@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0b0f16">
+<meta name="description" content="Útvonalbejárás túlméretes szállítmányhoz: nyomvonal rögzítés, fotók méretjelöléssel, halvány útirány-nyíl és hangjegyzetek.">
+<title>Útvonalbejárás</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header id="topbar">
+  <button id="back-btn" class="icon-btn" hidden aria-label="Vissza">‹</button>
+  <h1 id="topbar-title">Útvonalbejárás</h1>
+  <button id="topbar-action" class="icon-btn" hidden></button>
+</header>
+
+<main id="main">
+
+  <!-- ============================================ bejárások listája -->
+  <section class="screen" id="scr-list">
+    <div class="pad">
+      <button id="new-session" class="btn primary block">+ Új bejárás indítása</button>
+      <div class="search-row">
+        <input id="list-filter" type="search" placeholder="Bejárás keresése név szerint…" autocomplete="off">
+      </div>
+      <div id="session-list" class="list"></div>
+      <div id="list-empty" class="empty" hidden>
+        <p><strong>Még nincs bejárás.</strong></p>
+        <p>Indítson újat, és rögzítse a nyomvonalat, a fotókat, a méreteket és a hangjegyzeteket.</p>
+      </div>
+      <div class="footer-note">
+        <button id="import-btn" class="btn ghost small">Mentés visszatöltése (JSON)</button>
+        <input id="import-file" type="file" accept="application/json" hidden>
+        <p id="storage-info" class="muted small"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================ aktív bejárás -->
+  <section class="screen" id="scr-session" hidden>
+    <div class="track-panel">
+      <canvas id="track-canvas" aria-label="Rögzített nyomvonal"></canvas>
+      <div class="track-stats">
+        <div><span class="stat-val" id="st-distance">0 m</span><span class="stat-lbl" id="st-dist-label">Táv</span></div>
+        <div><span class="stat-val" id="st-time">00:00</span><span class="stat-lbl">Idő</span></div>
+        <div><span class="stat-val" id="st-points">0</span><span class="stat-lbl">Pont</span></div>
+        <div><span class="stat-val" id="st-acc">—</span><span class="stat-lbl">GPS</span></div>
+      </div>
+      <div class="track-actions">
+        <button id="rec-toggle" class="btn rec">● Nyomvonal rögzítése</button>
+        <button id="rec-mark" class="btn ghost small" disabled>Pont jelölése</button>
+      </div>
+      <button id="edit-track" class="btn ghost small block">🗺️ Nyomvonal szerkesztése</button>
+      <button id="reject-summary" class="reject-summary" hidden></button>
+      <p id="gps-status" class="muted small"></p>
+    </div>
+
+    <div class="capture-bar">
+      <button id="cap-photo" class="cap">
+        <span class="cap-icon">📷</span><span>Fotó</span>
+      </button>
+      <button id="cap-audio" class="cap">
+        <span class="cap-icon">🎙️</span><span>Hangjegyzet</span>
+      </button>
+      <button id="cap-note" class="cap">
+        <span class="cap-icon">📝</span><span>Jegyzet</span>
+      </button>
+      <input id="photo-input" type="file" accept="image/*" capture="environment" hidden multiple>
+    </div>
+
+    <div class="pad">
+      <div class="row-between">
+        <h2 class="section-title">Rögzített elemek (<span id="item-count">0</span>)</h2>
+        <div class="chips" id="item-filter">
+          <button class="chip active" data-f="all">Mind</button>
+          <button class="chip" data-f="photo">Fotó</button>
+          <button class="chip" data-f="audio">Hang</button>
+          <button class="chip" data-f="note">Jegyzet</button>
+        </div>
+      </div>
+      <div id="item-list" class="items"></div>
+      <div id="items-empty" class="empty" hidden>
+        <p>Még nincs rögzített elem ebben a bejárásban.</p>
+      </div>
+
+      <h2 class="section-title">Bejárás adatai</h2>
+      <div id="session-meta" class="meta-card"></div>
+      <div class="btn-grid">
+        <button id="edit-session" class="btn ghost small">Adatok szerkesztése</button>
+        <button id="export-gpx" class="btn ghost small">GPX export</button>
+        <button id="export-json" class="btn ghost small">Teljes mentés (JSON)</button>
+        <button id="open-maps" class="btn ghost small">Megnyitás térképen</button>
+        <button id="delete-session" class="btn danger small">Bejárás törlése</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= keresés -->
+  <section class="screen" id="scr-search" hidden>
+    <div class="pad">
+      <div class="search-row">
+        <input id="q" type="search" placeholder="Keresés: jegyzet, méret, felirat, hely…" autocomplete="off">
+      </div>
+      <div class="chips" id="search-filter">
+        <button class="chip active" data-f="all">Mind</button>
+        <button class="chip" data-f="photo">Fotó</button>
+        <button class="chip" data-f="audio">Hang</button>
+        <button class="chip" data-f="note">Jegyzet</button>
+        <button class="chip" data-f="dim">Csak méretezett</button>
+      </div>
+      <p class="muted small">A keresés a bejárások nevére, a jegyzetekre, a képre írt szövegekre és a beírt méretekre fut.</p>
+      <div id="search-results" class="items"></div>
+      <div id="search-empty" class="empty" hidden><p>Nincs találat.</p></div>
+    </div>
+  </section>
+
+</main>
+
+<nav id="tabbar">
+  <button class="tab active" data-screen="list"><span>🗂️</span>Bejárások</button>
+  <button class="tab" data-screen="session" disabled><span>📍</span>Aktív</button>
+  <button class="tab" data-screen="search"><span>🔍</span>Keresés</button>
+</nav>
+
+<!-- ================================================ fotó-szerkesztő -->
+<div id="editor" class="overlay" hidden>
+  <header class="overlay-bar">
+    <button id="editor-cancel" class="icon-btn" aria-label="Bezárás">✕</button>
+    <h2 id="editor-title">Fotó jelölése</h2>
+    <button id="editor-save" class="btn primary small">Mentés</button>
+  </header>
+
+  <div id="editor-stage"><canvas id="editor-canvas"></canvas></div>
+
+  <div class="editor-panel">
+    <p id="editor-hint" class="hint"></p>
+
+    <div id="editor-dir-panel" class="dir-panel" hidden>
+      <div class="dir-head">
+        <strong>Útirány-nyíl</strong>
+        <span class="muted small">halvány, hogy ne takarja a képet</span>
+      </div>
+      <label class="slider-row">
+        <span>Halványság</span>
+        <input id="editor-dir-alpha" type="range" min="10" max="90" value="35">
+        <span id="editor-dir-alpha-val" class="slider-val">35%</span>
+      </label>
+      <p class="dir-tip">
+        A megrajzolt nyílon három fogópont jelenik meg: a két végpont, és középen
+        a <strong>hajlítás</strong> — azt húzva állítható be a kanyar íve, bármelyik irányba.
+      </p>
+      <button type="button" id="editor-dir-straight" class="btn ghost tiny">Nyíl egyenesítése</button>
+      <div class="quick-dirs">
+        <span class="muted small">Gyors beszúrás:</span>
+        <button type="button" class="btn ghost tiny" data-quickdir="left">⟸ Balra</button>
+        <button type="button" class="btn ghost tiny" data-quickdir="right">Jobbra ⟹</button>
+        <button type="button" class="btn ghost tiny" data-quickdir="up">⇧ Előre</button>
+        <button type="button" class="btn ghost tiny" data-quickdir="down">⇩ Hátra</button>
+      </div>
+    </div>
+
+    <div id="editor-tools" class="tools"></div>
+
+    <div class="editor-row">
+      <div id="editor-colors" class="colors"></div>
+      <label class="slider-row compact">
+        <span>Vastag.</span>
+        <input id="editor-width" type="range" min="2" max="24" value="6">
+      </label>
+    </div>
+
+    <div class="editor-row">
+      <span id="editor-count" class="muted small">Nincs jelölés</span>
+      <div class="spacer"></div>
+      <button id="editor-undo" class="btn ghost tiny">↶ Vissza</button>
+      <button id="editor-redo" class="btn ghost tiny">↷ Újra</button>
+      <button id="editor-clear" class="btn ghost tiny">Összes törlése</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================== hangfelvevő panel -->
+<div id="rec-overlay" class="overlay center" hidden>
+  <div class="rec-card">
+    <h2>Hangjegyzet rögzítése</h2>
+    <div class="level"><div id="rec-level"></div></div>
+    <p id="rec-time" class="rec-time">0:00</p>
+    <p class="muted small">Mondja fel a helyszíni megjegyzést — a felvétel a bejárás aktuális pozíciójához kapcsolódik.</p>
+    <div class="modal-actions">
+      <button id="rec-cancel" class="btn ghost">Elvetés</button>
+      <button id="rec-stop" class="btn primary">Felvétel mentése</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ nyomvonal-szerkesztő -->
+<div id="trackedit" class="overlay" hidden>
+  <header class="overlay-bar">
+    <button id="trackedit-close" class="icon-btn" aria-label="Bezárás">✕</button>
+    <h2>Nyomvonal szerkesztése</h2>
+    <div class="zoom-group">
+      <button id="trackedit-zoom-out" class="icon-btn" aria-label="Kicsinyítés">−</button>
+      <button id="trackedit-zoom-in" class="icon-btn" aria-label="Nagyítás">+</button>
+      <button id="trackedit-fit" class="btn ghost tiny">Illesztés</button>
+    </div>
+  </header>
+
+  <div id="trackedit-stage"><canvas id="trackedit-canvas"></canvas></div>
+
+  <div class="editor-panel">
+    <div class="legend">
+      <span class="legend-item"><i class="swatch-line ok"></i>Érvényes: <strong id="te-ok">0 m</strong></span>
+      <span class="legend-item"><i class="swatch-line rejected"></i>Elvetett: <strong id="te-rejected">0 m</strong></span>
+      <span class="legend-item" id="te-drawn-item" hidden><i class="swatch-line drawn"></i>Berajzolt: <strong id="te-drawn">0 m</strong></span>
+    </div>
+
+    <p id="trackedit-hint" class="hint">
+      Koppintson a nyomvonalra a szakasz elejénél, majd a végénél. Két ujjal nagyíthat,
+      húzással mozgathatja a térképet.
+    </p>
+
+    <div id="trackedit-selinfo" hidden>
+      <p id="trackedit-selstats" class="hint"></p>
+      <label class="slider-row"><span>A pont</span><input id="trackedit-from" type="range" min="0" max="0" value="0"></label>
+      <label class="slider-row"><span>B pont</span><input id="trackedit-to" type="range" min="0" max="0" value="0"></label>
+    </div>
+
+    <div class="editor-row" id="trackedit-normalbar">
+      <button id="trackedit-reject" class="btn ghost small" disabled>⚠️ Elvetett szakasz</button>
+      <button id="trackedit-accept" class="btn ghost small" disabled>✓ Érvényes</button>
+      <button id="trackedit-delete" class="btn danger small" disabled>🗑 Törlés</button>
+      <button id="trackedit-clear-sel" class="btn ghost tiny" disabled>Kijelölés vége</button>
+    </div>
+
+    <div class="editor-row" id="trackedit-drawbar" hidden>
+      <button id="trackedit-draw-done" class="btn primary small">✓ Szakasz kész</button>
+      <button id="trackedit-draw-undo" class="btn ghost small">↶ Utolsó pont</button>
+      <button id="trackedit-draw-cancel" class="btn ghost small">Mégse</button>
+    </div>
+
+    <button id="trackedit-draw" class="btn ghost small block">✏️ Hiányzó szakasz berajzolása</button>
+
+    <div id="trackedit-drawn-wrap" hidden>
+      <h3 class="section-title">Berajzolt szakaszok</h3>
+      <div id="trackedit-drawn-list" class="sections"></div>
+      <div class="editor-row" id="trackedit-drawn-actions" hidden>
+        <button id="trackedit-drawn-rename" class="btn ghost tiny">Átnevezés</button>
+        <button id="trackedit-drawn-delete" class="btn danger tiny">Szakasz törlése</button>
+      </div>
+    </div>
+
+    <div id="trackedit-sections-wrap" hidden>
+      <h3 class="section-title">Elvetett szakaszok</h3>
+      <div id="trackedit-sections" class="sections"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================== elem részletek -->
+<div id="viewer" class="overlay" hidden>
+  <header class="overlay-bar">
+    <button id="viewer-close" class="icon-btn" aria-label="Bezárás">✕</button>
+    <h2 id="viewer-title">Elem</h2>
+    <button id="viewer-delete" class="icon-btn danger" aria-label="Törlés">🗑</button>
+  </header>
+  <div id="viewer-body" class="viewer-body"></div>
+  <div class="viewer-actions" id="viewer-actions"></div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
