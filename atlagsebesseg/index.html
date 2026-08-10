@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f16">
+<meta name="description" content="Átlagsebesség-kalkulátor: mérd le a saját szakaszátlagodat GPS-szel, és nézd meg, megbüntetnének-e — és mennyivel — ha bevezetik a szakaszellenőrzést. Az adatok nem hagyják el a készüléket.">
+<title>Átlagsebesség-kalkulátor</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header id="topbar">
+  <h1>Átlagsebesség-kalkulátor</h1>
+  <span id="adat-jelzo" class="pill" title="Semmilyen adat nem hagyja el a készüléket">🔒 helyben</span>
+</header>
+
+<main id="main">
+
+  <!-- ================================================== élő mérés -->
+  <section class="screen" id="scr-meres">
+    <div id="map" aria-label="Térkép a szakasszal és a nyomvonallal"></div>
+
+    <div class="map-tools">
+      <button id="btn-kozepre" class="chip">📍 Ide</button>
+      <button id="btn-illeszt" class="chip">🔍 Teljes szakasz</button>
+      <button id="btn-csempe" class="chip" aria-pressed="true">🗺️ Csempék</button>
+    </div>
+
+    <div class="pad">
+
+      <!-- szakasz kijelölése -->
+      <section class="card">
+        <h2 class="card-title">1. Szakasz kijelölése <span class="muted small">(nem kötelező)</span></h2>
+        <p class="muted small">
+          Koppints a térképre, majd válaszd ki, hogy az a szakasz eleje vagy vége.
+          Elhaladáskor a mérés magától indul és áll le. Ha üresen hagyod,
+          kézzel indíthatod induláskor és állíthatod le érkezéskor.
+        </p>
+        <div class="btn-row">
+          <button id="btn-start-jelol" class="btn ghost small">Szakasz eleje</button>
+          <button id="btn-end-jelol" class="btn ghost small">Szakasz vége</button>
+          <button id="btn-kapu-torol" class="btn ghost small">Törlés</button>
+        </div>
+        <div class="row-between">
+          <label for="sel-sugar">Kiváltási sugár</label>
+          <select id="sel-sugar">
+            <option value="30">30 m</option>
+            <option value="60" selected>60 m</option>
+            <option value="100">100 m</option>
+            <option value="150">150 m</option>
+          </select>
+        </div>
+        <p id="kapu-allapot" class="muted small">Nincs kijelölt szakasz — kézi mérés.</p>
+      </section>
+
+      <!-- eredmény -->
+      <section class="card result" id="eredmeny-kartya">
+        <div class="big">
+          <span class="big-val" id="ki-atlag">—</span>
+          <span class="big-unit">km/h</span>
+          <span class="big-lbl">mért átlagsebesség</span>
+        </div>
+        <div id="verdikt" class="verdikt semleges">Indítsd el a mérést.</div>
+        <div class="stats">
+          <div><span class="stat-val" id="ki-tav">0 m</span><span class="stat-lbl">Táv</span></div>
+          <div><span class="stat-val" id="ki-ido">0:00</span><span class="stat-lbl">Idő</span></div>
+          <div><span class="stat-val" id="ki-pill">—</span><span class="stat-lbl">Pillanatnyi</span></div>
+          <div><span class="stat-val" id="ki-gps">—</span><span class="stat-lbl">GPS</span></div>
+        </div>
+        <p id="gps-uzenet" class="muted small"></p>
+        <div class="btn-row">
+          <button id="btn-meres" class="btn primary grow">▶ Mérés indítása</button>
+          <button id="btn-ujra" class="btn ghost">Új mérés</button>
+        </div>
+      </section>
+
+      <!-- sebességhatárok -->
+      <section class="card">
+        <h2 class="card-title">2. Sebességhatárok az útvonalon</h2>
+        <div class="row-between">
+          <label for="sel-alap">Alapértelmezett határ</label>
+          <select id="sel-alap">
+            <option value="30">30 km/h</option>
+            <option value="40">40 km/h</option>
+            <option value="50">50 km/h</option>
+            <option value="70">70 km/h</option>
+            <option value="80">80 km/h</option>
+            <option value="90" selected>90 km/h</option>
+            <option value="100">100 km/h</option>
+            <option value="110">110 km/h</option>
+            <option value="130">130 km/h</option>
+          </select>
+        </div>
+        <button id="btn-osm" class="btn block">🛰️ Határok lekérése az OpenStreetMapből</button>
+        <p id="osm-allapot" class="muted small">
+          A lekérés a nyomvonal koordinátáit elküldi az Overpass API-nak.
+          Enélkül az app a fenti alapértelmezett határral számol.
+        </p>
+        <div id="szakasz-lista" class="seglist"></div>
+      </section>
+
+      <div class="hirdetes" data-slot="meres-also"><span>Hirdetés helye</span></div>
+
+    </div>
+  </section>
+
+  <!-- ================================================= kalkulátor -->
+  <section class="screen" id="scr-kalk" hidden>
+    <div class="pad">
+      <section class="card">
+        <h2 class="card-title">Számold ki GPS nélkül</h2>
+        <p class="muted small">
+          Add meg a szakaszt (több eltérő korlátozású rész is lehet), és azt,
+          hogy mennyi idő alatt tetted meg — vagy milyen tempóval mentél.
+        </p>
+
+        <div id="kalk-sorok" class="seglist"></div>
+        <button id="btn-sor-add" class="btn ghost small">+ Szakaszrész hozzáadása</button>
+
+        <div class="row-between mt">
+          <label for="sel-mod">Megadás</label>
+          <select id="sel-mod">
+            <option value="ido">menetidővel</option>
+            <option value="tempo">átlagsebességgel</option>
+          </select>
+        </div>
+
+        <div id="mezo-ido" class="row-between">
+          <label>Menetidő</label>
+          <span class="inline">
+            <input id="in-perc" type="number" min="0" step="1" value="12" inputmode="numeric"> perc
+            <input id="in-mp" type="number" min="0" max="59" step="1" value="0" inputmode="numeric"> mp
+          </span>
+        </div>
+
+        <div id="mezo-tempo" class="row-between" hidden>
+          <label for="in-tempo">Átlagsebesség</label>
+          <span class="inline"><input id="in-tempo" type="number" min="1" step="1" value="110" inputmode="decimal"> km/h</span>
+        </div>
+      </section>
+
+      <section class="card result">
+        <div class="big">
+          <span class="big-val" id="k-atlag">—</span>
+          <span class="big-unit">km/h</span>
+          <span class="big-lbl">átlagsebesség a szakaszon</span>
+        </div>
+        <div id="k-verdikt" class="verdikt semleges">—</div>
+        <div id="k-reszletek" class="seglist"></div>
+        <dl class="kv" id="k-kv"></dl>
+      </section>
+
+      <div class="hirdetes" data-slot="kalk-also"><span>Hirdetés helye</span></div>
+    </div>
+  </section>
+
+  <!-- ================================================== tudnivalók -->
+  <section class="screen" id="scr-info" hidden>
+    <div class="pad">
+
+      <section class="card">
+        <h2 class="card-title">Mi ez?</h2>
+        <p>
+          Az átlagsebesség-mérés (szakaszellenőrzés) a szakasz elején és végén
+          azonosítja a járművet, és a menetidőből számol átlagsebességet. Így a
+          traffipax előtti fékezés nem segít: a teljes szakaszon tartani kell a
+          korlátozást. Magyarországon a jogszabály 2008 óta lehetővé teszi, a
+          gyakorlati bevezetésről 2026 nyarán indult egyeztetés.
+        </p>
+        <p>
+          Ez az alkalmazás azt mutatja meg, hogy <strong>a te vezetési stílusoddal</strong>
+          mi történne, ha bevezetnék: mennyi lenne a szakaszátlagod, és jönne-e
+          érte bírság. Nem hatósági eszköz, tájékoztató jellegű.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Adatvédelem</h2>
+        <ul class="tick">
+          <li>Nincs regisztráció, nincs bejelentkezés.</li>
+          <li>A GPS-adatok <strong>csak a böngésző memóriájában</strong> vannak; az oldal
+              bezárásával nyomtalanul eltűnnek. Nincs fájl, nincs adatbázis, nincs süti.</li>
+          <li>Nincs szerveroldal: a számítás a te készülékeden fut.</li>
+          <li>Két külső kérés fordulhat elő, mindkettő kikapcsolható:
+              a térképcsempék az OpenStreetMaptől, és a sebességhatárok
+              lekérése az Overpass API-tól (ez utóbbi csak gombnyomásra).
+              Ezek a szolgáltatók a saját szabályzatuk szerint látják a kérés
+              IP-címét és a kért terület koordinátáit.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Honnan jönnek a sebességhatárok?</h2>
+        <p>
+          Az útvonal menti korlátozások az <strong>OpenStreetMap</strong>
+          <code>maxspeed</code> adataiból származnak (Overpass API).
+          Ez tartalmazza a kitáblázott értékeket, a lakott területi 50-eseket
+          és a zónákat is, de <strong>nem teljes körű</strong>, és a friss
+          útépítési korlátozásokat jellemzően nem tartalmazza.
+        </p>
+        <p>
+          Ha valamelyik szakasznál mást láttál kint, írd át kézzel a listában —
+          a számítás azonnal újrafut.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">A bírság</h2>
+        <p id="info-jog" class="muted small"></p>
+        <div id="info-tabla"></div>
+        <p class="muted small">
+          A közigazgatási bírságot objektív felelősség alapján az üzembentartóra
+          szabják ki; büntetőpont akkor kerülhet szóba, ha a hatóság a vezetőt is
+          azonosítja. Az itt látható összegek tájékoztatásul szolgálnak, jogi
+          tanácsadásnak nem minősülnek.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Pontosság</h2>
+        <ul class="tick">
+          <li>A telefon GPS-e a valós útvonalnál jellemzően 1–3%-kal hosszabb
+              nyomvonalat mér (zaj), ezért a számított átlag kicsit magasabb
+              lehet a valósnál.</li>
+          <li>Alagútban, mély bevágásban a jel elveszhet — ilyenkor az app a
+              két fix közti egyenessel számol.</li>
+          <li>A hatósági rendszer a szakasz két fix pontja közti időt méri,
+              és a hivatalos szakaszhosszal számol; a te méréseddel ez néhány
+              km/h-n belül egyezik.</li>
+        </ul>
+      </section>
+
+      <div class="hirdetes" data-slot="info-also"><span>Hirdetés helye</span></div>
+      <p class="muted small center">atlagsebesseg.hu — nyílt forrású, szerver nélküli alkalmazás.</p>
+    </div>
+  </section>
+
+</main>
+
+<nav id="tabs">
+  <button class="tab active" data-scr="scr-meres"><span>🚗</span>Mérés</button>
+  <button class="tab" data-scr="scr-kalk"><span>🧮</span>Kalkulátor</button>
+  <button class="tab" data-scr="scr-info"><span>ℹ️</span>Tudnivalók</button>
+</nav>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

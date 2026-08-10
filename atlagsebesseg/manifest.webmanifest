@@ -1,0 +1,20 @@
+{
+  "name": "Átlagsebesség-kalkulátor",
+  "short_name": "Átlagsebesség",
+  "description": "Mérd le GPS-szel a saját szakaszátlagodat, és nézd meg, megbüntetnének-e — és mennyivel — ha bevezetik az átlagsebesség-mérést.",
+  "lang": "hu",
+  "dir": "ltr",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0f16",
+  "theme_color": "#0b0f16",
+  "categories": ["navigation", "utilities", "travel"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

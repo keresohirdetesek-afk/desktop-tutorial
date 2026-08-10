@@ -3,17 +3,68 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Útvonalbejárás</title>
-<meta http-equiv="refresh" content="0; url=utvonalbejaras/">
-<link rel="canonical" href="utvonalbejaras/">
+<title>Alkalmazások</title>
+<meta name="description" content="Két statikus, szerver nélküli webalkalmazás: útvonalbejárás túlméretes szállítmányhoz és átlagsebesség-kalkulátor.">
 <style>
-  body { margin:0; min-height:100vh; display:grid; place-items:center;
-         background:#0b0f16; color:#eaf0f8;
-         font:16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  a { color:#4da3ff; }
+  :root {
+    --bg: #0b0f16; --surface: #131a25; --border: #253143;
+    --text: #eaf0f8; --muted: #8b98a9; --accent: #4da3ff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f2f5f9; --surface: #ffffff; --border: #d5dde8;
+      --text: #14202e; --muted: #5d6b7d; --accent: #0a6ed1;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid; place-items: center; padding: 24px;
+  }
+  main { width: 100%; max-width: 620px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 20px; }
+  a.app {
+    display: flex; gap: 14px; align-items: center; text-decoration: none;
+    color: inherit; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px; margin-bottom: 12px;
+  }
+  a.app:hover { border-color: var(--accent); }
+  .ikon { font-size: 32px; line-height: 1; }
+  .app h2 { margin: 0 0 2px; font-size: 17px; }
+  .app p { margin: 0; font-size: 14px; color: var(--muted); }
+  footer { color: var(--muted); font-size: 13px; margin-top: 18px; }
+  footer a { color: var(--accent); }
 </style>
 </head>
 <body>
-  <p>Átirányítás… ha nem indul el: <a href="utvonalbejaras/">Útvonalbejárás megnyitása</a></p>
+<main>
+  <h1>Alkalmazások</h1>
+  <p class="lead">Statikus, szerver nélküli webalkalmazások — az adatok a készüléken maradnak.</p>
+
+  <a class="app" href="atlagsebesseg/">
+    <span class="ikon">⏱️</span>
+    <span>
+      <h2>Átlagsebesség-kalkulátor</h2>
+      <p>Mérd le GPS-szel a szakaszátlagodat, és nézd meg, megbüntetnének-e — és mennyivel —,
+         ha bevezetik az átlagsebesség-mérést.</p>
+    </span>
+  </a>
+
+  <a class="app" href="utvonalbejaras/">
+    <span class="ikon">🗺️</span>
+    <span>
+      <h2>Útvonalbejárás</h2>
+      <p>Túlméretes szállítmány útvonalbejárása: nyomvonal, fotók méretjelöléssel,
+         hangjegyzetek — offline, a telefonon tárolva.</p>
+    </span>
+  </a>
+
+  <footer>
+    Leírások: <a href="atlagsebesseg/README.md">átlagsebesség</a> ·
+    <a href="utvonalbejaras/README.md">útvonalbejárás</a>
+  </footer>
+</main>
 </body>
 </html>

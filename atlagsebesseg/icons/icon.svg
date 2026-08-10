@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Átlagsebesség">
+  <rect width="512" height="512" rx="112" fill="#0b0f16"/>
+  <g fill="none" stroke-linecap="round">
+    <!-- óralap -->
+    <path d="M120 336a160 160 0 1 1 272 0" stroke="#253143" stroke-width="34"/>
+    <!-- megtett tartomány -->
+    <path d="M120 336a160 160 0 0 1 46-197" stroke="#3ddc84" stroke-width="34"/>
+    <path d="M166 139a160 160 0 0 1 176 4" stroke="#ffbe4d" stroke-width="34"/>
+    <path d="M342 143a160 160 0 0 1 50 193" stroke="#ff5f56" stroke-width="34"/>
+    <!-- mutató -->
+    <path d="M256 320 300 196" stroke="#eaf0f8" stroke-width="22"/>
+  </g>
+  <circle cx="256" cy="320" r="26" fill="#4da3ff"/>
+  <!-- átlagjel -->
+  <g stroke="#eaf0f8" stroke-width="16" stroke-linecap="round">
+    <path d="M196 404h120"/>
+  </g>
+</svg>
