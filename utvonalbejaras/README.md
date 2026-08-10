@@ -15,6 +15,7 @@ készüléken maradnak (IndexedDB), és offline is elérhetők.
 | Funkció | Hol |
 |---|---|
 | **Nyomvonal rögzítése** GPS-szel, élő távolság / idő / pontszám / pontosság | Aktív bejárás → *Nyomvonal rögzítése* |
+| **Nyomvonal utólagos szerkesztése**: szakasz elvetése indoklással vagy törlése | *Nyomvonal szerkesztése* |
 | **Fotó** készítése menet közben, automatikus GPS-koordinátával | *Fotó* gomb (a telefon kameráját nyitja) |
 | **Rajzolás a képernyőn** a fotóra (szabadkéz, keret, jelölő nyíl) | Fotó → *Jelölés / méretek* |
 | **Méretek beírása**: méretvonal két pont közé + beírt érték (m / cm / t) | Szerkesztő → *Méret* eszköz |
@@ -41,6 +42,33 @@ A rajzelemek a kép **arányos koordinátáin** tárolódnak, ezért a jelölés
 bármekkora kijelzőn és a teljes felbontású exportban is pontosan ugyanoda esik.
 A jelölések utólag szerkeszthetők: a fotó megnyitásakor a korábbi elemek
 visszatöltődnek, egyenként törölhetők (*Törlés* eszköz), vagy visszavonhatók.
+
+### A nyomvonal utólagos szerkesztése
+
+A kísérőautó útja nem feltétlenül a jóváhagyandó útvonal: akadály miatt vissza
+kellett fordulni, kerülőt kellett keresni. Ezt utólag, térképen lehet rendbe
+tenni — a *Nyomvonal szerkesztése* gombbal.
+
+- **Szakasz kijelölése**: koppintson a nyomvonalra a szakasz elejénél, majd a
+  végénél (az **A** és **B** fogópont jelzi). A két csúszkával pontosan
+  ráhangolható. Két ujjal nagyíthat, húzással mozgathatja a térképet.
+- **Elvetett szakasz**: a kijelölés kikerül a hivatalos útvonalból, de
+  **benne marad a felvételben** — szaggatott narancs vonallal, a megadott
+  indoklással együtt (pl. „3,8 m magasságkorlát a hídnál”). Bármikor
+  visszaállítható érvényesre.
+- **Törlés**: ha az adatra nincs szükség, a kijelölt pontok véglegesen
+  törölhetők.
+
+Ami ilyenkor a helyére kerül:
+
+- a **Táv** mező az **érvényes** útvonal hosszát mutatja, a bejárt teljes út
+  külön sorban szerepel az adatlapon;
+- a bejárás adatlapján felsorolva látszik minden elvetett szakasz az
+  indoklásával;
+- a **GPX** fő nyomvonala csak az érvényes útvonalat tartalmazza (ott, ahol
+  elvetett szakasz szakítja meg, új `trkseg` kezdődik), az elvetett részek
+  pedig külön, elnevezett nyomvonalként maradnak a fájlban;
+- a *Megnyitás térképen* is csak az érvényes útvonalat viszi át.
 
 ---
 

@@ -2,11 +2,13 @@
 
 import * as db from './db.js';
 import {
-  TrackRecorder, currentPosition, renderTrack, trackLength,
-  formatDistance, formatDuration, formatCoord, toGPX, typeLabel, describeItem,
+  TrackRecorder, currentPosition, renderTrack, lengthByStatus, isRejected,
+  rejectedSections, formatDistance, formatDuration, formatCoord, toGPX,
+  typeLabel, describeItem,
 } from './geo.js';
 import { AudioRecorder, shrinkImage, makeThumb } from './media.js';
 import { PhotoEditor } from './editor.js';
+import { TrackEditor } from './trackedit.js';
 import { $, $$, el, toast, modal, download, formatDateTime, formatTime } from './ui.js';
 
 const state = {
@@ -27,6 +29,7 @@ const RECORDING_HINT = 'Rögzítés fut — tartsa nyitva az alkalmazást, a ké
 let recorder = null;
 let audioRec = null;
 let editor = null;
+let trackEditor = null;
 let tickTimer = null;
 let trackHit = null;
 
@@ -224,13 +227,22 @@ async function openSession(id) {
 
 function renderMeta() {
   const s = state.session;
+  const len = lengthByStatus(state.points);
+  const secs = rejectedSections(state.points);
   const rows = [
     ['Megnevezés', s.name],
     ['Létrehozva', formatDateTime(s.created)],
     ['Szerelvény', vehicleSummary(s.vehicle) || '—'],
-    ['Nyomvonal', `${formatDistance(s.stats?.distance || 0)} · ${state.points.length} pont`],
-    ['Megjegyzés', s.note || '—'],
+    ['Érvényes útvonal', `${formatDistance(len.ok)} · ${state.points.length} pont`],
   ];
+  if (secs.length) {
+    rows.push(['Elvetett szakasz', `${secs.length} db · ${formatDistance(len.rejected)}`]);
+    secs.forEach((sec, i) => {
+      rows.push([`↳ ${i + 1}.`, `${sec.reason || 'nincs indoklás'} (${formatDistance(sec.length)})`]);
+    });
+    rows.push(['Bejárt összesen', formatDistance(len.total)]);
+  }
+  rows.push(['Megjegyzés', s.note || '—']);
   $('#session-meta').innerHTML = '';
   for (const [k, v] of rows) {
     $('#session-meta').appendChild(
@@ -243,17 +255,30 @@ function renderMeta() {
 }
 
 function updateStats() {
-  const dist = trackLength(state.points);
-  $('#st-distance').textContent = formatDistance(dist);
+  // a „táv” a hivatalos útvonal hossza: az elvetett szakaszok nem számítanak bele
+  const len = lengthByStatus(state.points);
+  $('#st-distance').textContent = formatDistance(len.ok);
+  $('#st-dist-label').textContent = len.rejected > 0 ? 'Érvényes' : 'Táv';
   $('#st-points').textContent = String(state.points.length);
   const elapsed = state.recording ? state.recElapsed + (Date.now() - state.recStartedAt) : state.recElapsed;
   $('#st-time').textContent = formatDuration(elapsed);
   const last = recorder && recorder.current;
   $('#st-acc').textContent = last && last.acc != null ? '±' + last.acc + ' m' : '—';
+
+  const secs = rejectedSections(state.points);
+  const summary = $('#reject-summary');
+  summary.hidden = secs.length === 0;
+  if (secs.length) {
+    summary.textContent =
+      `⚠️ ${secs.length} elvetett szakasz · ${formatDistance(len.rejected)} — megnyitás szerkesztésre`;
+  }
+
   if (state.session) {
     state.session.stats = {
       ...(state.session.stats || {}),
-      distance: dist,
+      distance: len.ok,          // hivatalos útvonal
+      distanceDriven: len.total, // a kísérőautó teljes útja
+      rejected: len.rejected,
       points: state.points.length,
       elapsed,
     };
@@ -273,7 +298,7 @@ function startRecording() {
     onPoint: async (pt) => {
       const rec = { ...pt, sessionId: state.session.id };
       state.points.push(rec);
-      await db.addPoint(rec);
+      rec.id = await db.addPoint(rec); // az azonosító kell a későbbi szerkesztéshez
       $('#gps-status').textContent = RECORDING_HINT;
       updateStats();
       if (state.screen === 'session') drawTrack();
@@ -321,13 +346,60 @@ async function stopRecording(silent = false) {
       ...(state.session.stats || {}),
       endedAt: Date.now(),
       elapsed: state.recElapsed,
-      distance: trackLength(state.points),
+      distance: lengthByStatus(state.points).ok,
       points: state.points.length,
     };
     await db.saveSession(state.session);
     renderMeta();
   }
   if (!silent) toast('Rögzítés leállítva, a nyomvonal mentve.');
+}
+
+/**
+ * Nyomvonal utólagos szerkesztése: a kísérőautó útja nem feltétlenül a
+ * jóváhagyandó útvonal, ezért szakaszonként elvethető vagy törölhető.
+ */
+async function openTrackEditor() {
+  if (state.points.length < 2) {
+    toast('Ehhez a bejáráshoz még nincs elég rögzített nyomvonalpont.', 'error');
+    return;
+  }
+  if (state.recording) {
+    const ok = await modal({
+      title: 'Rögzítés fut',
+      text: 'A szerkesztéshez le kell állítani a nyomvonal rögzítését. Leállítsuk most?',
+      okText: 'Leállítás és szerkesztés',
+    });
+    if (!ok) return;
+    await stopRecording(true);
+  }
+
+  if (!trackEditor) trackEditor = new TrackEditor($('#trackedit'));
+  const changed = await trackEditor.open({
+    points: state.points,
+    items: state.items,
+    onApply: async ({ updated, deleted }) => {
+      if (updated) await db.updatePoints(updated);
+      if (deleted) await db.deletePoints(deleted);
+      if (state.session) {
+        const len = lengthByStatus(state.points);
+        state.session.stats = {
+          ...(state.session.stats || {}),
+          distance: len.ok,
+          distanceDriven: len.total,
+          rejected: len.rejected,
+          points: state.points.length,
+        };
+        await db.saveSession(state.session);
+      }
+    },
+  });
+
+  if (changed) {
+    updateStats();
+    renderMeta();
+    drawTrack();
+  }
 }
 
 let wakeLock = null;
@@ -786,7 +858,8 @@ async function importJSON(file) {
 }
 
 function openInMaps() {
-  const pts = state.points;
+  // csak az érvényes útvonal: az elvetett szakaszokon nem kell végigvinni
+  const pts = state.points.filter((p) => !isRejected(p));
   if (!pts.length) { toast('Nincs rögzített nyomvonal.', 'error'); return; }
   const origin = pts[0];
   const dest = pts[pts.length - 1];
@@ -831,6 +904,8 @@ function bind() {
 
   $('#rec-toggle').addEventListener('click', () => (state.recording ? stopRecording() : startRecording()));
   $('#rec-mark').addEventListener('click', markPoint);
+  $('#edit-track').addEventListener('click', openTrackEditor);
+  $('#reject-summary').addEventListener('click', openTrackEditor);
   $('#cap-photo').addEventListener('click', () => $('#photo-input').click());
   $('#photo-input').addEventListener('change', onPhotoSelected);
   $('#cap-audio').addEventListener('click', () => recordAudio(null));

@@ -17,14 +17,14 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(dir, p), 'utf8');
 
 // a betöltési sorrend számít: az app.js indítja el a többit
-const MODULES = ['js/ui.js', 'js/db.js', 'js/geo.js', 'js/media.js', 'js/editor.js', 'js/app.js'];
+const MODULES = ['js/ui.js', 'js/db.js', 'js/geo.js', 'js/media.js', 'js/editor.js', 'js/trackedit.js', 'js/app.js'];
 
 // az app.js `db.valami()` alakban hivatkozik a tárolóra, ezért a modulok
 // összefűzése után össze kell raknunk neki ezt a névteret
 const DB_EXPORTS = [
   'uid', 'createSession', 'saveSession', 'getSession', 'listSessions', 'deleteSession',
-  'addPoint', 'addPoints', 'getPoints', 'saveItem', 'getItem', 'getItems', 'allItems',
-  'deleteItem', 'storageEstimate',
+  'addPoint', 'addPoints', 'updatePoints', 'deletePoints', 'getPoints',
+  'saveItem', 'getItem', 'getItems', 'allItems', 'deleteItem', 'storageEstimate',
 ];
 
 function stripModuleSyntax(src) {

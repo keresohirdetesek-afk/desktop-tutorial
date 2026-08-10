@@ -48,7 +48,7 @@
     <div class="track-panel">
       <canvas id="track-canvas" aria-label="Rögzített nyomvonal"></canvas>
       <div class="track-stats">
-        <div><span class="stat-val" id="st-distance">0 m</span><span class="stat-lbl">Táv</span></div>
+        <div><span class="stat-val" id="st-distance">0 m</span><span class="stat-lbl" id="st-dist-label">Táv</span></div>
         <div><span class="stat-val" id="st-time">00:00</span><span class="stat-lbl">Idő</span></div>
         <div><span class="stat-val" id="st-points">0</span><span class="stat-lbl">Pont</span></div>
         <div><span class="stat-val" id="st-acc">—</span><span class="stat-lbl">GPS</span></div>
@@ -57,6 +57,8 @@
         <button id="rec-toggle" class="btn rec">● Nyomvonal rögzítése</button>
         <button id="rec-mark" class="btn ghost small" disabled>Pont jelölése</button>
       </div>
+      <button id="edit-track" class="btn ghost small block">🗺️ Nyomvonal szerkesztése</button>
+      <button id="reject-summary" class="reject-summary" hidden></button>
       <p id="gps-status" class="muted small"></p>
     </div>
 
@@ -193,6 +195,51 @@
     <div class="modal-actions">
       <button id="rec-cancel" class="btn ghost">Elvetés</button>
       <button id="rec-stop" class="btn primary">Felvétel mentése</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ nyomvonal-szerkesztő -->
+<div id="trackedit" class="overlay" hidden>
+  <header class="overlay-bar">
+    <button id="trackedit-close" class="icon-btn" aria-label="Bezárás">✕</button>
+    <h2>Nyomvonal szerkesztése</h2>
+    <div class="zoom-group">
+      <button id="trackedit-zoom-out" class="icon-btn" aria-label="Kicsinyítés">−</button>
+      <button id="trackedit-zoom-in" class="icon-btn" aria-label="Nagyítás">+</button>
+      <button id="trackedit-fit" class="btn ghost tiny">Illesztés</button>
+    </div>
+  </header>
+
+  <div id="trackedit-stage"><canvas id="trackedit-canvas"></canvas></div>
+
+  <div class="editor-panel">
+    <div class="legend">
+      <span class="legend-item"><i class="swatch-line ok"></i>Érvényes útvonal: <strong id="te-ok">0 m</strong></span>
+      <span class="legend-item"><i class="swatch-line rejected"></i>Elvetett: <strong id="te-rejected">0 m</strong></span>
+    </div>
+
+    <p id="trackedit-hint" class="hint">
+      Koppintson a nyomvonalra a szakasz elejénél, majd a végénél. Két ujjal nagyíthat,
+      húzással mozgathatja a térképet.
+    </p>
+
+    <div id="trackedit-selinfo" hidden>
+      <p id="trackedit-selstats" class="hint"></p>
+      <label class="slider-row"><span>A pont</span><input id="trackedit-from" type="range" min="0" max="0" value="0"></label>
+      <label class="slider-row"><span>B pont</span><input id="trackedit-to" type="range" min="0" max="0" value="0"></label>
+    </div>
+
+    <div class="editor-row">
+      <button id="trackedit-reject" class="btn ghost small" disabled>⚠️ Elvetett szakasz</button>
+      <button id="trackedit-accept" class="btn ghost small" disabled>✓ Érvényes</button>
+      <button id="trackedit-delete" class="btn danger small" disabled>🗑 Törlés</button>
+      <button id="trackedit-clear-sel" class="btn ghost tiny" disabled>Kijelölés vége</button>
+    </div>
+
+    <div id="trackedit-sections-wrap" hidden>
+      <h3 class="section-title">Elvetett szakaszok</h3>
+      <div id="trackedit-sections" class="sections"></div>
     </div>
   </div>
 </div>

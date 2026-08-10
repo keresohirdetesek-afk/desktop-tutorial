@@ -120,6 +120,22 @@ export async function addPoints(list) {
   });
 }
 
+/** Meglévő pontok módosítása (pl. szakasz elvetése). */
+export async function updatePoints(list) {
+  if (!list.length) return;
+  return tx('points', 'readwrite', (p) => {
+    for (const pt of list) p.put(pt);
+  });
+}
+
+/** Pontok végleges törlése. */
+export async function deletePoints(ids) {
+  if (!ids.length) return;
+  return tx('points', 'readwrite', (p) => {
+    for (const id of ids) p.delete(id);
+  });
+}
+
 export async function getPoints(sessionId) {
   const pts = await tx('points', 'readonly', (p) =>
     wrap(p.index('sessionId').getAll(IDBKeyRange.only(sessionId)))

@@ -29,6 +29,69 @@ export function trackLength(points) {
   return d;
 }
 
+/* ------------------------------------------------- érvényes / elvetett
+
+A kísérőautó nyomvonala nem feltétlenül a jóváhagyandó útvonal: akadály
+miatt vissza kellett fordulni, kerülőt kellett keresni. Az ilyen szakaszok
+„elvetett” jelölést kapnak — az adat megmarad (indoklással együtt), de nem
+számít bele a hivatalos útvonalba. Egy szakasz akkor is törölhető végleg,
+ha nem hordoz hasznos információt.
+
+Egy útszakasz mindig a *végpontja* állapotát viseli: ha egy pont elvetett,
+akkor az odavezető szakasz is az.                                        */
+
+export const REJECTED = 'rejected';
+
+export const isRejected = (p) => !!p && p.status === REJECTED;
+
+/** Egybefüggő, azonos állapotú vonaldarabok a rajzoláshoz. */
+export function styledSegments(points) {
+  const segs = [];
+  for (let i = 1; i < points.length; i++) {
+    const status = isRejected(points[i]) ? REJECTED : 'ok';
+    const last = segs[segs.length - 1];
+    if (last && last.status === status) last.pts.push(points[i]);
+    else segs.push({ status, pts: [points[i - 1], points[i]] });
+  }
+  return segs;
+}
+
+/** Hossz állapotonként: { ok, rejected, total }. */
+export function lengthByStatus(points) {
+  const out = { ok: 0, rejected: 0, total: 0 };
+  for (let i = 1; i < points.length; i++) {
+    const d = haversine(points[i - 1], points[i]);
+    out.total += d;
+    if (isRejected(points[i])) out.rejected += d;
+    else out.ok += d;
+  }
+  return out;
+}
+
+/** Az elvetett szakaszok listája indexhatárokkal, hosszal és indoklással. */
+export function rejectedSections(points) {
+  const out = [];
+  let start = -1;
+  for (let i = 0; i <= points.length; i++) {
+    const rej = i < points.length && isRejected(points[i]);
+    if (rej && start < 0) start = i;
+    if (!rej && start >= 0) {
+      const slice = points.slice(Math.max(0, start - 1), i);
+      out.push({
+        from: start,
+        to: i - 1,
+        count: i - start,
+        length: trackLength(slice),
+        reason: points[start].reason || '',
+        t0: points[start].t,
+        t1: points[i - 1].t,
+      });
+      start = -1;
+    }
+  }
+  return out;
+}
+
 export function formatDistance(m) {
   if (!m || m < 1) return '0 m';
   if (m < 1000) return Math.round(m) + ' m';
@@ -189,34 +252,81 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   const cx = (minLon + maxLon) / 2;
   const cy = (minLat + maxLat) / 2;
 
+  // a nagyítás/mozgatás az illesztett nézetre ül rá
+  const view = opts.view || { k: 1, tx: 0, ty: 0 };
   const project = (lat, lon) => ({
-    x: w / 2 + (lon - cx) * kx * scale,
-    y: h / 2 - (lat - cy) * scale,
+    x: (w / 2 + (lon - cx) * kx * scale) * view.k + view.tx,
+    y: (h / 2 - (lat - cy) * scale) * view.k + view.ty,
   });
 
-  // nyomvonal
+  const rejectColor = opts.rejectLine || '#ff8a4d';
+  const lineW = (opts.lineWidth || 4) * Math.min(2, Math.max(1, view.k * 0.5 + 0.5));
+
+  // nyomvonal — az elvetett szakaszok szaggatottan, eltérő színnel
   if (coords.length > 1) {
-    ctx.lineWidth = 4;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.strokeStyle = line;
-    ctx.beginPath();
-    coords.forEach((p, i) => {
-      const { x, y } = project(p.lat, p.lon);
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    });
-    ctx.stroke();
+
+    for (const seg of styledSegments(coords)) {
+      const rejected = seg.status === REJECTED;
+      ctx.setLineDash(rejected ? [lineW * 2, lineW * 1.6] : []);
+      ctx.strokeStyle = rejected ? rejectColor : line;
+      ctx.globalAlpha = rejected ? 0.85 : 1;
+      ctx.lineWidth = rejected ? lineW * 0.8 : lineW;
+      ctx.beginPath();
+      seg.pts.forEach((p, i) => {
+        const { x, y } = project(p.lat, p.lon);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
 
     // haladási irány halvány nyilakkal a nyomvonalon
     ctx.globalAlpha = 0.45;
-    ctx.fillStyle = line;
     const every = Math.max(1, Math.floor(coords.length / 8));
     for (let i = every; i < coords.length; i += every) {
       const a = project(coords[i - 1].lat, coords[i - 1].lon);
       const b = project(coords[i].lat, coords[i].lon);
+      ctx.fillStyle = isRejected(coords[i]) ? rejectColor : line;
       drawArrowHead(ctx, a, b, 9);
     }
     ctx.globalAlpha = 1;
+
+    // kijelölt szakasz kiemelése a szerkesztőben
+    const sel = opts.selection;
+    if (sel && sel.to >= sel.from) {
+      const slice = coords.slice(sel.from, sel.to + 1);
+      ctx.strokeStyle = opts.selectColor || '#ffd60a';
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = lineW * 2.6;
+      ctx.beginPath();
+      slice.forEach((p, i) => {
+        const { x, y } = project(p.lat, p.lon);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+      if (slice.length === 1) {
+        const { x, y } = project(slice[0].lat, slice[0].lon);
+        ctx.arc(x, y, lineW * 1.4, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // fogópontok a szakasz két végén
+      for (const [idx, label] of [[sel.from, 'A'], [sel.to, 'B']]) {
+        const p = coords[idx];
+        if (!p) continue;
+        const s = project(p.lat, p.lon);
+        dot(ctx, s, 10, '#ffd60a', '#0b0f16');
+        ctx.fillStyle = '#0b0f16';
+        ctx.font = 'bold 11px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, s.x, s.y + 0.5);
+      }
+      ctx.textBaseline = 'alphabetic';
+    }
 
     // start / cél
     const s = project(coords[0].lat, coords[0].lon);
@@ -234,10 +344,21 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 12 });
   });
 
-  drawScaleBar(ctx, w, h, scale, kx, dim);
+  drawScaleBar(ctx, w, h, scale * view.k, kx, dim);
   drawNorth(ctx, w, dim);
 
-  return { project, hitboxes };
+  /** A képernyőponthoz legközelebbi nyomvonalpont indexe. */
+  const nearest = (x, y) => {
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < coords.length; i++) {
+      const p = project(coords[i].lat, coords[i].lon);
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return { index: best, distance: bestD };
+  };
+
+  return { project, hitboxes, nearest, coords };
 }
 
 function dot(ctx, p, r, fill, stroke) {
@@ -328,12 +449,47 @@ export function toGPX(session, points, items = []) {
     )
     .join('\n');
 
-  const trkpts = points
-    .map(
-      (p) => `      <trkpt lat="${p.lat}" lon="${p.lon}">${
-        p.alt != null ? `<ele>${p.alt}</ele>` : ''
-      }<time>${iso(p.t)}</time></trkpt>`
-    )
+  const trkpt = (p) =>
+    `      <trkpt lat="${p.lat}" lon="${p.lon}">${
+      p.alt != null ? `<ele>${p.alt}</ele>` : ''
+    }<time>${iso(p.t)}</time></trkpt>`;
+
+  // Az érvényes útvonal a fő nyomvonal; ahol elvetett szakasz szakítja meg,
+  // ott új trkseg kezdődik, hogy ne rajzolódjon át rajta egyenes.
+  const validSegs = [];
+  let run = [];
+  for (const p of points) {
+    if (isRejected(p)) {
+      if (run.length > 1) validSegs.push(run);
+      run = [];
+    } else {
+      run.push(p);
+    }
+  }
+  if (run.length > 1) validSegs.push(run);
+
+  const mainTrack = `  <trk>
+    <name>${esc(session.name)}</name>
+    <desc>Érvényes útvonal</desc>
+${validSegs.map((seg) => `    <trkseg>\n${seg.map(trkpt).join('\n')}\n    </trkseg>`).join('\n')}
+  </trk>`;
+
+  // Az elvetett szakaszok külön nyomvonalként maradnak benne, hogy az
+  // információ ne vesszen el, de ne keveredjen az érvényes útvonallal.
+  const rejectedTracks = rejectedSections(points)
+    .map((sec, i) => {
+      const seg = points.slice(sec.from, sec.to + 1);
+      if (seg.length < 2) return '';
+      return `  <trk>
+    <name>Elvetett szakasz ${i + 1}${sec.reason ? ' — ' + esc(sec.reason) : ''}</name>
+    <desc>${esc(sec.reason || 'Nem járható / nem ez a végleges útvonal')} (${Math.round(sec.length)} m)</desc>
+    <type>rejected</type>
+    <trkseg>
+${seg.map(trkpt).join('\n')}
+    </trkseg>
+  </trk>`;
+    })
+    .filter(Boolean)
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -344,12 +500,8 @@ export function toGPX(session, points, items = []) {
     <desc>${esc(session.note)}</desc>
   </metadata>
 ${wpts}
-  <trk>
-    <name>${esc(session.name)}</name>
-    <trkseg>
-${trkpts}
-    </trkseg>
-  </trk>
+${mainTrack}
+${rejectedTracks}
 </gpx>`;
 }
 

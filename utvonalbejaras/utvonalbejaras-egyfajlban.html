@@ -268,6 +268,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .track-actions { display: flex; gap: 8px; align-items: stretch; }
 
+.reject-summary {
+  width: 100%;
+  text-align: left;
+  background: color-mix(in srgb, #ff8a4d 14%, transparent);
+  border: 1px solid color-mix(in srgb, #ff8a4d 45%, transparent);
+  border-radius: 11px;
+  padding: 8px 11px;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+
 .capture-bar {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -497,6 +509,53 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .check-row input { accent-color: var(--accent); width: 17px; height: 17px; }
 .quick-dirs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
+/* -------------------------------------------------- nyomvonal-szerkesztő */
+
+#trackedit-stage {
+  flex: 1;
+  min-height: 0;
+  background: var(--map-bg);
+  overflow: hidden;
+}
+#trackedit-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+
+.zoom-group { display: flex; align-items: center; gap: 2px; }
+.zoom-group .icon-btn { font-size: 20px; padding: 4px 10px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; color: var(--muted); }
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.swatch-line { width: 20px; height: 0; border-top: 3px solid var(--accent); border-radius: 2px; }
+.swatch-line.rejected { border-top-style: dashed; border-color: #ff8a4d; }
+
+.sections { display: flex; flex-direction: column; gap: 6px; max-height: 132px; overflow-y: auto; }
+.section-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid #ff8a4d;
+  border-radius: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+  color: inherit;
+}
+.section-idx {
+  flex: none;
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: #ff8a4d;
+  color: #2a1408;
+  font-size: 11px;
+  font-weight: 700;
+}
+.section-body { min-width: 0; display: flex; flex-direction: column; }
+.section-reason { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.section-sub { font-size: 11.5px; color: var(--muted); }
+
 /* ------------------------------------------------------- hangfelvétel */
 
 .rec-card {
@@ -571,7 +630,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
     <div class="track-panel">
       <canvas id="track-canvas" aria-label="Rögzített nyomvonal"></canvas>
       <div class="track-stats">
-        <div><span class="stat-val" id="st-distance">0 m</span><span class="stat-lbl">Táv</span></div>
+        <div><span class="stat-val" id="st-distance">0 m</span><span class="stat-lbl" id="st-dist-label">Táv</span></div>
         <div><span class="stat-val" id="st-time">00:00</span><span class="stat-lbl">Idő</span></div>
         <div><span class="stat-val" id="st-points">0</span><span class="stat-lbl">Pont</span></div>
         <div><span class="stat-val" id="st-acc">—</span><span class="stat-lbl">GPS</span></div>
@@ -580,6 +639,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
         <button id="rec-toggle" class="btn rec">● Nyomvonal rögzítése</button>
         <button id="rec-mark" class="btn ghost small" disabled>Pont jelölése</button>
       </div>
+      <button id="edit-track" class="btn ghost small block">🗺️ Nyomvonal szerkesztése</button>
+      <button id="reject-summary" class="reject-summary" hidden></button>
       <p id="gps-status" class="muted small"></p>
     </div>
 
@@ -716,6 +777,51 @@ button, input, select, textarea { font: inherit; color: inherit; }
     <div class="modal-actions">
       <button id="rec-cancel" class="btn ghost">Elvetés</button>
       <button id="rec-stop" class="btn primary">Felvétel mentése</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ nyomvonal-szerkesztő -->
+<div id="trackedit" class="overlay" hidden>
+  <header class="overlay-bar">
+    <button id="trackedit-close" class="icon-btn" aria-label="Bezárás">✕</button>
+    <h2>Nyomvonal szerkesztése</h2>
+    <div class="zoom-group">
+      <button id="trackedit-zoom-out" class="icon-btn" aria-label="Kicsinyítés">−</button>
+      <button id="trackedit-zoom-in" class="icon-btn" aria-label="Nagyítás">+</button>
+      <button id="trackedit-fit" class="btn ghost tiny">Illesztés</button>
+    </div>
+  </header>
+
+  <div id="trackedit-stage"><canvas id="trackedit-canvas"></canvas></div>
+
+  <div class="editor-panel">
+    <div class="legend">
+      <span class="legend-item"><i class="swatch-line ok"></i>Érvényes útvonal: <strong id="te-ok">0 m</strong></span>
+      <span class="legend-item"><i class="swatch-line rejected"></i>Elvetett: <strong id="te-rejected">0 m</strong></span>
+    </div>
+
+    <p id="trackedit-hint" class="hint">
+      Koppintson a nyomvonalra a szakasz elejénél, majd a végénél. Két ujjal nagyíthat,
+      húzással mozgathatja a térképet.
+    </p>
+
+    <div id="trackedit-selinfo" hidden>
+      <p id="trackedit-selstats" class="hint"></p>
+      <label class="slider-row"><span>A pont</span><input id="trackedit-from" type="range" min="0" max="0" value="0"></label>
+      <label class="slider-row"><span>B pont</span><input id="trackedit-to" type="range" min="0" max="0" value="0"></label>
+    </div>
+
+    <div class="editor-row">
+      <button id="trackedit-reject" class="btn ghost small" disabled>⚠️ Elvetett szakasz</button>
+      <button id="trackedit-accept" class="btn ghost small" disabled>✓ Érvényes</button>
+      <button id="trackedit-delete" class="btn danger small" disabled>🗑 Törlés</button>
+      <button id="trackedit-clear-sel" class="btn ghost tiny" disabled>Kijelölés vége</button>
+    </div>
+
+    <div id="trackedit-sections-wrap" hidden>
+      <h3 class="section-title">Elvetett szakaszok</h3>
+      <div id="trackedit-sections" class="sections"></div>
     </div>
   </div>
 </div>
@@ -997,6 +1103,22 @@ async function addPoints(list) {
   });
 }
 
+/** Meglévő pontok módosítása (pl. szakasz elvetése). */
+async function updatePoints(list) {
+  if (!list.length) return;
+  return tx('points', 'readwrite', (p) => {
+    for (const pt of list) p.put(pt);
+  });
+}
+
+/** Pontok végleges törlése. */
+async function deletePoints(ids) {
+  if (!ids.length) return;
+  return tx('points', 'readwrite', (p) => {
+    for (const id of ids) p.delete(id);
+  });
+}
+
 async function getPoints(sessionId) {
   const pts = await tx('points', 'readonly', (p) =>
     wrap(p.index('sessionId').getAll(IDBKeyRange.only(sessionId)))
@@ -1041,7 +1163,7 @@ async function storageEstimate() {
     return null;
   }
 }
-return { uid, createSession, saveSession, getSession, listSessions, deleteSession, addPoint, addPoints, getPoints, saveItem, getItem, getItems, allItems, deleteItem, storageEstimate };
+return { uid, createSession, saveSession, getSession, listSessions, deleteSession, addPoint, addPoints, updatePoints, deletePoints, getPoints, saveItem, getItem, getItems, allItems, deleteItem, storageEstimate };
 })();
 
 /* ===== js/geo.js ===== */
@@ -1074,6 +1196,69 @@ function trackLength(points) {
   let d = 0;
   for (let i = 1; i < points.length; i++) d += haversine(points[i - 1], points[i]);
   return d;
+}
+
+/* ------------------------------------------------- érvényes / elvetett
+
+A kísérőautó nyomvonala nem feltétlenül a jóváhagyandó útvonal: akadály
+miatt vissza kellett fordulni, kerülőt kellett keresni. Az ilyen szakaszok
+„elvetett” jelölést kapnak — az adat megmarad (indoklással együtt), de nem
+számít bele a hivatalos útvonalba. Egy szakasz akkor is törölhető végleg,
+ha nem hordoz hasznos információt.
+
+Egy útszakasz mindig a *végpontja* állapotát viseli: ha egy pont elvetett,
+akkor az odavezető szakasz is az.                                        */
+
+const REJECTED = 'rejected';
+
+const isRejected = (p) => !!p && p.status === REJECTED;
+
+/** Egybefüggő, azonos állapotú vonaldarabok a rajzoláshoz. */
+function styledSegments(points) {
+  const segs = [];
+  for (let i = 1; i < points.length; i++) {
+    const status = isRejected(points[i]) ? REJECTED : 'ok';
+    const last = segs[segs.length - 1];
+    if (last && last.status === status) last.pts.push(points[i]);
+    else segs.push({ status, pts: [points[i - 1], points[i]] });
+  }
+  return segs;
+}
+
+/** Hossz állapotonként: { ok, rejected, total }. */
+function lengthByStatus(points) {
+  const out = { ok: 0, rejected: 0, total: 0 };
+  for (let i = 1; i < points.length; i++) {
+    const d = haversine(points[i - 1], points[i]);
+    out.total += d;
+    if (isRejected(points[i])) out.rejected += d;
+    else out.ok += d;
+  }
+  return out;
+}
+
+/** Az elvetett szakaszok listája indexhatárokkal, hosszal és indoklással. */
+function rejectedSections(points) {
+  const out = [];
+  let start = -1;
+  for (let i = 0; i <= points.length; i++) {
+    const rej = i < points.length && isRejected(points[i]);
+    if (rej && start < 0) start = i;
+    if (!rej && start >= 0) {
+      const slice = points.slice(Math.max(0, start - 1), i);
+      out.push({
+        from: start,
+        to: i - 1,
+        count: i - start,
+        length: trackLength(slice),
+        reason: points[start].reason || '',
+        t0: points[start].t,
+        t1: points[i - 1].t,
+      });
+      start = -1;
+    }
+  }
+  return out;
 }
 
 function formatDistance(m) {
@@ -1236,34 +1421,81 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
   const cx = (minLon + maxLon) / 2;
   const cy = (minLat + maxLat) / 2;
 
+  // a nagyítás/mozgatás az illesztett nézetre ül rá
+  const view = opts.view || { k: 1, tx: 0, ty: 0 };
   const project = (lat, lon) => ({
-    x: w / 2 + (lon - cx) * kx * scale,
-    y: h / 2 - (lat - cy) * scale,
+    x: (w / 2 + (lon - cx) * kx * scale) * view.k + view.tx,
+    y: (h / 2 - (lat - cy) * scale) * view.k + view.ty,
   });
 
-  // nyomvonal
+  const rejectColor = opts.rejectLine || '#ff8a4d';
+  const lineW = (opts.lineWidth || 4) * Math.min(2, Math.max(1, view.k * 0.5 + 0.5));
+
+  // nyomvonal — az elvetett szakaszok szaggatottan, eltérő színnel
   if (coords.length > 1) {
-    ctx.lineWidth = 4;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.strokeStyle = line;
-    ctx.beginPath();
-    coords.forEach((p, i) => {
-      const { x, y } = project(p.lat, p.lon);
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    });
-    ctx.stroke();
+
+    for (const seg of styledSegments(coords)) {
+      const rejected = seg.status === REJECTED;
+      ctx.setLineDash(rejected ? [lineW * 2, lineW * 1.6] : []);
+      ctx.strokeStyle = rejected ? rejectColor : line;
+      ctx.globalAlpha = rejected ? 0.85 : 1;
+      ctx.lineWidth = rejected ? lineW * 0.8 : lineW;
+      ctx.beginPath();
+      seg.pts.forEach((p, i) => {
+        const { x, y } = project(p.lat, p.lon);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
 
     // haladási irány halvány nyilakkal a nyomvonalon
     ctx.globalAlpha = 0.45;
-    ctx.fillStyle = line;
     const every = Math.max(1, Math.floor(coords.length / 8));
     for (let i = every; i < coords.length; i += every) {
       const a = project(coords[i - 1].lat, coords[i - 1].lon);
       const b = project(coords[i].lat, coords[i].lon);
+      ctx.fillStyle = isRejected(coords[i]) ? rejectColor : line;
       drawArrowHead(ctx, a, b, 9);
     }
     ctx.globalAlpha = 1;
+
+    // kijelölt szakasz kiemelése a szerkesztőben
+    const sel = opts.selection;
+    if (sel && sel.to >= sel.from) {
+      const slice = coords.slice(sel.from, sel.to + 1);
+      ctx.strokeStyle = opts.selectColor || '#ffd60a';
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = lineW * 2.6;
+      ctx.beginPath();
+      slice.forEach((p, i) => {
+        const { x, y } = project(p.lat, p.lon);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+      if (slice.length === 1) {
+        const { x, y } = project(slice[0].lat, slice[0].lon);
+        ctx.arc(x, y, lineW * 1.4, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // fogópontok a szakasz két végén
+      for (const [idx, label] of [[sel.from, 'A'], [sel.to, 'B']]) {
+        const p = coords[idx];
+        if (!p) continue;
+        const s = project(p.lat, p.lon);
+        dot(ctx, s, 10, '#ffd60a', '#0b0f16');
+        ctx.fillStyle = '#0b0f16';
+        ctx.font = 'bold 11px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, s.x, s.y + 0.5);
+      }
+      ctx.textBaseline = 'alphabetic';
+    }
 
     // start / cél
     const s = project(coords[0].lat, coords[0].lon);
@@ -1281,10 +1513,21 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 12 });
   });
 
-  drawScaleBar(ctx, w, h, scale, kx, dim);
+  drawScaleBar(ctx, w, h, scale * view.k, kx, dim);
   drawNorth(ctx, w, dim);
 
-  return { project, hitboxes };
+  /** A képernyőponthoz legközelebbi nyomvonalpont indexe. */
+  const nearest = (x, y) => {
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < coords.length; i++) {
+      const p = project(coords[i].lat, coords[i].lon);
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return { index: best, distance: bestD };
+  };
+
+  return { project, hitboxes, nearest, coords };
 }
 
 function dot(ctx, p, r, fill, stroke) {
@@ -1375,12 +1618,47 @@ function toGPX(session, points, items = []) {
     )
     .join('\n');
 
-  const trkpts = points
-    .map(
-      (p) => `      <trkpt lat="${p.lat}" lon="${p.lon}">${
-        p.alt != null ? `<ele>${p.alt}</ele>` : ''
-      }<time>${iso(p.t)}</time></trkpt>`
-    )
+  const trkpt = (p) =>
+    `      <trkpt lat="${p.lat}" lon="${p.lon}">${
+      p.alt != null ? `<ele>${p.alt}</ele>` : ''
+    }<time>${iso(p.t)}</time></trkpt>`;
+
+  // Az érvényes útvonal a fő nyomvonal; ahol elvetett szakasz szakítja meg,
+  // ott új trkseg kezdődik, hogy ne rajzolódjon át rajta egyenes.
+  const validSegs = [];
+  let run = [];
+  for (const p of points) {
+    if (isRejected(p)) {
+      if (run.length > 1) validSegs.push(run);
+      run = [];
+    } else {
+      run.push(p);
+    }
+  }
+  if (run.length > 1) validSegs.push(run);
+
+  const mainTrack = `  <trk>
+    <name>${esc(session.name)}</name>
+    <desc>Érvényes útvonal</desc>
+${validSegs.map((seg) => `    <trkseg>\n${seg.map(trkpt).join('\n')}\n    </trkseg>`).join('\n')}
+  </trk>`;
+
+  // Az elvetett szakaszok külön nyomvonalként maradnak benne, hogy az
+  // információ ne vesszen el, de ne keveredjen az érvényes útvonallal.
+  const rejectedTracks = rejectedSections(points)
+    .map((sec, i) => {
+      const seg = points.slice(sec.from, sec.to + 1);
+      if (seg.length < 2) return '';
+      return `  <trk>
+    <name>Elvetett szakasz ${i + 1}${sec.reason ? ' — ' + esc(sec.reason) : ''}</name>
+    <desc>${esc(sec.reason || 'Nem járható / nem ez a végleges útvonal')} (${Math.round(sec.length)} m)</desc>
+    <type>rejected</type>
+    <trkseg>
+${seg.map(trkpt).join('\n')}
+    </trkseg>
+  </trk>`;
+    })
+    .filter(Boolean)
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -1391,12 +1669,8 @@ function toGPX(session, points, items = []) {
     <desc>${esc(session.note)}</desc>
   </metadata>
 ${wpts}
-  <trk>
-    <name>${esc(session.name)}</name>
-    <trkseg>
-${trkpts}
-    </trkseg>
-  </trk>
+${mainTrack}
+${rejectedTracks}
 </gpx>`;
 }
 
@@ -2169,6 +2443,331 @@ function segmentDistance(a, b, p) {
 
 const clamp01 = (n) => Math.max(0, Math.min(1, n));
 
+/* ===== js/trackedit.js ===== */
+// Nyomvonal-szerkesztő: a rögzített nyomvonalon utólag kijelölhető egy
+// szakasz, amely elvetetté tehető (megmarad, indoklással, de nem számít
+// bele a hivatalos útvonalba) vagy véglegesen törölhető.
+//
+// A kísérőautó útja nem feltétlenül a jóváhagyandó útvonal: akadály miatt
+// vissza kellett fordulni, kerülőt kellett keresni. Ezt csak utólag,
+// térképen lehet rendbe tenni.
+
+
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 40;
+
+class TrackEditor {
+  constructor(root) {
+    this.root = root;
+    this.canvas = $('#trackedit-canvas', root);
+    this.points = [];
+    this.items = [];
+    this.sel = null;                  // { from, to } — indexek a points tömbben
+    this.view = { k: 1, tx: 0, ty: 0 };
+    this.hit = null;
+    this.pointers = new Map();
+    this.pinch = null;
+    this.dirty = false;
+    this._bind();
+  }
+
+  /**
+   * @returns {Promise<boolean>} true, ha változott a nyomvonal
+   */
+  open({ points, items = [], onApply }) {
+    this.points = points;
+    this.items = items;
+    this.onApply = onApply;
+    this.sel = null;
+    this.view = { k: 1, tx: 0, ty: 0 };
+    this.dirty = false;
+    this.root.hidden = false;
+    document.body.classList.add('modal-open');
+    requestAnimationFrame(() => { this.draw(); this.renderPanel(); });
+    return new Promise((resolve) => { this._resolve = resolve; });
+  }
+
+  close() {
+    this.root.hidden = true;
+    document.body.classList.remove('modal-open');
+    const r = this._resolve;
+    this._resolve = null;
+    if (r) r(this.dirty);
+  }
+
+  /* ------------------------------------------------------------- vezérlés */
+
+  _bind() {
+    const c = this.canvas;
+    c.addEventListener('pointerdown', (e) => this.onDown(e));
+    c.addEventListener('pointermove', (e) => this.onMove(e));
+    c.addEventListener('pointerup', (e) => this.onUp(e));
+    c.addEventListener('pointercancel', (e) => this.onUp(e));
+    c.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+    c.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    $('#trackedit-close', this.root).addEventListener('click', () => this.close());
+    $('#trackedit-zoom-in', this.root).addEventListener('click', () => this.zoomBy(1.5));
+    $('#trackedit-zoom-out', this.root).addEventListener('click', () => this.zoomBy(1 / 1.5));
+    $('#trackedit-fit', this.root).addEventListener('click', () => {
+      this.view = { k: 1, tx: 0, ty: 0 };
+      this.draw();
+    });
+
+    $('#trackedit-reject', this.root).addEventListener('click', () => this.markSelection(REJECTED));
+    $('#trackedit-accept', this.root).addEventListener('click', () => this.markSelection('ok'));
+    $('#trackedit-delete', this.root).addEventListener('click', () => this.deleteSelection());
+    $('#trackedit-clear-sel', this.root).addEventListener('click', () => {
+      this.sel = null;
+      this.draw();
+      this.renderPanel();
+    });
+
+    for (const id of ['#trackedit-from', '#trackedit-to']) {
+      $(id, this.root).addEventListener('input', (e) => {
+        if (!this.sel) return;
+        const v = Number(e.target.value);
+        if (id === '#trackedit-from') this.sel.from = Math.min(v, this.sel.to);
+        else this.sel.to = Math.max(v, this.sel.from);
+        this.draw();
+        this.renderPanel();
+      });
+    }
+
+    if (window.ResizeObserver) {
+      let pending = false;
+      new ResizeObserver(() => {
+        if (this.root.hidden || pending) return;
+        pending = true;
+        requestAnimationFrame(() => { pending = false; this.draw(); });
+      }).observe($('#trackedit-stage', this.root));
+    }
+  }
+
+  /* --------------------------------------------------- nagyítás, mozgatás */
+
+  local(e) {
+    const r = this.canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  onDown(e) {
+    this.canvas.setPointerCapture(e.pointerId);
+    this.pointers.set(e.pointerId, this.local(e));
+    if (this.pointers.size === 2) {
+      const [a, b] = [...this.pointers.values()];
+      this.pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), k: this.view.k };
+      this.moved = true;
+    } else {
+      this.start = this.local(e);
+      this.startView = { ...this.view };
+      this.moved = false;
+    }
+  }
+
+  onMove(e) {
+    if (!this.pointers.has(e.pointerId)) return;
+    this.pointers.set(e.pointerId, this.local(e));
+
+    if (this.pointers.size === 2 && this.pinch) {
+      const [a, b] = [...this.pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const k = clamp(this.pinch.k * (dist / (this.pinch.dist || 1)), MIN_ZOOM, MAX_ZOOM);
+      this.zoomAt(mid, k);
+      return;
+    }
+
+    const p = this.local(e);
+    if (!this.start) return;
+    const dx = p.x - this.start.x, dy = p.y - this.start.y;
+    if (Math.hypot(dx, dy) > 8) this.moved = true;
+    if (this.moved) {
+      this.view.tx = this.startView.tx + dx;
+      this.view.ty = this.startView.ty + dy;
+      this.draw();
+    }
+  }
+
+  onUp(e) {
+    const p = this.pointers.get(e.pointerId);
+    this.pointers.delete(e.pointerId);
+    if (this.pointers.size < 2) this.pinch = null;
+    if (this.pointers.size === 0 && !this.moved && p) this.tap(p);
+    if (this.pointers.size === 0) this.start = null;
+  }
+
+  onWheel(e) {
+    e.preventDefault();
+    const k = clamp(this.view.k * (e.deltaY < 0 ? 1.2 : 1 / 1.2), MIN_ZOOM, MAX_ZOOM);
+    this.zoomAt(this.local(e), k);
+  }
+
+  zoomBy(f) {
+    const r = this.canvas.getBoundingClientRect();
+    this.zoomAt({ x: r.width / 2, y: r.height / 2 }, clamp(this.view.k * f, MIN_ZOOM, MAX_ZOOM));
+  }
+
+  /** Nagyítás úgy, hogy a megadott képernyőpont a helyén maradjon. */
+  zoomAt(anchor, k) {
+    const ratio = k / this.view.k;
+    this.view.tx = anchor.x - (anchor.x - this.view.tx) * ratio;
+    this.view.ty = anchor.y - (anchor.y - this.view.ty) * ratio;
+    this.view.k = k;
+    this.draw();
+  }
+
+  /* ------------------------------------------------------------ kijelölés */
+
+  tap(p) {
+    if (!this.hit || !this.hit.nearest) return;
+    const { index, distance } = this.hit.nearest(p.x, p.y);
+    if (index < 0 || distance > 44) return; // nem a nyomvonalra koppintott
+
+    if (!this.sel) {
+      this.sel = { from: index, to: index };
+    } else {
+      // a közelebbi fogópontot mozgatjuk
+      const dFrom = Math.abs(index - this.sel.from);
+      const dTo = Math.abs(index - this.sel.to);
+      if (dFrom <= dTo) this.sel.from = Math.min(index, this.sel.to);
+      else this.sel.to = Math.max(index, this.sel.from);
+    }
+    this.draw();
+    this.renderPanel();
+  }
+
+  selectedPoints() {
+    if (!this.sel) return [];
+    return this.points.slice(this.sel.from, this.sel.to + 1);
+  }
+
+  /* -------------------------------------------------------------- műveletek */
+
+  async markSelection(status) {
+    const pts = this.selectedPoints();
+    if (pts.length < 2) {
+      toast('Jelöljön ki legalább két pontot a nyomvonalon.', 'error');
+      return;
+    }
+
+    let reason = '';
+    if (status === REJECTED) {
+      const prev = pts.find((p) => p.reason);
+      const res = await modal({
+        title: 'Szakasz elvetése',
+        text: `${pts.length} pont, ${formatDistance(trackLength(pts))} — az adat megmarad, de nem számít bele a hivatalos útvonalba.`,
+        fields: [{
+          name: 'reason',
+          label: 'Miért nem járható ez a szakasz?',
+          type: 'textarea',
+          rows: 3,
+          value: prev ? prev.reason : '',
+          placeholder: 'pl. 3,8 m magasságkorlát a hídnál, vissza kellett fordulni',
+        }],
+        okText: 'Elvetés',
+      });
+      if (!res) return;
+      reason = res.reason;
+    }
+
+    for (const p of pts) {
+      if (status === REJECTED) { p.status = REJECTED; p.reason = reason; }
+      else { delete p.status; delete p.reason; }
+    }
+    await this.onApply({ updated: pts });
+    this.dirty = true;
+    this.draw();
+    this.renderPanel();
+    toast(status === REJECTED ? 'Szakasz elvetve.' : 'Szakasz visszaállítva érvényesre.');
+  }
+
+  async deleteSelection() {
+    const pts = this.selectedPoints();
+    if (!pts.length) return;
+    const ok = await modal({
+      title: 'Szakasz végleges törlése?',
+      text: `${pts.length} nyomvonalpont (${formatDistance(trackLength(pts))}) törlődik. Ha az információra később szükség lehet, inkább vesse el a szakaszt törlés helyett.`,
+      okText: 'Végleges törlés',
+    });
+    if (!ok) return;
+
+    const ids = pts.map((p) => p.id).filter((id) => id != null);
+    this.points.splice(this.sel.from, this.sel.to - this.sel.from + 1);
+    await this.onApply({ deleted: ids });
+    this.dirty = true;
+    this.sel = null;
+    this.draw();
+    this.renderPanel();
+    toast('Szakasz törölve.');
+  }
+
+  /* --------------------------------------------------------------- kirajz */
+
+  draw() {
+    if (this.root.hidden) return;
+    this.hit = renderTrack(this.canvas, this.points, this.items, {
+      view: this.view,
+      selection: this.sel,
+      lineWidth: 5,
+    });
+  }
+
+  renderPanel() {
+    const len = lengthByStatus(this.points);
+    $('#te-ok', this.root).textContent = formatDistance(len.ok);
+    $('#te-rejected', this.root).textContent = formatDistance(len.rejected);
+
+    const secs = rejectedSections(this.points);
+    const list = $('#trackedit-sections', this.root);
+    list.innerHTML = '';
+    $('#trackedit-sections-wrap', this.root).hidden = secs.length === 0;
+    secs.forEach((sec, i) => {
+      list.appendChild(
+        el('button', {
+          class: 'section-row',
+          type: 'button',
+          onclick: () => {
+            this.sel = { from: sec.from, to: sec.to };
+            this.draw();
+            this.renderPanel();
+          },
+        }, [
+          el('span', { class: 'section-idx', text: String(i + 1) }),
+          el('span', { class: 'section-body' }, [
+            el('span', { class: 'section-reason', text: sec.reason || 'Elvetett szakasz (nincs indoklás)' }),
+            el('span', { class: 'section-sub', text: `${formatDistance(sec.length)} · ${sec.count} pont` }),
+          ]),
+        ])
+      );
+    });
+
+    const hasSel = !!this.sel;
+    $('#trackedit-selinfo', this.root).hidden = !hasSel;
+    $('#trackedit-hint', this.root).hidden = hasSel;
+    for (const id of ['#trackedit-reject', '#trackedit-accept', '#trackedit-delete', '#trackedit-clear-sel']) {
+      $(id, this.root).disabled = !hasSel;
+    }
+    if (!hasSel) return;
+
+    const pts = this.selectedPoints();
+    const rejected = pts.filter(isRejected).length;
+    $('#trackedit-selstats', this.root).textContent =
+      `${pts.length} pont · ${formatDistance(trackLength(pts))} · ${
+        formatDuration((pts[pts.length - 1]?.t || 0) - (pts[0]?.t || 0))
+      }${rejected ? ` · ${rejected} már elvetett` : ''}`;
+
+    const max = Math.max(0, this.points.length - 1);
+    const from = $('#trackedit-from', this.root);
+    const to = $('#trackedit-to', this.root);
+    from.max = to.max = String(max);
+    from.value = String(this.sel.from);
+    to.value = String(this.sel.to);
+  }
+}
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
 /* ===== js/app.js ===== */
 // Útvonalbejárás — fő alkalmazáslogika
 
@@ -2191,6 +2790,7 @@ const RECORDING_HINT = 'Rögzítés fut — tartsa nyitva az alkalmazást, a ké
 let recorder = null;
 let audioRec = null;
 let editor = null;
+let trackEditor = null;
 let tickTimer = null;
 let trackHit = null;
 
@@ -2388,13 +2988,22 @@ async function openSession(id) {
 
 function renderMeta() {
   const s = state.session;
+  const len = lengthByStatus(state.points);
+  const secs = rejectedSections(state.points);
   const rows = [
     ['Megnevezés', s.name],
     ['Létrehozva', formatDateTime(s.created)],
     ['Szerelvény', vehicleSummary(s.vehicle) || '—'],
-    ['Nyomvonal', `${formatDistance(s.stats?.distance || 0)} · ${state.points.length} pont`],
-    ['Megjegyzés', s.note || '—'],
+    ['Érvényes útvonal', `${formatDistance(len.ok)} · ${state.points.length} pont`],
   ];
+  if (secs.length) {
+    rows.push(['Elvetett szakasz', `${secs.length} db · ${formatDistance(len.rejected)}`]);
+    secs.forEach((sec, i) => {
+      rows.push([`↳ ${i + 1}.`, `${sec.reason || 'nincs indoklás'} (${formatDistance(sec.length)})`]);
+    });
+    rows.push(['Bejárt összesen', formatDistance(len.total)]);
+  }
+  rows.push(['Megjegyzés', s.note || '—']);
   $('#session-meta').innerHTML = '';
   for (const [k, v] of rows) {
     $('#session-meta').appendChild(
@@ -2407,17 +3016,30 @@ function renderMeta() {
 }
 
 function updateStats() {
-  const dist = trackLength(state.points);
-  $('#st-distance').textContent = formatDistance(dist);
+  // a „táv” a hivatalos útvonal hossza: az elvetett szakaszok nem számítanak bele
+  const len = lengthByStatus(state.points);
+  $('#st-distance').textContent = formatDistance(len.ok);
+  $('#st-dist-label').textContent = len.rejected > 0 ? 'Érvényes' : 'Táv';
   $('#st-points').textContent = String(state.points.length);
   const elapsed = state.recording ? state.recElapsed + (Date.now() - state.recStartedAt) : state.recElapsed;
   $('#st-time').textContent = formatDuration(elapsed);
   const last = recorder && recorder.current;
   $('#st-acc').textContent = last && last.acc != null ? '±' + last.acc + ' m' : '—';
+
+  const secs = rejectedSections(state.points);
+  const summary = $('#reject-summary');
+  summary.hidden = secs.length === 0;
+  if (secs.length) {
+    summary.textContent =
+      `⚠️ ${secs.length} elvetett szakasz · ${formatDistance(len.rejected)} — megnyitás szerkesztésre`;
+  }
+
   if (state.session) {
     state.session.stats = {
       ...(state.session.stats || {}),
-      distance: dist,
+      distance: len.ok,          // hivatalos útvonal
+      distanceDriven: len.total, // a kísérőautó teljes útja
+      rejected: len.rejected,
       points: state.points.length,
       elapsed,
     };
@@ -2437,7 +3059,7 @@ function startRecording() {
     onPoint: async (pt) => {
       const rec = { ...pt, sessionId: state.session.id };
       state.points.push(rec);
-      await db.addPoint(rec);
+      rec.id = await db.addPoint(rec); // az azonosító kell a későbbi szerkesztéshez
       $('#gps-status').textContent = RECORDING_HINT;
       updateStats();
       if (state.screen === 'session') drawTrack();
@@ -2485,13 +3107,60 @@ async function stopRecording(silent = false) {
       ...(state.session.stats || {}),
       endedAt: Date.now(),
       elapsed: state.recElapsed,
-      distance: trackLength(state.points),
+      distance: lengthByStatus(state.points).ok,
       points: state.points.length,
     };
     await db.saveSession(state.session);
     renderMeta();
   }
   if (!silent) toast('Rögzítés leállítva, a nyomvonal mentve.');
+}
+
+/**
+ * Nyomvonal utólagos szerkesztése: a kísérőautó útja nem feltétlenül a
+ * jóváhagyandó útvonal, ezért szakaszonként elvethető vagy törölhető.
+ */
+async function openTrackEditor() {
+  if (state.points.length < 2) {
+    toast('Ehhez a bejáráshoz még nincs elég rögzített nyomvonalpont.', 'error');
+    return;
+  }
+  if (state.recording) {
+    const ok = await modal({
+      title: 'Rögzítés fut',
+      text: 'A szerkesztéshez le kell állítani a nyomvonal rögzítését. Leállítsuk most?',
+      okText: 'Leállítás és szerkesztés',
+    });
+    if (!ok) return;
+    await stopRecording(true);
+  }
+
+  if (!trackEditor) trackEditor = new TrackEditor($('#trackedit'));
+  const changed = await trackEditor.open({
+    points: state.points,
+    items: state.items,
+    onApply: async ({ updated, deleted }) => {
+      if (updated) await db.updatePoints(updated);
+      if (deleted) await db.deletePoints(deleted);
+      if (state.session) {
+        const len = lengthByStatus(state.points);
+        state.session.stats = {
+          ...(state.session.stats || {}),
+          distance: len.ok,
+          distanceDriven: len.total,
+          rejected: len.rejected,
+          points: state.points.length,
+        };
+        await db.saveSession(state.session);
+      }
+    },
+  });
+
+  if (changed) {
+    updateStats();
+    renderMeta();
+    drawTrack();
+  }
 }
 
 let wakeLock = null;
@@ -2950,7 +3619,8 @@ async function importJSON(file) {
 }
 
 function openInMaps() {
-  const pts = state.points;
+  // csak az érvényes útvonal: az elvetett szakaszokon nem kell végigvinni
+  const pts = state.points.filter((p) => !isRejected(p));
   if (!pts.length) { toast('Nincs rögzített nyomvonal.', 'error'); return; }
   const origin = pts[0];
   const dest = pts[pts.length - 1];
@@ -2995,6 +3665,8 @@ function bind() {
 
   $('#rec-toggle').addEventListener('click', () => (state.recording ? stopRecording() : startRecording()));
   $('#rec-mark').addEventListener('click', markPoint);
+  $('#edit-track').addEventListener('click', openTrackEditor);
+  $('#reject-summary').addEventListener('click', openTrackEditor);
   $('#cap-photo').addEventListener('click', () => $('#photo-input').click());
   $('#photo-input').addEventListener('change', onPhotoSelected);
   $('#cap-audio').addEventListener('click', () => recordAudio(null));

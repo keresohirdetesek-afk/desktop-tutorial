@@ -12,6 +12,7 @@ const ASSETS = [
   'js/ui.js',
   'js/media.js',
   'js/editor.js',
+  'js/trackedit.js',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/icon-192.png',
