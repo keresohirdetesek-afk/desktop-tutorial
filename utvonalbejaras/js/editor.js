@@ -35,7 +35,8 @@ export class PhotoEditor {
     this.colorByTool = { dir: '#ffffff' };
     this.width = 6;          // referencia-egységben
     this.dirAlpha = 0.35;    // az útirány-nyíl halványsága
-    this.dirCurve = false;
+    this.active = null;      // a fogópontokkal igazítható útirány-nyíl indexe
+    this.drag = null;        // épp húzott fogópont
     this.draft = null;
     this.image = null;
     this.layout = { ox: 0, oy: 0, dw: 1, dh: 1 };
@@ -49,6 +50,8 @@ export class PhotoEditor {
       this._resolve = resolve;
       this.ops = JSON.parse(JSON.stringify(ops || []));
       this.redoStack = [];
+      this.active = null;
+      this.drag = null;
       this.imageBlob = imageBlob;
       $('#editor-title', this.root).textContent = title;
       this.root.hidden = false;
@@ -117,8 +120,11 @@ export class PhotoEditor {
       for (const op of this.ops) if (op.k === 'dir') op.alpha = this.dirAlpha;
       this.draw();
     });
-    $('#editor-dir-curve', this.root).addEventListener('change', (e) => {
-      this.dirCurve = e.target.checked;
+    $('#editor-dir-straight', this.root).addEventListener('click', () => {
+      const op = this.activeOp();
+      if (!op) { toast('Előbb rajzoljon vagy válasszon ki egy útirány-nyilat.'); return; }
+      delete op.mid;
+      this.draw();
     });
     $$('[data-quickdir]', this.root).forEach((btn) =>
       btn.addEventListener('click', () => this.quickDirection(btn.dataset.quickdir))
@@ -162,7 +168,24 @@ export class PhotoEditor {
     this.colorByTool[this.tool] = this.color;
     this.tool = id;
     this.color = this.colorByTool[id] || COLORS[0];
+    if (id !== 'dir') this.active = null; // a fogópontok csak az útirány-eszköznél
     this._syncToolUI();
+    this.draw();
+  }
+
+  /** A fogópontokkal éppen igazítható útirány-nyíl. */
+  activeOp() {
+    const op = this.active == null ? null : this.ops[this.active];
+    return op && op.k === 'dir' ? op : null;
+  }
+
+  /** A nyíl három fogópontja normalizált koordinátákban. */
+  handlesOf(op) {
+    return [
+      { key: 'a', p: op.a },
+      { key: 'b', p: op.b },
+      { key: 'mid', p: op.mid || [(op.a[0] + op.b[0]) / 2, (op.a[1] + op.b[1]) / 2] },
+    ];
   }
 
   _syncToolUI() {
@@ -220,6 +243,20 @@ export class PhotoEditor {
 
     if (this.tool === 'erase') { this.eraseAt(p); return; }
 
+    if (this.tool === 'dir') {
+      // meglévő nyíl fogópontjának megfogása, vagy másik nyíl kiválasztása
+      const grabbed = this.grabHandle(p);
+      if (grabbed) { this.drag = grabbed; return; }
+      const idx = this.findDirAt(p);
+      if (idx != null && idx !== this.active) {
+        this.active = idx;
+        this.dirAlpha = this.ops[idx].alpha ?? this.dirAlpha;
+        this._syncToolUI();
+        this.draw();
+        return;
+      }
+    }
+
     if (this.tool === 'text') {
       this.addText(p);
       return;
@@ -231,7 +268,7 @@ export class PhotoEditor {
     } else if (this.tool === 'dir') {
       this.draft = {
         k: 'dir', a: p, b: p, color: this.color,
-        w: Math.max(this.width * 2.6, 14), alpha: this.dirAlpha, curve: this.dirCurve,
+        w: Math.max(this.width * 2.6, 14), alpha: this.dirAlpha,
       };
     } else if (this.tool === 'dim') {
       this.draft = { k: 'dim', a: p, b: p, color: this.color, w: this.width, label: '' };
@@ -241,7 +278,35 @@ export class PhotoEditor {
     this.draw();
   }
 
+  /** Fogópont a koppintás közelében? (képernyő-pixelben mérve) */
+  grabHandle(p) {
+    const op = this.activeOp();
+    if (!op) return null;
+    const { dw, dh } = this.layout;
+    for (const h of this.handlesOf(op)) {
+      const d = Math.hypot((h.p[0] - p[0]) * dw, (h.p[1] - p[1]) * dh);
+      if (d < 26) return { key: h.key, index: this.active };
+    }
+    return null;
+  }
+
+  /** A koppintáshoz tartozó útirány-nyíl indexe, ha van ilyen. */
+  findDirAt(p) {
+    for (let i = this.ops.length - 1; i >= 0; i--) {
+      if (this.ops[i].k === 'dir' && hitTest(this.ops[i], p)) return i;
+    }
+    return null;
+  }
+
   onMove(e) {
+    if (this.drag) {
+      const op = this.ops[this.drag.index];
+      const p = this.toNorm(e);
+      if (this.drag.key === 'mid') op.mid = p;
+      else op[this.drag.key] = p;
+      this.draw();
+      return;
+    }
     if (!this.draft) return;
     const p = this.toNorm(e);
     if (this.draft.k === 'pen') {
@@ -254,6 +319,7 @@ export class PhotoEditor {
   }
 
   async onUp(e) {
+    if (this.drag) { this.drag = null; this.draw(); return; }
     if (!this.draft) return;
     const op = this.draft;
     this.draft = null;
@@ -268,6 +334,11 @@ export class PhotoEditor {
       op.label = value;
     }
     this.commit(op);
+    if (op.k === 'dir') {
+      // a friss nyíl rögtön igazítható: fogópontok a végeken és az ívnél
+      this.active = this.ops.length - 1;
+      this.draw();
+    }
   }
 
   async askDimension() {
@@ -316,9 +387,11 @@ export class PhotoEditor {
     const m = map[dir] || map.right;
     this.commit({
       k: 'dir', a: m.a, b: m.b, color: this.color,
-      w: Math.max(this.width * 3.2, 18), alpha: this.dirAlpha, curve: this.dirCurve,
+      w: Math.max(this.width * 3.2, 18), alpha: this.dirAlpha,
     });
-    toast('Útirány-nyíl beszúrva — a halványságát a csúszkával állíthatja.');
+    this.active = this.ops.length - 1;
+    this.draw();
+    toast('Útirány-nyíl beszúrva — a fogópontokkal igazíthatja, a csúszkával halványíthatja.');
   }
 
   commit(op) {
@@ -360,11 +433,42 @@ export class PhotoEditor {
     ctx.drawImage(this.image, ox, oy, dw, dh);
     const ops = this.draft ? this.ops.concat([this.draft]) : this.ops;
     for (const op of ops) drawOp(ctx, op, ox, oy, dw, dh);
+    this.drawHandles(ctx, ox, oy, dw, dh);
     $('#editor-undo', this.root).disabled = !this.ops.length;
     $('#editor-redo', this.root).disabled = !this.redoStack.length;
     $('#editor-count', this.root).textContent = this.ops.length
       ? `${this.ops.length} jelölés`
       : 'Nincs jelölés';
+  }
+
+  /**
+   * Az útirány-nyíl fogópontjai. Csak a szerkesztőben látszanak — a
+   * lapított exportra nem kerülnek rá.
+   */
+  drawHandles(ctx, ox, oy, dw, dh) {
+    const op = this.activeOp();
+    if (!op || this.tool !== 'dir') return;
+    ctx.save();
+    for (const h of this.handlesOf(op)) {
+      const x = ox + h.p[0] * dw, y = oy + h.p[1] * dh;
+      const isMid = h.key === 'mid';
+      ctx.beginPath();
+      ctx.arc(x, y, isMid ? 11 : 9, 0, Math.PI * 2);
+      ctx.fillStyle = isMid ? '#ffd60a' : '#ffffff';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.stroke();
+      if (isMid) {
+        // hajlítás-jel: kis ív a fogópont közepén
+        ctx.beginPath();
+        ctx.arc(x, y + 3.5, 5, Math.PI * 1.15, Math.PI * 1.85);
+        ctx.strokeStyle = '#0b0f16';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   /** Kép + jelölések teljes felbontású, lapított exportja. */
@@ -400,7 +504,7 @@ export class PhotoEditor {
 const HINTS = {
   pen: 'Húzza az ujját a képen a szabadkézi jelöléshez.',
   arrow: 'Húzással rajzolhat kiemelő nyilat.',
-  dir: 'Húzza a haladás irányába — a nyíl halvány marad, hogy ne takarja a képet.',
+  dir: 'Húzza a haladás irányába, majd a középső sárga fogóponttal hajlítsa meg az ívet.',
   dim: 'Húzzon vonalat a két pont közé, majd írja be a méretet.',
   text: 'Koppintson oda, ahová a szöveg kerüljön.',
   rect: 'Húzással keretezhet be egy részletet.',
@@ -432,10 +536,10 @@ export function drawOp(ctx, op, ox, oy, dw, dh) {
   } else if (op.k === 'arrow') {
     strokeArrow(ctx, X(op.a), Y(op.a), X(op.b), Y(op.b), ctx.lineWidth, false);
   } else if (op.k === 'dir') {
-    // halvány útirány-nyíl: vastag test + világos kontúr, hogy sötét és
+    // halvány útirány-nyíl: vastag test + sötét kontúr, hogy sötét és
     // világos háttéren is olvasható maradjon
     ctx.lineWidth = Math.max(2, (op.w || 18) * S);
-    strokeArrow(ctx, X(op.a), Y(op.a), X(op.b), Y(op.b), ctx.lineWidth, true, op.curve);
+    strokeArrow(ctx, X(op.a), Y(op.a), X(op.b), Y(op.b), ctx.lineWidth, true, controlPoint(op, X, Y));
   } else if (op.k === 'dim') {
     drawDimension(ctx, X(op.a), Y(op.a), X(op.b), Y(op.b), op, S, bounds);
   } else if (op.k === 'text') {
@@ -444,29 +548,53 @@ export function drawOp(ctx, op, ox, oy, dw, dh) {
   ctx.restore();
 }
 
-function strokeArrow(ctx, x1, y1, x2, y2, w, filled, curve) {
-  const ang = Math.atan2(y2 - y1, x2 - x1);
+/**
+ * A hajlítás-fogópont a görbén ül (t=0,5), a Bézier vezérlőpont ebből
+ * számolható: C = 2·M − (A+B)/2. Így a fogópont oda kerül, ahová húzzák.
+ */
+export function controlPoint(op, X, Y) {
+  if (op.mid) {
+    const mx = X(op.mid), my = Y(op.mid);
+    return { x: 2 * mx - (X(op.a) + X(op.b)) / 2, y: 2 * my - (Y(op.a) + Y(op.b)) / 2 };
+  }
+  if (op.curve) {
+    // korábbi verzió „ívelt” kapcsolója: merőleges eltolás a felezőpontnál
+    const x1 = X(op.a), y1 = Y(op.a), x2 = X(op.b), y2 = Y(op.b);
+    const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+    return {
+      x: (x1 + x2) / 2 - ((y2 - y1) / len) * len * 0.36,
+      y: (y1 + y2) / 2 + ((x2 - x1) / len) * len * 0.36,
+    };
+  }
+  return null;
+}
+
+function strokeArrow(ctx, x1, y1, x2, y2, w, filled, ctrl) {
   const head = Math.max(w * (filled ? 1.9 : 2.6), 10);
-  const len = Math.hypot(x2 - x1, y2 - y1);
-  const bx = x2 - Math.cos(ang) * head * 0.85;
-  const by = y2 - Math.sin(ang) * head * 0.85;
+  // a nyílhegy a görbe végponti érintőjének irányába néz
+  const tx = ctrl ? x2 - ctrl.x : x2 - x1;
+  const ty = ctrl ? y2 - ctrl.y : y2 - y1;
+  const tl = Math.hypot(tx, ty) || 1;
+  const ux = tx / tl, uy = ty / tl;
+  const bx = x2 - ux * head * 0.85;
+  const by = y2 - uy * head * 0.85;
 
   if (filled) {
-    // világos szegély a kontraszt kedvéért
+    // sötét szegély a kontraszt kedvéért
     ctx.save();
     ctx.globalAlpha = Math.min(1, (ctx.globalAlpha || 1) * 0.55);
     ctx.strokeStyle = 'rgba(0,0,0,0.65)';
     ctx.lineWidth = w + Math.max(2, w * 0.25);
-    strokeArrowPath(ctx, x1, y1, bx, by, curve, len);
+    strokeArrowPath(ctx, x1, y1, bx, by, ctrl);
     ctx.restore();
   }
 
-  strokeArrowPath(ctx, x1, y1, bx, by, curve, len);
+  strokeArrowPath(ctx, x1, y1, bx, by, ctrl);
 
   // nyílhegy
   ctx.save();
   ctx.translate(x2, y2);
-  ctx.rotate(curve ? Math.atan2(y2 - by, x2 - bx) : ang);
+  ctx.rotate(Math.atan2(uy, ux));
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.lineTo(-head, head * 0.62);
@@ -477,17 +605,11 @@ function strokeArrow(ctx, x1, y1, x2, y2, w, filled, curve) {
   ctx.restore();
 }
 
-function strokeArrowPath(ctx, x1, y1, x2, y2, curve, len) {
+function strokeArrowPath(ctx, x1, y1, x2, y2, ctrl) {
   ctx.beginPath();
   ctx.moveTo(x1, y1);
-  if (curve) {
-    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
-    const nx = -(y2 - y1) / (len || 1), ny = (x2 - x1) / (len || 1);
-    const off = (len || 0) * 0.18;
-    ctx.quadraticCurveTo(mx + nx * off, my + ny * off, x2, y2);
-  } else {
-    ctx.lineTo(x2, y2);
-  }
+  if (ctrl) ctx.quadraticCurveTo(ctrl.x, ctrl.y, x2, y2);
+  else ctx.lineTo(x2, y2);
   ctx.stroke();
 }
 
@@ -580,6 +702,22 @@ function hitTest(op, p) {
     return near(p[0], x1, x2) && near(p[1], y1, y2) &&
       (Math.abs(p[0] - x1) < tol || Math.abs(p[0] - x2) < tol ||
        Math.abs(p[1] - y1) < tol || Math.abs(p[1] - y2) < tol);
+  }
+  if (op.k === 'dir' && op.mid) {
+    // ívelt nyíl: a görbét mintavételezve mérünk, nem a húrhoz képest
+    const c = [
+      2 * op.mid[0] - (op.a[0] + op.b[0]) / 2,
+      2 * op.mid[1] - (op.a[1] + op.b[1]) / 2,
+    ];
+    for (let i = 0; i <= 12; i++) {
+      const t = i / 12, u = 1 - t;
+      const q = [
+        u * u * op.a[0] + 2 * u * t * c[0] + t * t * op.b[0],
+        u * u * op.a[1] + 2 * u * t * c[1] + t * t * op.b[1],
+      ];
+      if (dist(q, p) < 0.06) return true;
+    }
+    return false;
   }
   return segmentDistance(op.a, op.b, p) < (op.k === 'dir' ? 0.06 : tol);
 }

@@ -16,6 +16,7 @@ készüléken maradnak (IndexedDB), és offline is elérhetők.
 |---|---|
 | **Nyomvonal rögzítése** GPS-szel, élő távolság / idő / pontszám / pontosság | Aktív bejárás → *Nyomvonal rögzítése* |
 | **Nyomvonal utólagos szerkesztése**: szakasz elvetése indoklással vagy törlése | *Nyomvonal szerkesztése* |
+| **Hiányzó szakasz berajzolása** a térképre, ahol nincs GPS-nyom | *Nyomvonal szerkesztése* → *Hiányzó szakasz berajzolása* |
 | **Fotó** készítése menet közben, automatikus GPS-koordinátával | *Fotó* gomb (a telefon kameráját nyitja) |
 | **Rajzolás a képernyőn** a fotóra (szabadkéz, keret, jelölő nyíl) | Fotó → *Jelölés / méretek* |
 | **Méretek beírása**: méretvonal két pont közé + beírt érték (m / cm / t) | Szerkesztő → *Méret* eszköz |
@@ -32,9 +33,13 @@ amely csak ennél az eszköznél jelenik meg:
 
 - **Halványság csúszka (10–90%)** — alapérték 35%. A csúszka a képen már
   meglévő útirány-nyilakat is együtt állítja, hogy egységes maradjon a kép.
-- **Ívelt nyíl** kapcsoló kanyar jelöléséhez.
+- **Az ív fogóponttal állítható**: a megrajzolt nyílon három fogópont jelenik
+  meg — a két végpont, és középen egy sárga **hajlítás**-pont. Ez utóbbit húzva
+  bármelyik irányba, tetszőleges mértékben meggörbíthető a nyíl, így pontosan
+  követi a kanyart. A *Nyíl egyenesítése* gomb visszaállítja egyenesre. Egy
+  meglévő nyílra koppintva később is előhívhatók a fogópontjai.
 - **Gyors beszúrás**: *Balra / Jobbra / Előre / Hátra* — egy koppintással
-  elhelyez egy kész nyilat, ami utána a csúszkával hangolható.
+  elhelyez egy kész nyilat, ami utána a fogópontokkal igazítható.
 - A nyíl alapból **fehér**, vastagabb a többi vonalnál, és sötét kontúrt kap,
   így világos és sötét háttéren is látszik anélkül, hogy takarná a részleteket.
 
@@ -59,6 +64,14 @@ tenni — a *Nyomvonal szerkesztése* gombbal.
 - **Törlés**: ha az adatra nincs szükség, a kijelölt pontok véglegesen
   törölhetők.
 
+**Hiányzó szakasz berajzolása.** Ha a helyes kerülőn a kísérőautó egyáltalán
+nem ment végig, nincs róla GPS-nyom — ilyenkor a *Hiányzó szakasz berajzolása*
+gombbal közvetlenül a térképre rajzolható. Koppintson sorban a szakasz
+pontjaira; a meglévő nyomvonal (vagy egy másik berajzolt szakasz) közelében a
+csúcs automatikusan **odailleszkedik**, így hézag nélkül csatlakozik. Az
+*Utolsó pont* visszavon, a *Szakasz kész* menti névvel és megjegyzéssel. A kész
+szakasz zölden jelenik meg, a listából kijelölhető, átnevezhető és törölhető.
+
 Ami ilyenkor a helyére kerül:
 
 - a **Táv** mező az **érvényes** útvonal hosszát mutatja, a bejárt teljes út
@@ -67,7 +80,8 @@ Ami ilyenkor a helyére kerül:
   indoklásával;
 - a **GPX** fő nyomvonala csak az érvényes útvonalat tartalmazza (ott, ahol
   elvetett szakasz szakítja meg, új `trkseg` kezdődik), az elvetett részek
-  pedig külön, elnevezett nyomvonalként maradnak a fájlban;
+  pedig külön, elnevezett nyomvonalként maradnak a fájlban (`<type>rejected</type>`),
+  ahogy a berajzolt szakaszok is (`<type>drawn</type>`);
 - a *Megnyitás térképen* is csak az érvényes útvonalat viszi át.
 
 ---

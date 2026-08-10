@@ -226,7 +226,10 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
 
   const coords = points.filter((p) => p.lat != null && p.lon != null);
   const markerPts = markers.filter((m) => m.lat != null && m.lon != null);
-  const all = coords.concat(markerPts);
+  const drawn = opts.drawn || [];        // kézzel berajzolt szakaszok
+  const draft = opts.draft || null;      // éppen rajzolt szakasz
+  const drawnPts = drawn.flatMap((s) => s.pts).concat(draft ? draft.pts || [] : []);
+  const all = coords.concat(markerPts, drawnPts);
 
   if (!all.length) {
     ctx.fillStyle = dim;
@@ -335,6 +338,44 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     dot(ctx, e, 6, '#ff5f56');
   }
 
+  // kézzel berajzolt szakaszok — ott, ahol nincs GPS-nyom, de ez a helyes út
+  const drawColor = opts.drawnLine || '#3ddc84';
+  const drawPoly = (pts, { color, width, dash, alpha = 1, vertices = false }) => {
+    if (!pts || pts.length < 2) {
+      if (pts && pts.length === 1) {
+        dot(ctx, project(pts[0].lat, pts[0].lon), 5, color, '#0b0f16');
+      }
+      return;
+    }
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash || []);
+    ctx.lineJoin = ctx.lineCap = 'round';
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      const s = project(p.lat, p.lon);
+      i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (vertices) for (const p of pts) dot(ctx, project(p.lat, p.lon), 4, color, '#0b0f16');
+    ctx.restore();
+  };
+
+  for (const seg of drawn) {
+    const selected = opts.selectedDrawn === seg.id;
+    drawPoly(seg.pts, {
+      color: selected ? '#ffd60a' : drawColor,
+      width: selected ? lineW * 1.8 : lineW,
+      vertices: selected,
+    });
+  }
+  if (draft) {
+    drawPoly(draft.pts, { color: drawColor, width: lineW, dash: [2, lineW * 1.6], vertices: true });
+  }
+
   // elem-markerek
   const hitboxes = [];
   markerPts.forEach((m) => {
@@ -358,7 +399,31 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     return { index: best, distance: bestD };
   };
 
-  return { project, hitboxes, nearest, coords };
+  /** Képernyőpont vissza földrajzi koordinátává (rajzoláshoz). */
+  const unproject = (x, y) => ({
+    lon: cx + ((x - view.tx) / view.k - w / 2) / (kx * scale),
+    lat: cy - ((y - view.ty) / view.k - h / 2) / scale,
+  });
+
+  /** A legközelebbi berajzolt szakasz-csúcs (illesztéshez, kijelöléshez). */
+  const nearestDrawn = (x, y) => {
+    let best = null, bestD = Infinity;
+    for (const seg of drawn) {
+      seg.pts.forEach((pt, i) => {
+        const p = project(pt.lat, pt.lon);
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d < bestD) { bestD = d; best = { id: seg.id, index: i, point: pt }; }
+      });
+    }
+    return best ? { ...best, distance: bestD } : { distance: Infinity };
+  };
+
+  return { project, unproject, hitboxes, nearest, nearestDrawn, coords };
+}
+
+/** Kézzel berajzolt szakaszok együttes hossza. */
+export function drawnLength(list = []) {
+  return list.reduce((sum, s) => sum + trackLength(s.pts || []), 0);
 }
 
 function dot(ctx, p, r, fill, stroke) {
@@ -492,6 +557,21 @@ ${seg.map(trkpt).join('\n')}
     .filter(Boolean)
     .join('\n');
 
+  // Kézzel berajzolt szakaszok: ahol nem volt GPS-nyom, de ez a helyes út.
+  const drawnTracks = (session.drawn || [])
+    .filter((seg) => (seg.pts || []).length > 1)
+    .map(
+      (seg) => `  <trk>
+    <name>Berajzolt szakasz${seg.name ? ' — ' + esc(seg.name) : ''}</name>
+    <desc>${esc(seg.note || 'Térképen kézzel megadott útvonalszakasz')} (${Math.round(trackLength(seg.pts))} m)</desc>
+    <type>drawn</type>
+    <trkseg>
+${seg.pts.map((p) => `      <trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`).join('\n')}
+    </trkseg>
+  </trk>`
+    )
+    .join('\n');
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Útvonalbejárás" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
@@ -501,6 +581,7 @@ ${seg.map(trkpt).join('\n')}
   </metadata>
 ${wpts}
 ${mainTrack}
+${drawnTracks}
 ${rejectedTracks}
 </gpx>`;
 }

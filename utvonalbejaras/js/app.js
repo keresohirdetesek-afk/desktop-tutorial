@@ -3,7 +3,7 @@
 import * as db from './db.js';
 import {
   TrackRecorder, currentPosition, renderTrack, lengthByStatus, isRejected,
-  rejectedSections, formatDistance, formatDuration, formatCoord, toGPX,
+  rejectedSections, drawnLength, formatDistance, formatDuration, formatCoord, toGPX,
   typeLabel, describeItem,
 } from './geo.js';
 import { AudioRecorder, shrinkImage, makeThumb } from './media.js';
@@ -235,6 +235,13 @@ function renderMeta() {
     ['Szerelvény', vehicleSummary(s.vehicle) || '—'],
     ['Érvényes útvonal', `${formatDistance(len.ok)} · ${state.points.length} pont`],
   ];
+  const drawn = s.drawn || [];
+  if (drawn.length) {
+    rows.push(['Berajzolt szakasz', `${drawn.length} db · ${formatDistance(drawnLength(drawn))}`]);
+    drawn.forEach((seg, i) => {
+      rows.push([`↳ ${i + 1}.`, `${seg.name || 'névtelen'}${seg.note ? ' — ' + seg.note : ''}`]);
+    });
+  }
   if (secs.length) {
     rows.push(['Elvetett szakasz', `${secs.length} db · ${formatDistance(len.rejected)}`]);
     secs.forEach((sec, i) => {
@@ -288,7 +295,9 @@ function updateStats() {
 function drawTrack() {
   const canvas = $('#track-canvas');
   if (!canvas.clientWidth) return;
-  trackHit = renderTrack(canvas, state.points, state.items);
+  trackHit = renderTrack(canvas, state.points, state.items, {
+    drawn: (state.session && state.session.drawn) || [],
+  });
 }
 
 /* ------------------------------------------------------- GPS felvétel */
@@ -378,16 +387,19 @@ async function openTrackEditor() {
   const changed = await trackEditor.open({
     points: state.points,
     items: state.items,
-    onApply: async ({ updated, deleted }) => {
+    drawn: state.session.drawn || [],
+    onApply: async ({ updated, deleted, drawn }) => {
       if (updated) await db.updatePoints(updated);
       if (deleted) await db.deletePoints(deleted);
       if (state.session) {
+        if (drawn) state.session.drawn = drawn;
         const len = lengthByStatus(state.points);
         state.session.stats = {
           ...(state.session.stats || {}),
           distance: len.ok,
           distanceDriven: len.total,
           rejected: len.rejected,
+          drawn: drawnLength(state.session.drawn || []),
           points: state.points.length,
         };
         await db.saveSession(state.session);

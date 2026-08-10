@@ -505,6 +505,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   gap: 7px;
 }
 .dir-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.dir-tip { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.dir-tip strong { color: #ffd60a; }
 .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .check-row input { accent-color: var(--accent); width: 17px; height: 17px; }
 .quick-dirs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -527,6 +529,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .legend strong { color: var(--text); font-variant-numeric: tabular-nums; }
 .swatch-line { width: 20px; height: 0; border-top: 3px solid var(--accent); border-radius: 2px; }
 .swatch-line.rejected { border-top-style: dashed; border-color: #ff8a4d; }
+.swatch-line.drawn { border-color: var(--ok); }
+
+.section-row.drawn { border-left-color: var(--ok); }
+.section-row.drawn .section-idx { background: var(--ok); color: #052616; }
+.section-row.active { border-color: #ffd60a; background: color-mix(in srgb, #ffd60a 12%, var(--surface-2)); }
 
 .sections { display: flex; flex-direction: column; gap: 6px; max-height: 132px; overflow-y: auto; }
 .section-row {
@@ -734,10 +741,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
         <input id="editor-dir-alpha" type="range" min="10" max="90" value="35">
         <span id="editor-dir-alpha-val" class="slider-val">35%</span>
       </label>
-      <label class="check-row">
-        <input id="editor-dir-curve" type="checkbox">
-        <span>Ívelt nyíl (kanyar jelölése)</span>
-      </label>
+      <p class="dir-tip">
+        A megrajzolt nyílon három fogópont jelenik meg: a két végpont, és középen
+        a <strong>hajlítás</strong> — azt húzva állítható be a kanyar íve, bármelyik irányba.
+      </p>
+      <button type="button" id="editor-dir-straight" class="btn ghost tiny">Nyíl egyenesítése</button>
       <div class="quick-dirs">
         <span class="muted small">Gyors beszúrás:</span>
         <button type="button" class="btn ghost tiny" data-quickdir="left">⟸ Balra</button>
@@ -797,8 +805,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
   <div class="editor-panel">
     <div class="legend">
-      <span class="legend-item"><i class="swatch-line ok"></i>Érvényes útvonal: <strong id="te-ok">0 m</strong></span>
+      <span class="legend-item"><i class="swatch-line ok"></i>Érvényes: <strong id="te-ok">0 m</strong></span>
       <span class="legend-item"><i class="swatch-line rejected"></i>Elvetett: <strong id="te-rejected">0 m</strong></span>
+      <span class="legend-item" id="te-drawn-item" hidden><i class="swatch-line drawn"></i>Berajzolt: <strong id="te-drawn">0 m</strong></span>
     </div>
 
     <p id="trackedit-hint" class="hint">
@@ -812,11 +821,28 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <label class="slider-row"><span>B pont</span><input id="trackedit-to" type="range" min="0" max="0" value="0"></label>
     </div>
 
-    <div class="editor-row">
+    <div class="editor-row" id="trackedit-normalbar">
       <button id="trackedit-reject" class="btn ghost small" disabled>⚠️ Elvetett szakasz</button>
       <button id="trackedit-accept" class="btn ghost small" disabled>✓ Érvényes</button>
       <button id="trackedit-delete" class="btn danger small" disabled>🗑 Törlés</button>
       <button id="trackedit-clear-sel" class="btn ghost tiny" disabled>Kijelölés vége</button>
+    </div>
+
+    <div class="editor-row" id="trackedit-drawbar" hidden>
+      <button id="trackedit-draw-done" class="btn primary small">✓ Szakasz kész</button>
+      <button id="trackedit-draw-undo" class="btn ghost small">↶ Utolsó pont</button>
+      <button id="trackedit-draw-cancel" class="btn ghost small">Mégse</button>
+    </div>
+
+    <button id="trackedit-draw" class="btn ghost small block">✏️ Hiányzó szakasz berajzolása</button>
+
+    <div id="trackedit-drawn-wrap" hidden>
+      <h3 class="section-title">Berajzolt szakaszok</h3>
+      <div id="trackedit-drawn-list" class="sections"></div>
+      <div class="editor-row" id="trackedit-drawn-actions" hidden>
+        <button id="trackedit-drawn-rename" class="btn ghost tiny">Átnevezés</button>
+        <button id="trackedit-drawn-delete" class="btn danger tiny">Szakasz törlése</button>
+      </div>
     </div>
 
     <div id="trackedit-sections-wrap" hidden>
@@ -1395,7 +1421,10 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
 
   const coords = points.filter((p) => p.lat != null && p.lon != null);
   const markerPts = markers.filter((m) => m.lat != null && m.lon != null);
-  const all = coords.concat(markerPts);
+  const drawn = opts.drawn || [];        // kézzel berajzolt szakaszok
+  const draft = opts.draft || null;      // éppen rajzolt szakasz
+  const drawnPts = drawn.flatMap((s) => s.pts).concat(draft ? draft.pts || [] : []);
+  const all = coords.concat(markerPts, drawnPts);
 
   if (!all.length) {
     ctx.fillStyle = dim;
@@ -1504,6 +1533,44 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
     dot(ctx, e, 6, '#ff5f56');
   }
 
+  // kézzel berajzolt szakaszok — ott, ahol nincs GPS-nyom, de ez a helyes út
+  const drawColor = opts.drawnLine || '#3ddc84';
+  const drawPoly = (pts, { color, width, dash, alpha = 1, vertices = false }) => {
+    if (!pts || pts.length < 2) {
+      if (pts && pts.length === 1) {
+        dot(ctx, project(pts[0].lat, pts[0].lon), 5, color, '#0b0f16');
+      }
+      return;
+    }
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash || []);
+    ctx.lineJoin = ctx.lineCap = 'round';
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      const s = project(p.lat, p.lon);
+      i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (vertices) for (const p of pts) dot(ctx, project(p.lat, p.lon), 4, color, '#0b0f16');
+    ctx.restore();
+  };
+
+  for (const seg of drawn) {
+    const selected = opts.selectedDrawn === seg.id;
+    drawPoly(seg.pts, {
+      color: selected ? '#ffd60a' : drawColor,
+      width: selected ? lineW * 1.8 : lineW,
+      vertices: selected,
+    });
+  }
+  if (draft) {
+    drawPoly(draft.pts, { color: drawColor, width: lineW, dash: [2, lineW * 1.6], vertices: true });
+  }
+
   // elem-markerek
   const hitboxes = [];
   markerPts.forEach((m) => {
@@ -1527,7 +1594,31 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
     return { index: best, distance: bestD };
   };
 
-  return { project, hitboxes, nearest, coords };
+  /** Képernyőpont vissza földrajzi koordinátává (rajzoláshoz). */
+  const unproject = (x, y) => ({
+    lon: cx + ((x - view.tx) / view.k - w / 2) / (kx * scale),
+    lat: cy - ((y - view.ty) / view.k - h / 2) / scale,
+  });
+
+  /** A legközelebbi berajzolt szakasz-csúcs (illesztéshez, kijelöléshez). */
+  const nearestDrawn = (x, y) => {
+    let best = null, bestD = Infinity;
+    for (const seg of drawn) {
+      seg.pts.forEach((pt, i) => {
+        const p = project(pt.lat, pt.lon);
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d < bestD) { bestD = d; best = { id: seg.id, index: i, point: pt }; }
+      });
+    }
+    return best ? { ...best, distance: bestD } : { distance: Infinity };
+  };
+
+  return { project, unproject, hitboxes, nearest, nearestDrawn, coords };
+}
+
+/** Kézzel berajzolt szakaszok együttes hossza. */
+function drawnLength(list = []) {
+  return list.reduce((sum, s) => sum + trackLength(s.pts || []), 0);
 }
 
 function dot(ctx, p, r, fill, stroke) {
@@ -1661,6 +1752,21 @@ ${seg.map(trkpt).join('\n')}
     .filter(Boolean)
     .join('\n');
 
+  // Kézzel berajzolt szakaszok: ahol nem volt GPS-nyom, de ez a helyes út.
+  const drawnTracks = (session.drawn || [])
+    .filter((seg) => (seg.pts || []).length > 1)
+    .map(
+      (seg) => `  <trk>
+    <name>Berajzolt szakasz${seg.name ? ' — ' + esc(seg.name) : ''}</name>
+    <desc>${esc(seg.note || 'Térképen kézzel megadott útvonalszakasz')} (${Math.round(trackLength(seg.pts))} m)</desc>
+    <type>drawn</type>
+    <trkseg>
+${seg.pts.map((p) => `      <trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`).join('\n')}
+    </trkseg>
+  </trk>`
+    )
+    .join('\n');
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Útvonalbejárás" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
@@ -1670,6 +1776,7 @@ ${seg.map(trkpt).join('\n')}
   </metadata>
 ${wpts}
 ${mainTrack}
+${drawnTracks}
 ${rejectedTracks}
 </gpx>`;
 }
@@ -1881,7 +1988,8 @@ class PhotoEditor {
     this.colorByTool = { dir: '#ffffff' };
     this.width = 6;          // referencia-egységben
     this.dirAlpha = 0.35;    // az útirány-nyíl halványsága
-    this.dirCurve = false;
+    this.active = null;      // a fogópontokkal igazítható útirány-nyíl indexe
+    this.drag = null;        // épp húzott fogópont
     this.draft = null;
     this.image = null;
     this.layout = { ox: 0, oy: 0, dw: 1, dh: 1 };
@@ -1895,6 +2003,8 @@ class PhotoEditor {
       this._resolve = resolve;
       this.ops = JSON.parse(JSON.stringify(ops || []));
       this.redoStack = [];
+      this.active = null;
+      this.drag = null;
       this.imageBlob = imageBlob;
       $('#editor-title', this.root).textContent = title;
       this.root.hidden = false;
@@ -1963,8 +2073,11 @@ class PhotoEditor {
       for (const op of this.ops) if (op.k === 'dir') op.alpha = this.dirAlpha;
       this.draw();
     });
-    $('#editor-dir-curve', this.root).addEventListener('change', (e) => {
-      this.dirCurve = e.target.checked;
+    $('#editor-dir-straight', this.root).addEventListener('click', () => {
+      const op = this.activeOp();
+      if (!op) { toast('Előbb rajzoljon vagy válasszon ki egy útirány-nyilat.'); return; }
+      delete op.mid;
+      this.draw();
     });
     $$('[data-quickdir]', this.root).forEach((btn) =>
       btn.addEventListener('click', () => this.quickDirection(btn.dataset.quickdir))
@@ -2008,7 +2121,24 @@ class PhotoEditor {
     this.colorByTool[this.tool] = this.color;
     this.tool = id;
     this.color = this.colorByTool[id] || COLORS[0];
+    if (id !== 'dir') this.active = null; // a fogópontok csak az útirány-eszköznél
     this._syncToolUI();
+    this.draw();
+  }
+
+  /** A fogópontokkal éppen igazítható útirány-nyíl. */
+  activeOp() {
+    const op = this.active == null ? null : this.ops[this.active];
+    return op && op.k === 'dir' ? op : null;
+  }
+
+  /** A nyíl három fogópontja normalizált koordinátákban. */
+  handlesOf(op) {
+    return [
+      { key: 'a', p: op.a },
+      { key: 'b', p: op.b },
+      { key: 'mid', p: op.mid || [(op.a[0] + op.b[0]) / 2, (op.a[1] + op.b[1]) / 2] },
+    ];
   }
 
   _syncToolUI() {
@@ -2066,6 +2196,20 @@ class PhotoEditor {
 
     if (this.tool === 'erase') { this.eraseAt(p); return; }
 
+    if (this.tool === 'dir') {
+      // meglévő nyíl fogópontjának megfogása, vagy másik nyíl kiválasztása
+      const grabbed = this.grabHandle(p);
+      if (grabbed) { this.drag = grabbed; return; }
+      const idx = this.findDirAt(p);
+      if (idx != null && idx !== this.active) {
+        this.active = idx;
+        this.dirAlpha = this.ops[idx].alpha ?? this.dirAlpha;
+        this._syncToolUI();
+        this.draw();
+        return;
+      }
+    }
+
     if (this.tool === 'text') {
       this.addText(p);
       return;
@@ -2077,7 +2221,7 @@ class PhotoEditor {
     } else if (this.tool === 'dir') {
       this.draft = {
         k: 'dir', a: p, b: p, color: this.color,
-        w: Math.max(this.width * 2.6, 14), alpha: this.dirAlpha, curve: this.dirCurve,
+        w: Math.max(this.width * 2.6, 14), alpha: this.dirAlpha,
       };
     } else if (this.tool === 'dim') {
       this.draft = { k: 'dim', a: p, b: p, color: this.color, w: this.width, label: '' };
@@ -2087,7 +2231,35 @@ class PhotoEditor {
     this.draw();
   }
 
+  /** Fogópont a koppintás közelében? (képernyő-pixelben mérve) */
+  grabHandle(p) {
+    const op = this.activeOp();
+    if (!op) return null;
+    const { dw, dh } = this.layout;
+    for (const h of this.handlesOf(op)) {
+      const d = Math.hypot((h.p[0] - p[0]) * dw, (h.p[1] - p[1]) * dh);
+      if (d < 26) return { key: h.key, index: this.active };
+    }
+    return null;
+  }
+
+  /** A koppintáshoz tartozó útirány-nyíl indexe, ha van ilyen. */
+  findDirAt(p) {
+    for (let i = this.ops.length - 1; i >= 0; i--) {
+      if (this.ops[i].k === 'dir' && hitTest(this.ops[i], p)) return i;
+    }
+    return null;
+  }
+
   onMove(e) {
+    if (this.drag) {
+      const op = this.ops[this.drag.index];
+      const p = this.toNorm(e);
+      if (this.drag.key === 'mid') op.mid = p;
+      else op[this.drag.key] = p;
+      this.draw();
+      return;
+    }
     if (!this.draft) return;
     const p = this.toNorm(e);
     if (this.draft.k === 'pen') {
@@ -2100,6 +2272,7 @@ class PhotoEditor {
   }
 
   async onUp(e) {
+    if (this.drag) { this.drag = null; this.draw(); return; }
     if (!this.draft) return;
     const op = this.draft;
     this.draft = null;
@@ -2114,6 +2287,11 @@ class PhotoEditor {
       op.label = value;
     }
     this.commit(op);
+    if (op.k === 'dir') {
+      // a friss nyíl rögtön igazítható: fogópontok a végeken és az ívnél
+      this.active = this.ops.length - 1;
+      this.draw();
+    }
   }
 
   async askDimension() {
@@ -2162,9 +2340,11 @@ class PhotoEditor {
     const m = map[dir] || map.right;
     this.commit({
       k: 'dir', a: m.a, b: m.b, color: this.color,
-      w: Math.max(this.width * 3.2, 18), alpha: this.dirAlpha, curve: this.dirCurve,
+      w: Math.max(this.width * 3.2, 18), alpha: this.dirAlpha,
     });
-    toast('Útirány-nyíl beszúrva — a halványságát a csúszkával állíthatja.');
+    this.active = this.ops.length - 1;
+    this.draw();
+    toast('Útirány-nyíl beszúrva — a fogópontokkal igazíthatja, a csúszkával halványíthatja.');
   }
 
   commit(op) {
@@ -2206,11 +2386,42 @@ class PhotoEditor {
     ctx.drawImage(this.image, ox, oy, dw, dh);
     const ops = this.draft ? this.ops.concat([this.draft]) : this.ops;
     for (const op of ops) drawOp(ctx, op, ox, oy, dw, dh);
+    this.drawHandles(ctx, ox, oy, dw, dh);
     $('#editor-undo', this.root).disabled = !this.ops.length;
     $('#editor-redo', this.root).disabled = !this.redoStack.length;
     $('#editor-count', this.root).textContent = this.ops.length
       ? `${this.ops.length} jelölés`
       : 'Nincs jelölés';
+  }
+
+  /**
+   * Az útirány-nyíl fogópontjai. Csak a szerkesztőben látszanak — a
+   * lapított exportra nem kerülnek rá.
+   */
+  drawHandles(ctx, ox, oy, dw, dh) {
+    const op = this.activeOp();
+    if (!op || this.tool !== 'dir') return;
+    ctx.save();
+    for (const h of this.handlesOf(op)) {
+      const x = ox + h.p[0] * dw, y = oy + h.p[1] * dh;
+      const isMid = h.key === 'mid';
+      ctx.beginPath();
+      ctx.arc(x, y, isMid ? 11 : 9, 0, Math.PI * 2);
+      ctx.fillStyle = isMid ? '#ffd60a' : '#ffffff';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.stroke();
+      if (isMid) {
+        // hajlítás-jel: kis ív a fogópont közepén
+        ctx.beginPath();
+        ctx.arc(x, y + 3.5, 5, Math.PI * 1.15, Math.PI * 1.85);
+        ctx.strokeStyle = '#0b0f16';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   /** Kép + jelölések teljes felbontású, lapított exportja. */
@@ -2246,7 +2457,7 @@ class PhotoEditor {
 const HINTS = {
   pen: 'Húzza az ujját a képen a szabadkézi jelöléshez.',
   arrow: 'Húzással rajzolhat kiemelő nyilat.',
-  dir: 'Húzza a haladás irányába — a nyíl halvány marad, hogy ne takarja a képet.',
+  dir: 'Húzza a haladás irányába, majd a középső sárga fogóponttal hajlítsa meg az ívet.',
   dim: 'Húzzon vonalat a két pont közé, majd írja be a méretet.',
   text: 'Koppintson oda, ahová a szöveg kerüljön.',
   rect: 'Húzással keretezhet be egy részletet.',
@@ -2278,10 +2489,10 @@ function drawOp(ctx, op, ox, oy, dw, dh) {
   } else if (op.k === 'arrow') {
     strokeArrow(ctx, X(op.a), Y(op.a), X(op.b), Y(op.b), ctx.lineWidth, false);
   } else if (op.k === 'dir') {
-    // halvány útirány-nyíl: vastag test + világos kontúr, hogy sötét és
+    // halvány útirány-nyíl: vastag test + sötét kontúr, hogy sötét és
     // világos háttéren is olvasható maradjon
     ctx.lineWidth = Math.max(2, (op.w || 18) * S);
-    strokeArrow(ctx, X(op.a), Y(op.a), X(op.b), Y(op.b), ctx.lineWidth, true, op.curve);
+    strokeArrow(ctx, X(op.a), Y(op.a), X(op.b), Y(op.b), ctx.lineWidth, true, controlPoint(op, X, Y));
   } else if (op.k === 'dim') {
     drawDimension(ctx, X(op.a), Y(op.a), X(op.b), Y(op.b), op, S, bounds);
   } else if (op.k === 'text') {
@@ -2290,29 +2501,53 @@ function drawOp(ctx, op, ox, oy, dw, dh) {
   ctx.restore();
 }
 
-function strokeArrow(ctx, x1, y1, x2, y2, w, filled, curve) {
-  const ang = Math.atan2(y2 - y1, x2 - x1);
+/**
+ * A hajlítás-fogópont a görbén ül (t=0,5), a Bézier vezérlőpont ebből
+ * számolható: C = 2·M − (A+B)/2. Így a fogópont oda kerül, ahová húzzák.
+ */
+function controlPoint(op, X, Y) {
+  if (op.mid) {
+    const mx = X(op.mid), my = Y(op.mid);
+    return { x: 2 * mx - (X(op.a) + X(op.b)) / 2, y: 2 * my - (Y(op.a) + Y(op.b)) / 2 };
+  }
+  if (op.curve) {
+    // korábbi verzió „ívelt” kapcsolója: merőleges eltolás a felezőpontnál
+    const x1 = X(op.a), y1 = Y(op.a), x2 = X(op.b), y2 = Y(op.b);
+    const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+    return {
+      x: (x1 + x2) / 2 - ((y2 - y1) / len) * len * 0.36,
+      y: (y1 + y2) / 2 + ((x2 - x1) / len) * len * 0.36,
+    };
+  }
+  return null;
+}
+
+function strokeArrow(ctx, x1, y1, x2, y2, w, filled, ctrl) {
   const head = Math.max(w * (filled ? 1.9 : 2.6), 10);
-  const len = Math.hypot(x2 - x1, y2 - y1);
-  const bx = x2 - Math.cos(ang) * head * 0.85;
-  const by = y2 - Math.sin(ang) * head * 0.85;
+  // a nyílhegy a görbe végponti érintőjének irányába néz
+  const tx = ctrl ? x2 - ctrl.x : x2 - x1;
+  const ty = ctrl ? y2 - ctrl.y : y2 - y1;
+  const tl = Math.hypot(tx, ty) || 1;
+  const ux = tx / tl, uy = ty / tl;
+  const bx = x2 - ux * head * 0.85;
+  const by = y2 - uy * head * 0.85;
 
   if (filled) {
-    // világos szegély a kontraszt kedvéért
+    // sötét szegély a kontraszt kedvéért
     ctx.save();
     ctx.globalAlpha = Math.min(1, (ctx.globalAlpha || 1) * 0.55);
     ctx.strokeStyle = 'rgba(0,0,0,0.65)';
     ctx.lineWidth = w + Math.max(2, w * 0.25);
-    strokeArrowPath(ctx, x1, y1, bx, by, curve, len);
+    strokeArrowPath(ctx, x1, y1, bx, by, ctrl);
     ctx.restore();
   }
 
-  strokeArrowPath(ctx, x1, y1, bx, by, curve, len);
+  strokeArrowPath(ctx, x1, y1, bx, by, ctrl);
 
   // nyílhegy
   ctx.save();
   ctx.translate(x2, y2);
-  ctx.rotate(curve ? Math.atan2(y2 - by, x2 - bx) : ang);
+  ctx.rotate(Math.atan2(uy, ux));
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.lineTo(-head, head * 0.62);
@@ -2323,17 +2558,11 @@ function strokeArrow(ctx, x1, y1, x2, y2, w, filled, curve) {
   ctx.restore();
 }
 
-function strokeArrowPath(ctx, x1, y1, x2, y2, curve, len) {
+function strokeArrowPath(ctx, x1, y1, x2, y2, ctrl) {
   ctx.beginPath();
   ctx.moveTo(x1, y1);
-  if (curve) {
-    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
-    const nx = -(y2 - y1) / (len || 1), ny = (x2 - x1) / (len || 1);
-    const off = (len || 0) * 0.18;
-    ctx.quadraticCurveTo(mx + nx * off, my + ny * off, x2, y2);
-  } else {
-    ctx.lineTo(x2, y2);
-  }
+  if (ctrl) ctx.quadraticCurveTo(ctrl.x, ctrl.y, x2, y2);
+  else ctx.lineTo(x2, y2);
   ctx.stroke();
 }
 
@@ -2427,6 +2656,22 @@ function hitTest(op, p) {
       (Math.abs(p[0] - x1) < tol || Math.abs(p[0] - x2) < tol ||
        Math.abs(p[1] - y1) < tol || Math.abs(p[1] - y2) < tol);
   }
+  if (op.k === 'dir' && op.mid) {
+    // ívelt nyíl: a görbét mintavételezve mérünk, nem a húrhoz képest
+    const c = [
+      2 * op.mid[0] - (op.a[0] + op.b[0]) / 2,
+      2 * op.mid[1] - (op.a[1] + op.b[1]) / 2,
+    ];
+    for (let i = 0; i <= 12; i++) {
+      const t = i / 12, u = 1 - t;
+      const q = [
+        u * u * op.a[0] + 2 * u * t * c[0] + t * t * op.b[0],
+        u * u * op.a[1] + 2 * u * t * c[1] + t * t * op.b[1],
+      ];
+      if (dist(q, p) < 0.06) return true;
+    }
+    return false;
+  }
   return segmentDistance(op.a, op.b, p) < (op.k === 'dir' ? 0.06 : tol);
 }
 
@@ -2453,6 +2698,8 @@ const clamp01 = (n) => Math.max(0, Math.min(1, n));
 // térképen lehet rendbe tenni.
 
 
+const SNAP_PX = 26; // ennél közelebb a meglévő nyomvonalhoz odaillesztjük a csúcsot
+
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 40;
 
@@ -2474,11 +2721,14 @@ class TrackEditor {
   /**
    * @returns {Promise<boolean>} true, ha változott a nyomvonal
    */
-  open({ points, items = [], onApply }) {
+  open({ points, items = [], drawn = [], onApply }) {
     this.points = points;
     this.items = items;
+    this.drawn = drawn;
     this.onApply = onApply;
     this.sel = null;
+    this.draft = null;        // éppen rajzolt szakasz
+    this.selectedDrawn = null;
     this.view = { k: 1, tx: 0, ty: 0 };
     this.dirty = false;
     this.root.hidden = false;
@@ -2522,6 +2772,22 @@ class TrackEditor {
       this.draw();
       this.renderPanel();
     });
+
+    $('#trackedit-draw', this.root).addEventListener('click', () => this.startDraw());
+    $('#trackedit-draw-undo', this.root).addEventListener('click', () => {
+      if (!this.draft) return;
+      this.draft.pts.pop();
+      this.draw();
+      this.renderPanel();
+    });
+    $('#trackedit-draw-done', this.root).addEventListener('click', () => this.finishDraw());
+    $('#trackedit-draw-cancel', this.root).addEventListener('click', () => {
+      this.draft = null;
+      this.draw();
+      this.renderPanel();
+    });
+    $('#trackedit-drawn-delete', this.root).addEventListener('click', () => this.deleteDrawn());
+    $('#trackedit-drawn-rename', this.root).addEventListener('click', () => this.renameDrawn());
 
     for (const id of ['#trackedit-from', '#trackedit-to']) {
       $(id, this.root).addEventListener('input', (e) => {
@@ -2621,8 +2887,21 @@ class TrackEditor {
 
   tap(p) {
     if (!this.hit || !this.hit.nearest) return;
+    if (this.draft) { this.addVertex(p); return; }
+
+    // berajzolt szakaszra koppintva azt jelöljük ki
+    const dn = this.hit.nearestDrawn(p.x, p.y);
     const { index, distance } = this.hit.nearest(p.x, p.y);
+    if (dn.distance < 26 && dn.distance < distance) {
+      this.selectedDrawn = this.selectedDrawn === dn.id ? null : dn.id;
+      this.sel = null;
+      this.draw();
+      this.renderPanel();
+      return;
+    }
+
     if (index < 0 || distance > 44) return; // nem a nyomvonalra koppintott
+    this.selectedDrawn = null;
 
     if (!this.sel) {
       this.sel = { from: index, to: index };
@@ -2640,6 +2919,115 @@ class TrackEditor {
   selectedPoints() {
     if (!this.sel) return [];
     return this.points.slice(this.sel.from, this.sel.to + 1);
+  }
+
+  /* ------------------------------------------- kézzel berajzolt szakasz
+
+  Ha a kísérőautó nem járta végig a helyes kerülőt, nincs róla GPS-nyom —
+  ilyenkor a hiányzó szakasz közvetlenül a térképre rajzolható. A csúcsok a
+  meglévő nyomvonalhoz illeszkednek, hogy hézag nélkül csatlakozzanak.    */
+
+  startDraw() {
+    this.draft = { pts: [] };
+    this.sel = null;
+    this.selectedDrawn = null;
+    this.draw();
+    this.renderPanel();
+    toast('Koppintson sorban a szakasz pontjaira. A nyomvonal közelében automatikusan illeszkedik.');
+  }
+
+  addVertex(p) {
+    const un = this.hit.unproject(p.x, p.y);
+    let pt = { lat: un.lat, lon: un.lon };
+
+    // illesztés a meglévő nyomvonalhoz vagy egy másik berajzolt csúcshoz
+    const nt = this.hit.nearest(p.x, p.y);
+    const nd = this.hit.nearestDrawn(p.x, p.y);
+    if (nt.index >= 0 && nt.distance < SNAP_PX && nt.distance <= nd.distance) {
+      const s = this.points[nt.index];
+      pt = { lat: s.lat, lon: s.lon, snap: 'track' };
+    } else if (nd.distance < SNAP_PX) {
+      pt = { lat: nd.point.lat, lon: nd.point.lon, snap: 'drawn' };
+    }
+
+    this.draft.pts.push(pt);
+    if (pt.snap) toast('Illesztve a meglévő útvonalhoz.');
+    this.draw();
+    this.renderPanel();
+  }
+
+  async finishDraw() {
+    const pts = this.draft ? this.draft.pts : [];
+    if (pts.length < 2) {
+      toast('Legalább két pont kell a szakaszhoz.', 'error');
+      return;
+    }
+    const res = await modal({
+      title: 'Berajzolt szakasz mentése',
+      text: `${pts.length} pont · ${formatDistance(trackLength(pts))}`,
+      fields: [
+        { name: 'name', label: 'Megnevezés', placeholder: 'pl. kerülő a Fő utcán át' },
+        { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2,
+          placeholder: 'pl. a bejáráskor nem hajtottunk végig rajta' },
+      ],
+      okText: 'Mentés',
+    });
+    if (!res) return;
+
+    this.drawn.push({
+      id: 'seg-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
+      name: res.name,
+      note: res.note,
+      pts,
+      created: Date.now(),
+    });
+    this.draft = null;
+    await this.onApply({ drawn: this.drawn });
+    this.dirty = true;
+    this.draw();
+    this.renderPanel();
+    toast('Berajzolt szakasz mentve.');
+  }
+
+  currentDrawn() {
+    return this.drawn.find((s) => s.id === this.selectedDrawn) || null;
+  }
+
+  async renameDrawn() {
+    const seg = this.currentDrawn();
+    if (!seg) return;
+    const res = await modal({
+      title: 'Berajzolt szakasz',
+      fields: [
+        { name: 'name', label: 'Megnevezés', value: seg.name || '' },
+        { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2, value: seg.note || '' },
+      ],
+    });
+    if (!res) return;
+    seg.name = res.name;
+    seg.note = res.note;
+    await this.onApply({ drawn: this.drawn });
+    this.dirty = true;
+    this.renderPanel();
+    toast('Mentve.');
+  }
+
+  async deleteDrawn() {
+    const seg = this.currentDrawn();
+    if (!seg) return;
+    const ok = await modal({
+      title: 'Berajzolt szakasz törlése?',
+      text: `${seg.name || 'Névtelen szakasz'} — ${formatDistance(trackLength(seg.pts))}`,
+      okText: 'Törlés',
+    });
+    if (!ok) return;
+    this.drawn = this.drawn.filter((s) => s.id !== seg.id);
+    this.selectedDrawn = null;
+    await this.onApply({ drawn: this.drawn });
+    this.dirty = true;
+    this.draw();
+    this.renderPanel();
+    toast('Szakasz törölve.');
   }
 
   /* -------------------------------------------------------------- műveletek */
@@ -2709,14 +3097,38 @@ class TrackEditor {
     this.hit = renderTrack(this.canvas, this.points, this.items, {
       view: this.view,
       selection: this.sel,
+      drawn: this.drawn,
+      draft: this.draft,
+      selectedDrawn: this.selectedDrawn,
       lineWidth: 5,
     });
   }
 
   renderPanel() {
     const len = lengthByStatus(this.points);
+    const drawnLen = drawnLength(this.drawn);
     $('#te-ok', this.root).textContent = formatDistance(len.ok);
     $('#te-rejected', this.root).textContent = formatDistance(len.rejected);
+    $('#te-drawn', this.root).textContent = formatDistance(drawnLen);
+    $('#te-drawn-item', this.root).hidden = !this.drawn.length && !this.draft;
+
+    // rajzolás közben csak a rajzoló panel látszik
+    const drawing = !!this.draft;
+    $('#trackedit-drawbar', this.root).hidden = !drawing;
+    $('#trackedit-normalbar', this.root).hidden = drawing;
+    $('#trackedit-draw', this.root).hidden = drawing;
+    if (drawing) {
+      const n = this.draft.pts.length;
+      $('#trackedit-hint', this.root).hidden = false;
+      $('#trackedit-hint', this.root).textContent = n
+        ? `${n} pont · ${formatDistance(trackLength(this.draft.pts))} — koppintson a következő pontra.`
+        : 'Koppintson a szakasz első pontjára. A meglévő nyomvonal közelében automatikusan illeszkedik.';
+      $('#trackedit-selinfo', this.root).hidden = true;
+      $('#trackedit-draw-done', this.root).disabled = n < 2;
+      $('#trackedit-draw-undo', this.root).disabled = n === 0;
+      this.renderDrawnList();
+      return;
+    }
 
     const secs = rejectedSections(this.points);
     const list = $('#trackedit-sections', this.root);
@@ -2742,9 +3154,15 @@ class TrackEditor {
       );
     });
 
+    this.renderDrawnList();
+
     const hasSel = !!this.sel;
+    const hasDrawnSel = !!this.currentDrawn();
+    $('#trackedit-drawn-actions', this.root).hidden = !hasDrawnSel;
     $('#trackedit-selinfo', this.root).hidden = !hasSel;
-    $('#trackedit-hint', this.root).hidden = hasSel;
+    $('#trackedit-hint', this.root).hidden = hasSel || hasDrawnSel;
+    $('#trackedit-hint', this.root).textContent =
+      'Koppintson a nyomvonalra a szakasz elejénél, majd a végénél. Két ujjal nagyíthat, húzással mozgathatja a térképet.';
     for (const id of ['#trackedit-reject', '#trackedit-accept', '#trackedit-delete', '#trackedit-clear-sel']) {
       $(id, this.root).disabled = !hasSel;
     }
@@ -2763,6 +3181,32 @@ class TrackEditor {
     from.max = to.max = String(max);
     from.value = String(this.sel.from);
     to.value = String(this.sel.to);
+  }
+
+  renderDrawnList() {
+    const wrap = $('#trackedit-drawn-wrap', this.root);
+    const list = $('#trackedit-drawn-list', this.root);
+    wrap.hidden = this.drawn.length === 0;
+    list.innerHTML = '';
+    this.drawn.forEach((seg, i) => {
+      const row = el('button', {
+        class: 'section-row drawn' + (seg.id === this.selectedDrawn ? ' active' : ''),
+        type: 'button',
+        onclick: () => {
+          this.selectedDrawn = seg.id === this.selectedDrawn ? null : seg.id;
+          this.sel = null;
+          this.draw();
+          this.renderPanel();
+        },
+      }, [
+        el('span', { class: 'section-idx', text: String(i + 1) }),
+        el('span', { class: 'section-body' }, [
+          el('span', { class: 'section-reason', text: seg.name || 'Berajzolt szakasz' }),
+          el('span', { class: 'section-sub', text: `${formatDistance(trackLength(seg.pts))} · ${seg.pts.length} pont` }),
+        ]),
+      ]);
+      list.appendChild(row);
+    });
   }
 }
 
@@ -2996,6 +3440,13 @@ function renderMeta() {
     ['Szerelvény', vehicleSummary(s.vehicle) || '—'],
     ['Érvényes útvonal', `${formatDistance(len.ok)} · ${state.points.length} pont`],
   ];
+  const drawn = s.drawn || [];
+  if (drawn.length) {
+    rows.push(['Berajzolt szakasz', `${drawn.length} db · ${formatDistance(drawnLength(drawn))}`]);
+    drawn.forEach((seg, i) => {
+      rows.push([`↳ ${i + 1}.`, `${seg.name || 'névtelen'}${seg.note ? ' — ' + seg.note : ''}`]);
+    });
+  }
   if (secs.length) {
     rows.push(['Elvetett szakasz', `${secs.length} db · ${formatDistance(len.rejected)}`]);
     secs.forEach((sec, i) => {
@@ -3049,7 +3500,9 @@ function updateStats() {
 function drawTrack() {
   const canvas = $('#track-canvas');
   if (!canvas.clientWidth) return;
-  trackHit = renderTrack(canvas, state.points, state.items);
+  trackHit = renderTrack(canvas, state.points, state.items, {
+    drawn: (state.session && state.session.drawn) || [],
+  });
 }
 
 /* ------------------------------------------------------- GPS felvétel */
@@ -3139,16 +3592,19 @@ async function openTrackEditor() {
   const changed = await trackEditor.open({
     points: state.points,
     items: state.items,
-    onApply: async ({ updated, deleted }) => {
+    drawn: state.session.drawn || [],
+    onApply: async ({ updated, deleted, drawn }) => {
       if (updated) await db.updatePoints(updated);
       if (deleted) await db.deletePoints(deleted);
       if (state.session) {
+        if (drawn) state.session.drawn = drawn;
         const len = lengthByStatus(state.points);
         state.session.stats = {
           ...(state.session.stats || {}),
           distance: len.ok,
           distanceDriven: len.total,
           rejected: len.rejected,
+          drawn: drawnLength(state.session.drawn || []),
           points: state.points.length,
         };
         await db.saveSession(state.session);
