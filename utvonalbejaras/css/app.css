@@ -17,8 +17,11 @@
   --safe-b: env(safe-area-inset-bottom, 0px);
 }
 
+/* Világos téma: az operációs rendszer beállítása szerint, illetve ha a
+   megjelenítő kifejezetten világosra vált (data-theme). A kifejezett
+   választás mindkét irányban erősebb az operációs rendszerénél. */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
     --bg: #f2f5f9;
     --surface: #ffffff;
     --surface-2: #eef2f7;
@@ -29,6 +32,18 @@
     --accent-ink: #ffffff;
     --map-bg: #e6ecf4;
   }
+}
+
+:root[data-theme="light"] {
+  --bg: #f2f5f9;
+  --surface: #ffffff;
+  --surface-2: #eef2f7;
+  --border: #d5dde8;
+  --text: #14202e;
+  --muted: #5d6b7d;
+  --accent: #0a6ed1;
+  --accent-ink: #ffffff;
+  --map-bg: #e6ecf4;
 }
 
 * { box-sizing: border-box; }

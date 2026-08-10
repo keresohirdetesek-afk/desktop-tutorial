@@ -66,6 +66,17 @@ Tegye ki a mappát bármilyen HTTPS-es helyre — például GitHub Pages
 A böngésző menüjéből **„Hozzáadás a kezdőképernyőhöz”** — ezután
 külön alkalmazásként, teljes képernyőn, offline is indul.
 
+### Egyfájlos változat (gyors megnézéshez)
+
+```bash
+node build-single.mjs      # -> utvonalbejaras-egyfajlban.html
+```
+
+A szkript egyetlen HTML-fájlba fűzi a teljes appot (CSS, JS, ikon beágyazva),
+így megosztható vagy e-mailben elküldhető. A funkciók ugyanazok, de a kamera,
+a GPS és a mikrofon itt is csak `https://`-en vagy `localhost`-on érhető el,
+ezért éles használatra a rendes, több fájlos verzió való.
+
 ### Engedélyek
 
 Első használatkor a böngésző kéri a **helymeghatározás**, a **kamera** és a
