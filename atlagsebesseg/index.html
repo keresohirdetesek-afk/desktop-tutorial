@@ -95,14 +95,14 @@
         <section class="szakasz-panel" id="szakasz-panel">
           <h2 id="szakasz-nev">Kijelölt szakasz</h2>
           <div class="kapu-sor">
-            <span class="kapu-cimke">Kapu #1</span>
+            <span class="kapu-cimke" id="kapu-bal">Kapu #1</span>
             <span class="kapu-kozep">
               <span id="szp-hatra">Még: —</span>
               <span id="szp-ido">Becsült idő: —</span>
             </span>
-            <span class="kapu-cimke">Kapu #2</span>
+            <span class="kapu-cimke" id="kapu-jobb">Kapu #2</span>
           </div>
-          <div class="halado-sor">
+          <div class="halado-sor" id="halado-sor">
             <span class="kapu-tick"></span>
             <span class="sav"><span class="sav-kitolt" id="szp-sav"></span></span>
             <span class="kapu-tick"></span>
@@ -113,7 +113,8 @@
         <section class="card ora-kartya" id="ora-kartya">
           <div class="ora-doboz">
             <svg id="ora" class="ora" role="img" aria-label="Szakaszátlag mérője"></svg>
-            <span class="tabla" id="ora-tabla">—</span>
+            <button class="tabla" id="ora-tabla" aria-label="Sebességhatár módosítása">—</button>
+            <span class="tabla-sugo">koppints</span>
           </div>
 
           <div class="statuszsav semleges" id="statuszsav">
@@ -312,13 +313,30 @@
         <p>
           Az útvonal menti korlátozások az <strong>OpenStreetMap</strong>
           <code>maxspeed</code> adataiból származnak (Overpass API).
-          Ez tartalmazza a kitáblázott értékeket, a lakott területi 50-eseket
-          és a zónákat is, de <strong>nem teljes körű</strong>, és a friss
-          útépítési korlátozásokat jellemzően nem tartalmazza.
         </p>
+        <p><strong>Mennyire pontos ez?</strong> Rétegenként más:</p>
+        <ul class="tick">
+          <li><strong>Autópálya, autóút, főutak:</strong> jellemzően kitöltött és
+              megbízható — itt a 130 / 110 / 90 stimmel.</li>
+          <li><strong>Lakott terület:</strong> az 50-es általában jó, mert
+              zónaként is jelölik. Ahol nincs külön érték, az út típusából
+              következtetünk.</li>
+          <li><strong>Kisebb utak, lakóutcák:</strong> gyakran nincs adat. Ilyenkor
+              az app az út típusa alapján becsül, és a szakaszt
+              <em>becsült</em> jelzéssel látja el.</li>
+          <li><strong>Útépítés, ideiglenes korlátozás:</strong> jellemzően
+              <strong>hiányzik</strong>. Ez a leggyengébb pont: a tegnap kitett
+              60-as tábláról az OpenStreetMap nem tud.</li>
+          <li><strong>Feltételes korlátozás</strong> (éjszakai, időjárásfüggő,
+              változtatható jelzésű): az app nem kezeli.</li>
+          <li>Közösségi adatbázis: pontos ott, ahol valaki felvitte, és
+              elavulhat ott, ahol azóta változott a kitáblázás.</li>
+        </ul>
         <p>
-          Ha valamelyik szakasznál mást láttál kint, írd át kézzel a listában —
-          a számítás azonnal újrafut.
+          Ezért <strong>minden határ átírható</strong>: koppints a
+          sebességtáblára az órán, vagy a szakaszlistában az adott
+          szakaszrészre — a számítás azonnal újrafut. Amit kint láttál, az az
+          igazság, nem amit az adatbázis mond.
         </p>
       </section>
 
@@ -362,6 +380,28 @@
   <button class="tab" data-scr="scr-kalk"><span>🧮</span>Kalkulátor</button>
   <button class="tab" data-scr="scr-info"><span>ℹ️</span>Tudnivalók</button>
 </nav>
+
+<!-- sebességhatár-választó: bárhonnan hívható, egy helyen van definiálva -->
+<div id="limit-lap" class="lap" hidden>
+  <div class="lap-hatter" data-zar></div>
+  <div class="lap-doboz" role="dialog" aria-modal="true" aria-labelledby="lap-cim">
+    <h2 id="lap-cim">Sebességhatár</h2>
+    <p id="lap-alcim" class="muted small"></p>
+    <div class="limit-racs" id="limit-racs"></div>
+    <div class="row-between">
+      <label for="limit-egyeni">Egyéni érték</label>
+      <span class="inline">
+        <input id="limit-egyeni" type="number" min="5" max="150" step="5" inputmode="numeric">
+        km/h
+        <button id="limit-egyeni-ok" class="btn small">Beállít</button>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button id="limit-osm" class="btn ghost grow" hidden>↺ Vissza az OpenStreetMap adatához</button>
+      <button id="limit-megse" class="btn ghost grow" data-zar>Mégse</button>
+    </div>
+  </div>
+</div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script type="module" src="js/app.js"></script>

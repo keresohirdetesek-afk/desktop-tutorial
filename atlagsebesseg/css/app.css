@@ -582,3 +582,91 @@ input[type="number"], select {
 
 .leaflet-container { background: var(--surface-2); font: inherit; }
 .leaflet-control-attribution { font-size: 10px; }
+
+/* ------------------------------------------- sebességhatár-választó */
+
+/* A táblára koppintva nyílik; ugyanez a lap szolgálja ki a kalkulátor
+   sorait és a szakaszlistát is, hogy a határ mindenhol egyformán
+   állítható legyen.                                                   */
+
+.tabla { cursor: pointer; padding: 0; font-family: inherit; }
+.tabla:active { transform: scale(0.96); }
+
+.tabla-sugo {
+  position: absolute;
+  top: 60px;
+  right: 4px;
+  width: 52px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.lap {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.lap-hatter { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55); }
+
+.lap-doboz {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px 18px 0 0;
+  padding: 16px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.lap-doboz h2 { margin: 0; font-size: 17px; }
+.lap-doboz > p { margin: -6px 0 0; }
+
+.limit-racs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 10px;
+}
+
+/* a választható értékek maguk is sebességtáblák — így nem kell elolvasni,
+   elég ránézni                                                          */
+.limit-jel {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 5px solid #d92b1f;
+  color: #17171a;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0;
+}
+.limit-jel.aktiv { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* kompakt, táblaszerű gomb a kalkulátorsorokban és a szakaszlistában */
+.limit-gomb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  line-height: 1.1;
+}
+.limit-gomb strong { font-size: 19px; }
+.limit-gomb span { font-size: 10px; color: var(--muted); }

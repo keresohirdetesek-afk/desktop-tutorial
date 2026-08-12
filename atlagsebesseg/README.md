@@ -47,7 +47,10 @@ szöveg írásakor ezt tartsuk.
   mérve kap értékelést. A hatóság is így szankcionál, nem a teljes út vegyes
   átlagára.
 - **Sebességhatárok lekérése** az OpenStreetMapből (Overpass API), kézi
-  felülírással — ahol mást láttál kint, egy mezőben átírod.
+  felülírással: a sebességtáblára koppintva feljön a gyakori korlátozások
+  listája (30–130) meg egy egyéni mező, és ugyanez a lap nyílik a
+  kalkulátor soraiban és a szakaszlistában is. Ahol mást láttál kint, két
+  koppintás átírni.
 - **Élő tanács vezetés közben:** „a hátralévő kb. 6,4 km-en legfeljebb
   84 km/h átlaggal maradsz a bírsághatár alatt”.
 - **Kalkulátor GPS nélkül:** szakaszhossz(ok) + menetidő vagy tempó →

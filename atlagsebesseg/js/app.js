@@ -25,8 +25,12 @@ const S = {
   utak: null,          // OSM utak (lekérés után)
   felulir: new Map(),  // szakaszindex -> kézzel megadott határ
   alap: 90,
+  kezi: null,          // kézzel megadott határ az egész szakaszra
   kalkSorok: [{ hossz: 10, limit: 90 }],
 };
+
+// A magyar közutakon előforduló korlátozások — ezek jönnek fel koppintásra.
+const LIMIT_JELEK = [30, 40, 50, 60, 70, 80, 90, 100, 110, 130];
 
 const STATUSZ = {
   ok:        { cimke: '[● BIZTONSÁGOS]', megj: '(Sebesség tartása OK)' },
@@ -37,6 +41,8 @@ const STATUSZ = {
 
 let terkep = null;
 let ora = null;
+let utolsoEredmeny = null;   // a legutóbbi értékelés, a választóhoz
+let lapValaszt = null;       // a nyitott választó visszahívása
 const meres = new Meres({
   onChange: () => elonezetFrissit(),
   onError: (m) => ($('gps-uzenet').textContent = m),
@@ -102,6 +108,15 @@ function bontas(pontok) {
     }];
   }
   szakaszok = szakaszok.filter((sz) => sz.tav > 0 && sz.ido > 0);
+  // sorrend: adat (OSM vagy alapértelmezés) → kézi felülírás az egészre →
+  // szakaszonkénti kézi érték
+  if (S.kezi) {
+    for (const sz of szakaszok) {
+      sz.limit = S.kezi;
+      sz.cimke = 'kézzel megadva';
+      sz.becsult = false;
+    }
+  }
   S.felulir.forEach((limit, i) => {
     if (szakaszok[i]) {
       szakaszok[i].limit = limit;
@@ -144,6 +159,51 @@ function birsagOsszeg(eredmeny) {
   return eredmeny.birsagosak.length > 1
     ? eredmeny.osszegHalmozott
     : eredmeny.legsulyosabb.ertekeles.osszeg;
+}
+
+/* ------------------------------------------- sebességhatár-választó */
+
+function limitLapNyit({ cim, alcim, ertek, osmGomb, onValaszt, onOsm }) {
+  $('lap-cim').textContent = cim;
+  $('lap-alcim').textContent = alcim || '';
+  $('lap-alcim').hidden = !alcim;
+
+  const racs = $('limit-racs');
+  racs.innerHTML = '';
+  for (const v of LIMIT_JELEK) {
+    const gomb = el('button', `limit-jel${v === Math.round(ertek) ? ' aktiv' : ''}`, String(v));
+    gomb.addEventListener('click', () => {
+      onValaszt(v);
+      limitLapZar();
+    });
+    racs.append(gomb);
+  }
+
+  $('limit-egyeni').value = Math.round(ertek) || '';
+  lapValaszt = onValaszt;
+
+  const osm = $('limit-osm');
+  osm.hidden = !osmGomb;
+  osm.onclick = () => {
+    onOsm?.();
+    limitLapZar();
+  };
+
+  $('limit-lap').hidden = false;
+}
+
+function limitLapZar() {
+  $('limit-lap').hidden = true;
+  lapValaszt = null;
+}
+
+/** A táblára koppintva megadott érték az egész szakaszra érvényes. */
+function limitBeallit(v) {
+  S.alap = v;
+  if (S.utak) S.kezi = v;          // a lekért adatot írjuk felül
+  const sel = $('sel-alap');
+  if ([...sel.options].some((o) => Number(o.value) === v)) sel.value = String(v);
+  elonezetFrissit();
 }
 
 /* ========================================================= megjelenítés */
@@ -203,8 +263,7 @@ function szakaszLista(node, eredmeny, { szerkesztheto }) {
     const sor = el('div', `seg ${allapot}`);
 
     const limitDoboz = szerkesztheto
-      ? el('label', 'seg-limit',
-          `<input type="number" min="5" max="150" step="5" value="${sz.limit}" aria-label="Sebességhatár"><span>km/h</span>`)
+      ? el('button', 'limit-gomb', `<strong>${sz.limit}</strong><span>km/h</span>`)
       : el('div', 'seg-limit', `<strong>${sz.limit}</strong><span>km/h</span>`);
 
     const info = el('div', 'seg-info',
@@ -220,13 +279,15 @@ function szakaszLista(node, eredmeny, { szerkesztheto }) {
     node.append(sor);
 
     if (szerkesztheto) {
-      sor.querySelector('input').addEventListener('change', (ev) => {
-        const ertek = parseInt(ev.target.value, 10);
-        if (ertek > 0) {
-          S.felulir.set(i, ertek);
+      limitDoboz.addEventListener('click', () => limitLapNyit({
+        cim: 'Szakaszrész sebességhatára',
+        alcim: `${fmtDistance(sz.tav)} — ${sz.nev || sz.cimke}`,
+        ertek: sz.limit,
+        onValaszt: (v) => {
+          S.felulir.set(i, v);
           elonezetFrissit();
-        }
-      });
+        },
+      }));
     }
   });
 }
@@ -235,6 +296,10 @@ function szakaszLista(node, eredmeny, { szerkesztheto }) {
 
 function szakaszPanel(eredmeny) {
   const vanKapu = !!(S.kapuk.start && S.kapuk.end);
+  // kapu nélkül nincs mihez viszonyítani a haladást — ne mutassunk üres sávot
+  $('kapu-bal').hidden = !vanKapu;
+  $('kapu-jobb').hidden = !vanKapu;
+  $('halado-sor').hidden = !vanKapu;
 
   let nev = vanKapu ? 'Kijelölt szakasz' : 'Kézi mérés';
   const utNev = eredmeny.szakaszok
@@ -381,6 +446,7 @@ function elonezetFrissit() {
   const p = meres.pontok;
   const szakaszok = bontas(p);
   const eredmeny = ertekelSzakaszok(szakaszok);
+  utolsoEredmeny = eredmeny;
 
   szakaszPanel(eredmeny);
   oraEsStatusz(eredmeny);
@@ -411,13 +477,19 @@ function kalkSorokRender() {
   node.innerHTML = '';
   S.kalkSorok.forEach((sor, i) => {
     const d = el('div', 'seg edit',
-      `<label class="seg-limit"><input class="k-limit" type="number" min="5" max="150" step="5" value="${sor.limit}" aria-label="Sebességhatár"><span>km/h</span></label>
+      `<button class="limit-gomb k-limit" aria-label="Sebességhatár"><strong>${sor.limit}</strong><span>km/h</span></button>
        <div class="seg-info"><label>Hossz <input class="k-hossz" type="number" min="0.1" step="0.1" value="${String(sor.hossz).replace('.', ',')}" inputmode="decimal"> km</label></div>
        <button class="seg-torol" aria-label="Sor törlése" ${S.kalkSorok.length === 1 ? 'disabled' : ''}>✕</button>`);
-    d.querySelector('.k-limit').addEventListener('input', (e) => {
-      S.kalkSorok[i].limit = parseFloat(e.target.value) || 0;
-      kalkSzamol();
-    });
+    d.querySelector('.k-limit').addEventListener('click', () => limitLapNyit({
+      cim: 'Szakaszrész sebességhatára',
+      alcim: 'Válassz a gyakori korlátozásokból, vagy írj be egyéni értéket.',
+      ertek: sor.limit,
+      onValaszt: (v) => {
+        S.kalkSorok[i].limit = v;
+        kalkSorokRender();
+        kalkSzamol();
+      },
+    }));
     d.querySelector('.k-hossz').addEventListener('input', (e) => {
       S.kalkSorok[i].hossz = parseFloat(String(e.target.value).replace(',', '.')) || 0;
       kalkSzamol();
@@ -577,6 +649,7 @@ function ujSzimulacio() {
   meres.leallit();
   meres.reset();
   S.felulir.clear();
+  S.kezi = null;
   S.utak = null;
   $('osm-allapot').textContent =
     'A lekérés a nyomvonal koordinátáit elküldi az Overpass API-nak. Ez az egyetlen ' +
@@ -586,6 +659,33 @@ function ujSzimulacio() {
 
 function esemenyek() {
   $('btn-info').addEventListener('click', () => fulre('scr-info'));
+
+  $('ora-tabla').addEventListener('click', () => limitLapNyit({
+    cim: 'Sebességhatár a szakaszon',
+    alcim: S.utak
+      ? 'Az OpenStreetMap adatát írod felül — minden szakaszrészre ez az érték kerül.'
+      : 'Ezzel számol az app, amíg le nem kéred a tényleges határokat.',
+    ertek: utolsoEredmeny ? megengedettAtlag(utolsoEredmeny) : S.alap,
+    osmGomb: !!S.utak && S.kezi != null,
+    onValaszt: limitBeallit,
+    onOsm: () => {
+      S.kezi = null;
+      elonezetFrissit();
+    },
+  }));
+
+  document.querySelectorAll('#limit-lap [data-zar]').forEach((n) =>
+    n.addEventListener('click', limitLapZar));
+  $('limit-egyeni-ok').addEventListener('click', () => {
+    const v = parseInt($('limit-egyeni').value, 10);
+    if (v > 0 && lapValaszt) {
+      lapValaszt(v);
+      limitLapZar();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('limit-lap').hidden) limitLapZar();
+  });
 
   $('btn-cta').addEventListener('click', () => {
     $('mod-valaszto').hidden = false;
@@ -628,6 +728,7 @@ function esemenyek() {
 
   $('sel-alap').addEventListener('change', (e) => {
     S.alap = parseInt(e.target.value, 10);
+    if (S.kezi != null) S.kezi = S.alap;
     elonezetFrissit();
   });
 
