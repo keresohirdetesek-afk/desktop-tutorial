@@ -39,6 +39,9 @@ export class Meres {
     this.kozelites = null;   // legkisebb eddigi távolság a figyelt ponttól
     this.kozelitoPont = null;
     this.uzenet = '';
+    // csak a valódi gond kerül a felületre; a szokásos állapotot a
+    // szakaszpanel mondja el, azt nem kell megismételni
+    this.figyelmeztet = false;
   }
 
   /** @param {{start:?{lat,lon}, end:?{lat,lon}, sugar:number}} szakasz */
@@ -116,10 +119,12 @@ export class Meres {
 
     if (c.accuracy > MAX_PONTATLANSAG) {
       this.uzenet = `Gyenge GPS-jel (±${Math.round(c.accuracy)} m) — várunk a pontosabb helyzetre.`;
+      this.figyelmeztet = true;
       this.onChange(this);
       return;
     }
 
+    this.figyelmeztet = false;
     if (this.allapot === ALLAPOT.VAR) this.#varakozas(p);
     else if (this.allapot === ALLAPOT.MER) this.#meres(p);
     this.onChange(this);
@@ -192,6 +197,7 @@ export class Meres {
           ? 'Nem érhető el a helyzeted (nincs GPS-jel).'
           : 'Időtúllépés a helymeghatározásnál.';
     this.uzenet = szoveg;
+    this.figyelmeztet = true;
     this.onError(szoveg);
     this.onChange(this);
   }
