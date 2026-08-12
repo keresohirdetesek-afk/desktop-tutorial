@@ -1,5 +1,20 @@
 # desktop-tutorial
 
+Két statikus webalkalmazás egy repóban. A gyökér egy indítóoldal, ahonnan
+mindkettő elérhető.
+
+## Átlagsebesség-kalkulátor
+
+Bárki kipróbálhatja, hogy megbüntetnék-e — és mennyivel —, ha bevezetik
+Magyarországon az átlagsebesség-mérést: GPS-szel lemeri a szakaszátlagot,
+az útvonal menti *változó* sebességhatárokhoz (útépítés, település) méri, és
+kiszámolja a bírságot. Semmit nem tárol: az adat a böngésző memóriájában él.
+
+➡️ **[atlagsebesseg/](atlagsebesseg/)** — leírás, adatforrások, hirdetés-előkészítés:
+[atlagsebesseg/README.md](atlagsebesseg/README.md)
+
+---
+
 ## Útvonalbejárás
 
 Túlméretes szállítmány útvonalbejárásához készült önálló webalkalmazás (PWA):
@@ -36,7 +51,25 @@ kamerát, a GPS-t és a mikrofont.
    https://<felhasználónév>.github.io/desktop-tutorial/
    ```
 
-   A gyökér automatikusan átirányít az `utvonalbejaras/` mappára.
+   A gyökéren egy indítóoldal fogad, ahonnan mindkét app elérhető:
+   `atlagsebesseg/` és `utvonalbejaras/`.
+
+### Saját domain (pl. atlagsebesseg.hu)
+
+A GitHub Pages egy repóhoz **egy** egyedi domaint enged, és az mindig a repó
+gyökerét szolgálja ki. Ezért ha az `atlagsebesseg.hu` közvetlenül az
+átlagsebesség-appot nyissa meg, két út van:
+
+- **Külön repó** (ez a tisztább): az `atlagsebesseg/` mappa tartalma egy önálló
+  repó gyökerébe kerül, és annak a Pages-beállításánál lesz megadva a domain.
+  Az app így a `https://atlagsebesseg.hu/` címen nyílik.
+- **Ebben a repóban maradva**: a domain a gyökérre mutat, az app pedig a
+  `https://atlagsebesseg.hu/atlagsebesseg/` címen érhető el.
+
+DNS oldalon a domain szolgáltatójánál: `A` rekordok a `185.199.108–111.153`
+címekre, a `www` alá pedig `CNAME` a `<felhasználónév>.github.io` névre —
+utána a Pages **Custom domain** mezőjébe beírva jön az ingyenes HTTPS
+(*Enforce HTTPS*, néhány perc után).
 
 ### Telepítés a telefonra
 
