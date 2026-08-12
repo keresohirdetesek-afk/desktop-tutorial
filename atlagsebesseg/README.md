@@ -1,15 +1,36 @@
-# Átlagsebesség-kalkulátor
+# Átlagsebesség.hu
 
-Bárki kipróbálhatja, hogy **megbüntetnék-e, és mennyivel**, ha Magyarországon
-bevezetik az átlagsebesség-mérést (szakaszellenőrzést). Az app GPS-szel
-lemeri a saját szakaszátlagot, az útvonal menti sebességhatárokhoz méri, és
-kiszámolja a 410/2007. (XII. 29.) Korm. rendelet szerinti bírságot.
+„Próbáld ki, hogy egy átlagsebesség-mérős szakaszon szabályosan érnél-e célba."
 
-**Nincs szerver, nincs adatbázis, nincs süti.** A mérés a böngésző
+Az app GPS-szel lemeri a saját szakaszátlagot, az útvonal menti
+sebességhatárokhoz méri, és megmutatja, hogyan működne nálad az
+átlagsebesség-mérés, ha Magyarországon a jelenleg egyeztetett rendszer
+bevezetésre kerül.
+
+**Nincs regisztráció. Nem követünk. Csak számolunk.** A mérés a böngésző
 memóriájában él, és az oldal bezárásával nyomtalanul eltűnik.
+
+### Márkanév és szövegezés
+
+A megjelenő márkanév **Átlagsebesség.hu** (a cím `atlagsebesseg.hu`). A
+szövegek szándékosan feltételes módban fogalmaznak: az átlagsebesség-mérés
+gyakorlati bevezetéséről nincs végleges döntés, ezért az oldal sehol nem
+sugallja, hogy a rendszer már működik vagy pontosan így fog működni. Új
+szöveg írásakor ezt tartsuk.
 
 ## Mit tud
 
+- **Egy mondat és egy gomb az induláskor.** Az első képernyőn nincs térkép
+  és nincs kapcsoló: egy állítás, egy nagy CTA, majd választás „most vezetek"
+  (GPS) és „csak kipróbálnám" (kalkulátor) között.
+- **A három nagy szám vezetés közben:** jelenlegi szakaszátlag, megengedett
+  átlag, státusz. Alatta az előrejelzés: „ha innen 130 km/h-val haladsz
+  tovább, várhatóan 126 km/h lesz a szakaszátlagod".
+- **Eredménykártya a végén:** szakasz, idő, átlag, megengedett átlag, és egy
+  mondatos verdikt.
+- A technikai kapcsolók (kiváltási sugár, alapértelmezett határ, Overpass
+  lekérés, térképcsempék) a **Haladó beállítások** alatt vannak, nem az első
+  képernyőn.
 - **Élő mérés GPS-szel.** Két munkamód:
   - *kijelölt szakasz*: a térképen megjelölöd a szakasz elejét és végét, a
     mérés elhaladáskor magától indul és áll le (rezgésjelzéssel);
