@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b0f16">
+<meta name="theme-color" content="#0e0e10">
 <meta name="description" content="Nézd meg, hogyan működne nálad az átlagsebesség-mérés, ha Magyarországon a jelenleg egyeztetett rendszer bevezetésre kerül. Nincs regisztráció, nem követünk, csak számolunk.">
 <title>Átlagsebesség.hu</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -17,8 +17,12 @@
 <body>
 
 <header id="topbar">
-  <h1>Átlagsebesség<span class="tld">.hu</span></h1>
-  <span id="adat-jelzo" class="pill" title="Semmilyen adat nem hagyja el a készüléket">🔒 helyben</span>
+  <span class="logo" aria-hidden="true">[á]</span>
+  <h1>átlagsebesség<span class="tld">.hu</span></h1>
+  <span id="gps-pill" class="gps-pill" data-allapot="ki" title="GPS állapota">
+    GPS <span class="dot"></span>
+  </span>
+  <button id="btn-info" class="ikon-gomb" aria-label="Tudnivalók">i</button>
 </header>
 
 <main id="main">
@@ -35,7 +39,7 @@
           célba. Nézd meg, hogyan működne nálad az átlagsebesség-mérés, ha
           Magyarországon a jelenleg egyeztetett rendszer bevezetésre kerül.
         </p>
-        <button id="btn-cta" class="btn primary cta">▶ Szimuláció indítása</button>
+        <button id="btn-cta" class="btn nagy">▶ SZIMULÁCIÓ INDÍTÁSA</button>
 
         <div id="mod-valaszto" class="mod-valaszto" hidden>
           <button class="mod" id="mod-vezetek">
@@ -74,8 +78,8 @@
 
     <!-- ------------------------------------------------- 2. élő nézet -->
     <div id="meres-elo" hidden>
-
       <div class="pad">
+
         <!-- eredménykártya: a mérés lezárása után jelenik meg -->
         <section class="card eredmeny" id="eredmeny-kartya" hidden>
           <h2 class="eredmeny-cim">Szimuláció eredménye</h2>
@@ -87,41 +91,50 @@
           </div>
         </section>
 
-        <!-- a három nagy szám -->
-        <section class="card harmas" id="harmas-kartya">
-          <div class="harmas-racs">
-            <div class="harmas-cella">
-              <span class="harmas-lbl">Jelenlegi szakaszátlag</span>
-              <span class="harmas-val" id="h-atlag">—</span>
-              <span class="harmas-egyseg">km/h</span>
-            </div>
-            <div class="harmas-cella">
-              <span class="harmas-lbl">Megengedett átlag</span>
-              <span class="harmas-val" id="h-limit">—</span>
-              <span class="harmas-egyseg">km/h</span>
-            </div>
-            <div class="harmas-cella" id="h-statusz-cella">
-              <span class="harmas-lbl">Státusz</span>
-              <span class="harmas-val statusz" id="h-statusz">—</span>
-              <span class="harmas-egyseg" id="h-statusz-alcim">még nem indult</span>
-            </div>
+        <!-- szakasz: kapuk és haladás -->
+        <section class="szakasz-panel" id="szakasz-panel">
+          <h2 id="szakasz-nev">Kijelölt szakasz</h2>
+          <div class="kapu-sor">
+            <span class="kapu-cimke">Kapu #1</span>
+            <span class="kapu-kozep">
+              <span id="szp-hatra">Még: —</span>
+              <span id="szp-ido">Becsült idő: —</span>
+            </span>
+            <span class="kapu-cimke">Kapu #2</span>
+          </div>
+          <div class="halado-sor">
+            <span class="kapu-tick"></span>
+            <span class="sav"><span class="sav-kitolt" id="szp-sav"></span></span>
+            <span class="kapu-tick"></span>
+          </div>
+        </section>
+
+        <!-- óra + státusz + adatok -->
+        <section class="card ora-kartya" id="ora-kartya">
+          <div class="ora-doboz">
+            <svg id="ora" class="ora" role="img" aria-label="Szakaszátlag mérője"></svg>
+            <span class="tabla" id="ora-tabla">—</span>
+          </div>
+
+          <div class="statuszsav semleges" id="statuszsav">
+            <span class="statusz-fo" id="st-fo">JELENLEGI ÁTLAG: —</span>
+            <span class="statusz-al">STÁTUSZ: <strong id="st-cimke">[○ NINCS ADAT]</strong></span>
+            <span class="statusz-megj" id="st-megj">(Indítsd el a mérést)</span>
+          </div>
+
+          <div class="adatracs">
+            <div><span class="adat-lbl">Mért átlag</span><span class="adat-val" id="ki-atlag">—</span></div>
+            <div><span class="adat-lbl">Megengedett</span><span class="adat-val" id="ki-limit">—</span></div>
+            <div><span class="adat-lbl">Eltelt idő</span><span class="adat-val" id="ki-ido">0:00</span></div>
+            <div><span class="adat-lbl">Bírságveszély</span><span class="adat-val" id="ki-birsag">0 Ft</span></div>
           </div>
 
           <p id="h-projekcio" class="projekcio" hidden></p>
+          <p id="ki-melleklet" class="muted small center">Táv: 0 m · GPS: —</p>
+          <p id="gps-uzenet" class="muted small center"></p>
 
-          <div class="stats">
-            <div><span class="stat-val" id="ki-tav">0 m</span><span class="stat-lbl">Táv</span></div>
-            <div><span class="stat-val" id="ki-ido">0:00</span><span class="stat-lbl">Idő</span></div>
-            <div><span class="stat-val" id="ki-pill">—</span><span class="stat-lbl">Pillanatnyi</span></div>
-            <div><span class="stat-val" id="ki-gps">—</span><span class="stat-lbl">GPS</span></div>
-          </div>
-
-          <p id="gps-uzenet" class="muted small"></p>
-
-          <div class="btn-row">
-            <button id="btn-meres" class="btn primary grow">▶ Mérés indítása</button>
-            <button id="btn-ujra" class="btn ghost">Új mérés</button>
-          </div>
+          <button id="btn-meres" class="btn nagy">▶ MÉRÉS INDÍTÁSA</button>
+          <button id="btn-ujra" class="btn ghost small">Új mérés</button>
         </section>
       </div>
 

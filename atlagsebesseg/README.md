@@ -23,9 +23,15 @@ szöveg írásakor ezt tartsuk.
 - **Egy mondat és egy gomb az induláskor.** Az első képernyőn nincs térkép
   és nincs kapcsoló: egy állítás, egy nagy CTA, majd választás „most vezetek"
   (GPS) és „csak kipróbálnám" (kalkulátor) között.
-- **A három nagy szám vezetés közben:** jelenlegi szakaszátlag, megengedett
-  átlag, státusz. Alatta az előrejelzés: „ha innen 130 km/h-val haladsz
-  tovább, várhatóan 126 km/h lesz a szakaszátlagod".
+- **Műszerfal vezetés közben.** Felül a szakasz: két kapu, a hátralévő táv,
+  a becsült idő és egy haladásjelző sáv. Alatta sebességóra, ami a
+  *szakaszátlagot* mutatja — a skála a korlátozáshoz igazodik (110-es
+  határnál 80–140), a színek a szabályos / túllépés-bírság-nélkül / bírságos
+  tartományt jelölik, a fehér háromszög a korlátozás helyét, a sarokban
+  pedig a sebességtábla. Utána a státuszsáv, végül négy adat: mért átlag,
+  megengedett átlag, eltelt idő, bírságveszély forintban.
+- **Előrejelzés:** „ha innen 130 km/h-val haladsz tovább, várhatóan
+  126 km/h lesz a szakaszátlagod".
 - **Eredménykártya a végén:** szakasz, idő, átlag, megengedett átlag, és egy
   mondatos verdikt.
 - A technikai kapcsolók (kiváltási sugár, alapértelmezett határ, Overpass
