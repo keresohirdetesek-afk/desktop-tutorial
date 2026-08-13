@@ -50,9 +50,12 @@ szöveg írásakor ezt tartsuk.
   repülőgépek utastéri jelzése, rezgéssel együtt. Csak romló irányban szól,
   a bírságos tartományban félpercenként emlékeztet, visszalassuláskor egy
   feloldó hang zárja. Egy koppintással némítható a mérőkártyán.
-  **Korlát:** a képernyő a mérés alatt ébren marad, de ha kikapcsolod a
+  A Haladó beállítások alatt **kipróbálható** gombbal, mert menet közben
+  csak valódi túllépéskor szólal meg.
+  **Korlátok:** a képernyő a mérés alatt ébren marad, de ha kikapcsolod a
   kijelzőt vagy más appra váltasz, a böngésző felfüggesztheti a lapot, és a
-  hang elmarad. iPhone-on ez biztosan így van.
+  hang elmarad; iPhone-on ez biztosan így van. Szintén iPhone-on a néma
+  kapcsoló a webes hangot is elnémítja, a média-hangerőtől függetlenül.
 - **Előrejelzés:** „ha innen 130 km/h-val haladsz tovább, várhatóan
   126 km/h lesz a szakaszátlagod".
 - **Eredménykártya a végén:** szakasz, idő, átlag, megengedett átlag, és egy
@@ -125,6 +128,18 @@ Az OSM-lekérés helye egy fájlban van: `js/limits.js` (`OVERPASS_VEGPONTOK`,
 
 Egyetlen helyen, a `js/birsag.js` fájlban van, dátumozva. Ha a rendelet
 módosul, elég az ottani számokat átírni — az egész app követi.
+
+## Frissítés és a service worker
+
+A service worker az app saját fájljait **hálózat-először** szolgálja ki, 2,5
+másodperces türelemmel, utána a gyorsítótárból. Ez fontos: korábban
+gyorsítótár-először ment, és emiatt egy kiadás után az első indítás még a
+régi appot futtatta, az új kód csak a következő indításkor jelent meg. Aki
+kipróbált egy frissen kitett funkciót, nem találta.
+
+Offline vagy lassú kapcsolatnál a türelmi idő után a gyorsítótár válaszol,
+tehát a repülős/alagutas működés megmarad. A `CACHE` nevét (`atlagsebesseg-vN`)
+minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Fájlok
 

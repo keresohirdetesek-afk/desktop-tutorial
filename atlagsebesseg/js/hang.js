@@ -11,11 +11,11 @@
 
 const HANGOK = {
   // átlépted a megengedett átlagot: két hang, magasról mélyre
-  figyelem: { hangok: [[880, 0], [660, 0.22]], hangero: 0.22, hossz: 0.75 },
+  figyelem: { hangok: [[880, 0], [660, 0.22]], hangero: 0.42, hossz: 0.75 },
   // bírságos tartomány: mélyebb, három ütés, sürgetőbb
-  birsag: { hangok: [[660, 0], [523, 0.2], [440, 0.4]], hangero: 0.3, hossz: 0.9 },
+  birsag: { hangok: [[660, 0], [523, 0.2], [440, 0.4]], hangero: 0.5, hossz: 0.9 },
   // visszatértél a megengedett alá: egyetlen, felfelé oldó hang
-  rendben: { hangok: [[660, 0], [880, 0.16]], hangero: 0.16, hossz: 0.5 },
+  rendben: { hangok: [[660, 0], [880, 0.16]], hangero: 0.3, hossz: 0.5 },
 };
 
 export class Gong {
@@ -75,5 +75,17 @@ export class Gong {
   jelez(fajta) {
     this.szol(fajta);
     this.rezeg(fajta);
+  }
+
+  /** Kipróbáláshoz: felébreszti a hangot és rögtön meg is szólaltatja.
+      @returns {Promise<boolean>} szólt-e; ha nem, a hívó megmondhatja, miért. */
+  async probal(fajta = 'figyelem') {
+    const megy = await this.ebreszt();
+    if (!megy) return false;
+    const volt = this.be;
+    this.be = true;
+    this.jelez(fajta);
+    this.be = volt;
+    return true;
   }
 }

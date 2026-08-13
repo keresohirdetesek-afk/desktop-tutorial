@@ -1,7 +1,7 @@
 // Offline működés: az alkalmazás saját fájljai gyorsítótárba kerülnek.
 // Mérési adat nincs — nincs is mit menteni vagy szinkronizálni.
 
-const CACHE = 'atlagsebesseg-v3';
+const CACHE = 'atlagsebesseg-v4';
 const ASSETS = [
   './',
   'index.html',
@@ -51,28 +51,36 @@ self.addEventListener('fetch', (e) => {
   // és soha nem kerülnek gyorsítótárba.
   if (new URL(req.url).origin !== location.origin) return;
 
-  if (req.mode === 'navigate') {
-    e.respondWith(
-      fetch(req).catch(() => caches.match('index.html').then((r) => r || caches.match('./')))
-    );
-    return;
-  }
+  /* Az app saját fájljai hálózat-először, 2,5 másodperces türelemmel.
 
-  e.respondWith(
-    caches.match(req).then((hit) => {
-      if (hit) {
-        fetch(req).then((res) => {
-          if (res && res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone()));
-        }).catch(() => {});
-        return hit;
-      }
-      return fetch(req).then((res) => {
-        if (res && res.ok && res.type === 'basic') {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-        }
-        return res;
-      });
-    })
-  );
+     Korábban gyorsítótár-először mentek, háttérfrissítéssel. Ennek az volt
+     a következménye, hogy egy kiadás után az első indítás még a RÉGI appot
+     futtatta, és az új kód csak a következő indításkor jelent meg. Aki
+     kipróbált egy frissen kitett funkciót, nem találta.
+
+     Hálózat nélkül vagy lassú kapcsolatnál a türelmi idő után a
+     gyorsítótár válaszol, tehát az offline működés megmarad.            */
+  e.respondWith(halozatEloszor(req));
 });
+
+async function halozatEloszor(req) {
+  const gyorsitotarbol = caches.match(req);
+  try {
+    const res = await Promise.race([
+      fetch(req),
+      new Promise((_, rossz) => setTimeout(() => rossz(new Error('lassu')), 2500)),
+    ]);
+    if (res && res.ok && res.type === 'basic') {
+      const masolat = res.clone();
+      caches.open(CACHE).then((c) => c.put(req, masolat));
+    }
+    return res;
+  } catch {
+    const hit = await gyorsitotarbol;
+    if (hit) return hit;
+    if (req.mode === 'navigate') {
+      return (await caches.match('index.html')) || (await caches.match('./'));
+    }
+    throw new Error('nem elérhető');
+  }
+}
