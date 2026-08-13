@@ -786,3 +786,8 @@ input[type="checkbox"] {
   height: 22px;
   accent-color: var(--accent);
 }
+
+/* A némítás vezetés közben egy koppintás legyen, ne a beállítások alól. */
+.hang-kapcsolo { align-self: center; }
+.hang-kapcsolo[aria-pressed="false"] { opacity: 1; color: var(--muted); }
+.hang-kapcsolo[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); }
