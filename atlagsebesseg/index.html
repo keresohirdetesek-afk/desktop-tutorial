@@ -136,6 +136,7 @@
           </div>
 
           <p id="h-projekcio" class="projekcio" hidden></p>
+          <p id="hatar-allapot" class="muted small center">Sebességhatárok: a beállított alapértékkel számolunk.</p>
           <p id="ki-melleklet" class="muted small center">Táv: 0 m · GPS: -</p>
           <p id="gps-uzenet" class="muted small center"></p>
 
@@ -200,13 +201,24 @@
               határokat.
             </p>
 
+            <div class="row-between">
+              <label for="chk-auto-hatar">Sebességhatárok automatikus lekérése</label>
+              <input id="chk-auto-hatar" type="checkbox" checked>
+            </div>
+            <p class="muted small">
+              Bekapcsolva a mérés magától lekéri az útvonal menti
+              korlátozásokat, és haladás közben frissíti. Ehhez kb.
+              kilométerenként elküldi a helyzetedet az Overpass API-nak.
+              Kikapcsolva az app a lenti alapértékkel számol, és semmilyen
+              adat nem hagyja el a készüléket.
+            </p>
+
             <button id="btn-osm" class="btn block">
-              <svg class="ikon" aria-hidden="true"><use href="#i-map-trifold"/></svg>Sebességhatárok lekérése (OpenStreetMap)
+              <svg class="ikon" aria-hidden="true"><use href="#i-map-trifold"/></svg>Frissítés most, a teljes nyomvonalra
             </button>
             <p id="osm-allapot" class="muted small">
-              A lekérés a nyomvonal koordinátáit elküldi az Overpass API-nak.
-              Ez az egyetlen alkalom, amikor adat hagyja el a készüléket,
-              és az sem rólad szól, hanem az útról.
+              Utólagos pontosításhoz: a már megtett nyomvonal mentén kéri le a
+              határokat, nem csak a jelenlegi helyzet körül.
             </p>
 
             <div class="row-between">
@@ -307,9 +319,13 @@
           <li>Nincs szerveroldal: a számítás a te készülékeden fut.</li>
           <li>Két külső kérés fordulhat elő, mindkettő kikapcsolható:
               a térképcsempék az OpenStreetMaptől, és a sebességhatárok
-              lekérése az Overpass API-tól (ez utóbbi csak gombnyomásra).
-              Ezek a szolgáltatók a saját szabályzatuk szerint látják a kérés
-              IP-címét és a kért terület koordinátáit.</li>
+              lekérése az Overpass API-tól. Mérés közben ez utóbbi
+              <strong>magától fut</strong>, nagyjából kilométerenként, hogy a
+              táblán mindig az legyen, ami tényleg ki van téve. Ilyenkor a
+              szolgáltató a saját szabályzata szerint látja a kérés IP-címét
+              és a kért terület koordinátáit. A Haladó beállításokban
+              kikapcsolható; kikapcsolva semmilyen adat nem hagyja el a
+              készüléket.</li>
         </ul>
       </section>
 

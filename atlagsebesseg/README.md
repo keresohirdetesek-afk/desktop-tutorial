@@ -61,8 +61,15 @@ szöveg írásakor ezt tartsuk.
   útépítési korlátozás → település), és minden szakasz a *saját* határához
   mérve kap értékelést. A hatóság is így szankcionál, nem a teljes út vegyes
   átlagára.
-- **Sebességhatárok lekérése** az OpenStreetMapből (Overpass API), kézi
-  felülírással: a sebességtáblára koppintva feljön a gyakori korlátozások
+- **A sebességhatárok magától jönnek le, menet közben.** A mérés indulásakor
+  és utána nagyjából kilométerenként lekérdezi az app a jelenlegi helyzet
+  körüli kb. 1,8 km-es kört az Overpass API-tól, és a részleteket összefűzi.
+  Így a táblán végig a helyben érvényes érték áll, nem csak a szakasz végén
+  derül ki, mi volt kint. A Haladó beállításokban kikapcsolható; kikapcsolva
+  semmilyen kérés nem megy ki, és az app az alapértékkel számol.
+  A gomb ott maradt „Frissítés most, a teljes nyomvonalra” néven, utólagos
+  pontosításhoz.
+- **Kézi felülírás:** a sebességtáblára koppintva feljön a gyakori korlátozások
   listája (30–130) meg egy egyéni mező, és ugyanez a lap nyílik a
   kalkulátor soraiban és a szakaszlistában is. Ahol mást láttál kint, két
   koppintás átírni.
