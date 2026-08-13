@@ -349,12 +349,14 @@ button, input, select { font: inherit; color: inherit; }
 
 .ora-tick { stroke: var(--muted); stroke-width: 2; opacity: 0.6; }
 .ora-cimke { fill: var(--muted); font-size: 12px; font-weight: 600; }
-.ora-limitjel { fill: var(--text); }
+.ora-limitjel { stroke: var(--text); stroke-width: 4; }
 .ora-mutato { stroke: var(--text); stroke-width: 5; stroke-linecap: round; }
 /* a pillanatnyi sebesség vékony, narancs mutatója */
 .ora-mutato-pill { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; opacity: 0.95; }
 .ora-most { fill: var(--accent); font-size: 12px; font-weight: 700; }
 .ora-tengely { fill: var(--accent); }
+.ora-tengely.halvany { fill: var(--border); }
+.ora-ertek.halvany { fill: var(--muted); }
 
 .ora-ertek { fill: var(--text); font-size: 40px; font-weight: 700; letter-spacing: -1.5px; }
 .ora-egyseg { fill: var(--muted); font-size: 14px; font-weight: 600; }
@@ -362,17 +364,17 @@ button, input, select { font: inherit; color: inherit; }
 /* sebességkorlátozó tábla az óra sarkában */
 .tabla {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 52px;
-  height: 52px;
+  top: 2px;
+  right: 2px;
+  width: clamp(42px, 13vw, 54px);
+  height: clamp(42px, 13vw, 54px);
   display: grid;
   place-items: center;
   border-radius: 999px;
   background: #ffffff;
-  border: 6px solid #d92b1f;
+  border: 5px solid #d92b1f;
   color: #17171a;
-  font-size: 19px;
+  font-size: clamp(15px, 4.6vw, 19px);
   font-weight: 800;
 }
 
@@ -402,18 +404,20 @@ button, input, select { font: inherit; color: inherit; }
 
 .adatracs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
+/* Címke fölé, érték alá: egy sorban a hosszabb címke és a mértékegységes
+   érték együtt kilógna a keskeny oszlopból.                            */
 .adatracs div {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 9px 11px;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 8px 10px;
   border-radius: 10px;
   background: var(--surface-2);
   border: 1px solid var(--border);
 }
-.adat-lbl { font-size: 12px; color: var(--muted); }
-.adat-val { font-size: 15px; font-weight: 700; white-space: nowrap; }
+.adat-lbl { font-size: 11px; color: var(--muted); line-height: 1.2; }
+.adat-val { font-size: 16px; font-weight: 700; }
 
 .projekcio {
   margin: 0;
@@ -440,6 +444,8 @@ button, input, select { font: inherit; color: inherit; }
 }
 
 .card-title { margin: 0; font-size: 15px; font-weight: 650; }
+.card p { margin: 0; }
+.card ul { margin: 0; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 .center { text-align: center; }
@@ -488,6 +494,14 @@ input[type="number"], select {
   text-transform: uppercase;
   color: var(--muted);
   text-align: center;
+}
+
+.eredmeny-alcim {
+  margin: -6px 0 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .eredmeny-adatok { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; font-size: 15px; }
@@ -597,11 +611,12 @@ input[type="number"], select {
 
 .tabla-sugo {
   position: absolute;
-  top: 60px;
-  right: 4px;
-  width: 52px;
+  top: calc(clamp(42px, 13vw, 54px) + 4px);
+  right: 2px;
+  width: clamp(42px, 13vw, 54px);
   text-align: center;
   font-size: 10px;
+  line-height: 1.2;
   color: var(--muted);
 }
 
@@ -673,3 +688,25 @@ input[type="number"], select {
 }
 .limit-gomb strong { font-size: 19px; }
 .limit-gomb span { font-size: 10px; color: var(--muted); }
+
+/* -------------------------------------------------- keskeny kijelző */
+
+/* 360 px alatt a nagybetűs státuszsáv és a szóvédjegy tördelődne. */
+@media (max-width: 360px) {
+  #topbar h1 { font-size: 15px; }
+  .statusz-fo { font-size: 15px; }
+  .statusz-al { font-size: 13px; }
+  .statusz-megj { font-size: 12px; }
+  .adat-lbl { font-size: 11px; }
+  .adat-val { font-size: 14px; }
+  .btn.nagy { font-size: 15px; padding: 14px; letter-spacing: 0.3px; }
+  .hero h2 { font-size: 22px; }
+}
+
+/* A szakaszlistában a „+X km/h” önmagában nem mondja meg, mihez képest. */
+.seg-verd small {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+}

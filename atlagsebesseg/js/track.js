@@ -38,6 +38,7 @@ export class Meres {
     this.vegTav = null;      // távolság a szakasz végétől
     this.kozelites = null;   // legkisebb eddigi távolság a figyelt ponttól
     this.kozelitoPont = null;
+    this.allasKezdet = null;   // mióta állunk a végponti kapun belül
     this.uzenet = '';
     // csak a valódi gond kerül a felületre; a szokásos állapotot a
     // szakaszpanel mondja el, azt nem kell megismételni
@@ -182,6 +183,19 @@ export class Meres {
         this.leallit(true);
         if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
         return;
+      }
+      /* Ha a végpont maga az úti cél, nem hajtunk át rajta: megállunk rajta.
+         Ilyenkor az elhaladás sosem következne be, ezért néhány másodperc
+         állás a kapun belül szintén lezárja a mérést.                    */
+      if (this.vegTav <= this.szakasz.sugar && this.pillanatnyi < 5) {
+        if (this.allasKezdet === null) this.allasKezdet = p.t;
+        else if (p.t - this.allasKezdet >= 5000) {
+          this.leallit(true);
+          if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+          return;
+        }
+      } else {
+        this.allasKezdet = null;
       }
       this.uzenet = `Szakasz vége ${Math.round(this.vegTav)} m-re.`;
     } else {

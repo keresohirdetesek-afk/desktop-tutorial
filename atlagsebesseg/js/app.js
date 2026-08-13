@@ -33,10 +33,11 @@ const S = {
 const LIMIT_JELEK = [30, 40, 50, 60, 70, 80, 90, 100, 110, 130];
 
 const STATUSZ = {
-  ok:        { cimke: '[● BIZTONSÁGOS]', megj: '(Sebesség tartása OK)' },
-  hatar:     { cimke: '[● HATÁRON]',     megj: '(A megengedett átlag felett, még bírság nélkül)' },
-  birsag:    { cimke: '[● BÍRSÁGOS]',    megj: '(Ezen a szakaszon már bírság járna)' },
-  semleges:  { cimke: '[○ NINCS ADAT]',  megj: '(Indítsd el a mérést)' },
+  ok:        { fo: 'JELENLEGI ÁTLAG',        cimke: '[● BIZTONSÁGOS]', megj: '(Sebesség tartása OK)' },
+  hatar:     { fo: 'JELENLEGI ÁTLAG',        cimke: '[● HATÁRON]',     megj: '(A megengedett átlag felett, még bírság nélkül)' },
+  birsag:    { fo: 'JELENLEGI ÁTLAG',        cimke: '[● BÍRSÁGOS]',    megj: '(Ezen a szakaszon már bírság járna)' },
+  varakozik: { fo: 'MÉG NEM INDULT A MÉRÉS', cimke: '[○ VÁRAKOZÁS]',   megj: '(A szakasz elejére vár)' },
+  semleges:  { fo: 'JELENLEGI ÁTLAG',        cimke: '[○ NINCS ADAT]',  megj: '(Indítsd el a mérést)' },
 };
 
 let terkep = null;
@@ -160,6 +161,11 @@ function fmtLimit(v) {
   return Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : fmtSpeed1(v);
 }
 
+/* „az ötven”, de „a nyolcvan” — a névelő a szám kiejtésétől függ. */
+function nevelo(n) {
+  return n === 1 || n === 5 || (n >= 50 && n < 60) ? 'az' : 'a';
+}
+
 function allapotJel(eredmeny) {
   if (!eredmeny || eredmeny.szakaszok.length === 0) return 'semleges';
   if (eredmeny.birsagosak.length > 0) return 'birsag';
@@ -233,10 +239,13 @@ function verdiktRender(node, eredmeny) {
     const megengedett = megengedettAtlag(eredmeny);
     const felette = eredmeny.osszAtlag > megengedett + 0.05;
     node.className = `verdikt ${felette || tartalek <= 5 ? 'hatar' : 'ok'}`;
+    const szoros = eredmeny.szakaszok.reduce(
+      (a, sz) => (sz.ertekeles.tartalek < a.ertekeles.tartalek ? sz : a)
+    );
     node.innerHTML = felette
       ? `<strong>⚠ Gyorsabb voltál a megengedettnél, de bírság nem járna.</strong><br>` +
-        `<span class="small">A megengedett átlag ${fmtLimit(megengedett)} km/h volt, ` +
-        `a tiéd ${fmtSpeed1(eredmeny.osszAtlag)} km/h. ` +
+        `<span class="small">A legszorosabb ${nevelo(szoros.limit)} ${szoros.limit} km/h-s szakasz volt: ` +
+        `${fmtSpeed1(szoros.ertekeles.mert)} km/h átlaggal. ` +
         (tartalek < 0.5
           ? 'Épp a bírsághatáron vagy.'
           : `A bírsághatárig még ${fmtSpeed1(tartalek)} km/h maradt.`) +
@@ -286,7 +295,8 @@ function szakaszLista(node, eredmeny, { szerkesztheto }) {
     const verd = el('div', `seg-verd ${allapot}`,
       e.birsagos
         ? fmtForint(e.osszeg)
-        : `+${fmtSpeed1(Math.max(0, e.tartalek))}<span class="small"> km/h</span>`);
+        : `+${fmtSpeed1(Math.max(0, e.tartalek))}<span class="small"> km/h</span>` +
+          `<small>a bírsághatárig</small>`);
 
     sor.append(limitDoboz, info, verd);
     node.append(sor);
@@ -307,29 +317,40 @@ function szakaszLista(node, eredmeny, { szerkesztheto }) {
 
 /* ------------------------------------------------- szakasz és haladás */
 
+/** A szakasz neve a leghosszabb, névvel bíró útszakaszból. */
+function szakaszNev(eredmeny, vanKapu) {
+  const utNev = eredmeny.szakaszok
+    .slice()
+    .sort((a, b) => b.tav - a.tav)
+    .map((sz) => sz.nev)
+    .find(Boolean);
+  if (utNev) return `${utNev} szakasz`;
+  return vanKapu ? 'Kijelölt szakasz' : 'Kézi mérés';
+}
+
 function szakaszPanel(eredmeny) {
   const vanKapu = !!(S.kapuk.start && S.kapuk.end);
+  // a lezárás után az eredménykártya mondja el ugyanezt
+  $('szakasz-panel').hidden = meres.allapot === ALLAPOT.KESZ;
   // kapu nélkül nincs mihez viszonyítani a haladást — ne mutassunk üres sávot
   $('kapu-bal').hidden = !vanKapu;
   $('kapu-jobb').hidden = !vanKapu;
   $('halado-sor').hidden = !vanKapu;
 
-  let nev = vanKapu ? 'Kijelölt szakasz' : 'Kézi mérés';
-  const utNev = eredmeny.szakaszok
-    .slice()
-    .sort((a, b) => b.tav - a.tav)
-    .map((s) => s.nev)
-    .find(Boolean);
-  if (utNev) nev = `${utNev} szakasz`;
-  $('szakasz-nev').textContent = nev;
+  $('szakasz-nev').textContent = szakaszNev(eredmeny, vanKapu);
 
   const kozep = $('szp-hatra');
   const idoSor = $('szp-ido');
   const sav = $('szp-sav');
 
   if (!vanKapu) {
-    kozep.textContent = `Megtéve: ${fmtDistance(meres.tav)}`;
-    idoSor.textContent = 'Nincs kijelölt kapu — kézi leállítás';
+    const indulasElott = meres.allapot === ALLAPOT.ALLO;
+    kozep.textContent = indulasElott
+      ? 'Készen áll'
+      : `Megtéve: ${fmtDistance(meres.tav)}`;
+    idoSor.textContent = indulasElott
+      ? 'Jelöld ki a szakaszt a térképen, vagy indíts kézzel'
+      : 'Nincs kijelölt kapu — kézi leállítás';
     sav.style.width = '0%';
     return;
   }
@@ -366,7 +387,7 @@ function szakaszPanel(eredmeny) {
 
 function oraEsStatusz(eredmeny) {
   const van = eredmeny.szakaszok.length > 0;
-  const allapot = allapotJel(eredmeny);
+  const allapot = meres.allapot === ALLAPOT.VAR ? 'varakozik' : allapotJel(eredmeny);
   const megengedett = megengedettAtlag(eredmeny);
   const hatar = birsagHatarAtlag(eredmeny);
 
@@ -387,13 +408,17 @@ function oraEsStatusz(eredmeny) {
 
   const sav = $('statuszsav');
   sav.className = `statuszsav ${allapot}`;
-  $('st-fo').textContent = van
-    ? `JELENLEGI ÁTLAG: ${fmtSpeed(eredmeny.osszAtlag)} km/h`
-    : 'JELENLEGI ÁTLAG: —';
-  $('st-cimke').textContent = STATUSZ[allapot].cimke;
-  $('st-megj').textContent = allapot === 'birsag'
-    ? `(Ezen a szakaszon ${fmtForint(birsagOsszeg(eredmeny))} bírság járna)`
-    : STATUSZ[allapot].megj;
+  const st = STATUSZ[allapot];
+  $('st-fo').textContent = allapot === 'varakozik'
+    ? st.fo
+    : `${st.fo}: ${van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '—'}`;
+  $('st-cimke').textContent = st.cimke;
+  $('st-megj').textContent =
+    allapot === 'birsag'
+      ? `(Ezen a szakaszon ${fmtForint(birsagOsszeg(eredmeny))} bírság járna)`
+      : allapot === 'varakozik' && meres.kezdoTav != null
+        ? `(Kapu #1 még ${fmtDistance(meres.kezdoTav)})`
+        : st.megj;
 
   $('ki-atlag').textContent = van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '—';
   $('ki-pill').textContent = meres.utolso ? `${fmtSpeed(meres.pillanatnyi)} km/h` : '—';
@@ -433,8 +458,13 @@ function projekcio(eredmeny) {
 
   node.hidden = false;
   node.className = `projekcio ${varhato > tempo + 0.05 ? 'rossz' : 'jo'}`;
+  /* Vegyes korlátozású szakaszon a súlyozott átlag nem olyan tempó, amivel
+     bárhol szabályosan mehetnél — ilyenkor ne is írjuk ki számként.     */
+  const egyfele = new Set(eredmeny.szakaszok.map((sz) => sz.limit)).size === 1;
   node.innerHTML =
-    `Ha innen <strong>${fmtLimit(tempo)} km/h</strong>-val haladsz tovább, ` +
+    (egyfele
+      ? `Ha innen <strong>${fmtLimit(tempo)} km/h</strong>-val haladsz tovább, `
+      : 'Ha innen végig tartod a korlátozásokat, ') +
     `várhatóan <strong>${Math.round(varhato)} km/h</strong> lesz a szakaszátlagod.`;
 }
 
@@ -448,6 +478,9 @@ function eredmenyKartya(eredmeny) {
   kartya.hidden = !kesz;
   $('ora-kartya').hidden = kesz;
   if (!kesz) return;
+
+  $('eredmeny-alcim').textContent =
+    szakaszNev(eredmeny, !!(S.kapuk.start && S.kapuk.end));
 
   const sorok = [
     ['Szakasz', fmtDistance(eredmeny.osszTav)],
@@ -561,7 +594,7 @@ function kalkSzamol() {
   }));
   const eredmeny = ertekelSzakaszok(szakaszok);
 
-  $('k-atlag').textContent = fmtSpeed(atlag);
+  $('k-atlag').textContent = fmtLimit(atlag);
   verdiktRender($('k-verdikt'), eredmeny);
   szakaszLista($('k-reszletek'), eredmeny, { szerkesztheto: false });
 
@@ -730,6 +763,7 @@ function esemenyek() {
   });
 
   $('btn-ujra').addEventListener('click', ujSzimulacio);
+  $('btn-ujra-szakasz').addEventListener('click', ujSzimulacio);
   $('btn-uj-szimulacio').addEventListener('click', () => {
     ujSzimulacio();
     eloNezet(false);
