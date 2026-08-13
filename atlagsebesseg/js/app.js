@@ -10,6 +10,7 @@ import { utakLekerese, utakPontKorul, pontonkentiHatar, szakaszokra } from './li
 import { Terkep } from './map.js';
 import { Ora } from './gauge.js';
 import { Meres, ALLAPOT } from './track.js';
+import { Gong } from './hang.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -53,6 +54,9 @@ const STATUSZ = {
 
 let terkep = null;
 let ora = null;
+const gong = new Gong();
+let elozoAllapot = 'semleges';   // a hangjelzéshez: mikor váltott az állapot
+let utolsoJelzes = 0;            // ms, a bírságos ismétlés ütemezéséhez
 let utolsoEredmeny = null;   // a legutóbbi értékelés, a választóhoz
 let lapValaszt = null;       // a nyitott választó visszahívása
 const meres = new Meres({
@@ -496,6 +500,8 @@ function oraEsStatusz(eredmeny) {
     hely.tipus === 'osm' && hely.becsult ? 'becsült' : TABLA_SUGO[hely.tipus];
   $('ki-hely-limit').textContent = `${fmtLimit(hely.limit)} km/h`;
 
+  hangJelzes(allapot);
+
   const sav = $('statuszsav');
   sav.className = `statuszsav ${allapot}`;
   const st = STATUSZ[allapot];
@@ -520,6 +526,35 @@ function oraEsStatusz(eredmeny) {
   $('ki-melleklet').textContent =
     `Táv: ${fmtDistance(meres.tav)} · GPS: ` +
     (meres.utolso ? `±${Math.round(meres.utolso.acc)} m` : '-');
+}
+
+/* Vezetés közben a képernyőt nem nézi senki, ezért az állapotváltást
+   hallani kell. Csak váltáskor szólal meg, nem folyamatosan; a bírságos
+   tartományban félpercenként emlékeztet, amíg vissza nem lassulsz.     */
+const JELZES_ISMETLES = 30000;
+
+function hangJelzes(allapot) {
+  if (meres.allapot !== ALLAPOT.MER) {
+    elozoAllapot = allapot;
+    return;
+  }
+  const most = Date.now();
+  if (allapot !== elozoAllapot) {
+    // csak romló irányban figyelmeztetünk: lefelé jövet már lassítasz,
+    // ott elég a feloldó hang
+    const sulyossag = { semleges: 0, varakozik: 0, ok: 1, hatar: 2, birsag: 3 };
+    const elore = (sulyossag[allapot] ?? 0) > (sulyossag[elozoAllapot] ?? 0);
+    if (elore && allapot === 'birsag') gong.jelez('birsag');
+    else if (elore && allapot === 'hatar') gong.jelez('figyelem');
+    else if (allapot === 'ok' && (sulyossag[elozoAllapot] ?? 0) >= 2) gong.jelez('rendben');
+    utolsoJelzes = most;
+    elozoAllapot = allapot;
+    return;
+  }
+  if (allapot === 'birsag' && most - utolsoJelzes > JELZES_ISMETLES) {
+    gong.jelez('birsag');
+    utolsoJelzes = most;
+  }
 }
 
 function gpsPill() {
@@ -880,6 +915,8 @@ function esemenyek() {
     if (meres.allapot === ALLAPOT.VAR || meres.allapot === ALLAPOT.MER) meres.leallit();
     else {
       S.felulir.clear();
+      elozoAllapot = 'semleges';
+      gong.ebreszt();          // hangot csak felhasználói mozdulat után enged a böngésző
       meres.indit({ ...S.kapuk });
     }
   });
@@ -913,6 +950,17 @@ function esemenyek() {
     S.alap = parseInt(e.target.value, 10);
     if (S.kezi != null) S.kezi = S.alap;
     elonezetFrissit();
+  });
+
+  $('btn-hang').addEventListener('click', (e) => {
+    gong.be = !gong.be;
+    const gomb = e.currentTarget;
+    gomb.setAttribute('aria-pressed', String(gong.be));
+    gomb.querySelector('use').setAttribute(
+      'href', gong.be ? '#i-speaker-high' : '#i-speaker-slash'
+    );
+    gomb.querySelector('span').textContent = gong.be ? 'Hangjelzés be' : 'Hangjelzés ki';
+    if (gong.be) gong.ebreszt();
   });
 
   $('btn-osm').addEventListener('click', osmLekeres);
@@ -977,7 +1025,7 @@ function esemenyek() {
 function indul() {
   // Fogódzó fejlesztéshez és automatikus teszthez. Nincs benne más, mint ami
   // amúgy is a memóriában van; sehová nem kerül el.
-  window.atlagsebesseg = { S, meres, terkep: null, eloNezet };
+  window.atlagsebesseg = { S, meres, terkep: null, eloNezet, gong };
 
   ora = new Ora($('ora'));
   fulek();

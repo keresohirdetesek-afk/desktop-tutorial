@@ -45,6 +45,14 @@ szöveg írásakor ezt tartsuk.
   határokat: ahogy az útépítési szakaszra érsz, 130-ról 80-ra vált. Ez
   független a „megengedett átlag" mezőtől, ami az egész szakaszra vonatkozó,
   hosszal súlyozott érték. A tábla bármikor felülírható koppintással.
+- **Hangjelzés, ha átléped a megengedettet.** A böngésző szintetizálja
+  (nincs hangfájl, offline is szól): lágy, gongszerű kettős hang, mint a
+  repülőgépek utastéri jelzése, rezgéssel együtt. Csak romló irányban szól,
+  a bírságos tartományban félpercenként emlékeztet, visszalassuláskor egy
+  feloldó hang zárja. Egy koppintással némítható a mérőkártyán.
+  **Korlát:** a képernyő a mérés alatt ébren marad, de ha kikapcsolod a
+  kijelzőt vagy más appra váltasz, a böngésző felfüggesztheti a lapot, és a
+  hang elmarad. iPhone-on ez biztosan így van.
 - **Előrejelzés:** „ha innen 130 km/h-val haladsz tovább, várhatóan
   126 km/h lesz a szakaszátlagod".
 - **Eredménykártya a végén:** szakasz, idő, átlag, megengedett átlag, és egy
