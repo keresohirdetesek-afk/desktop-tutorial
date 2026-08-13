@@ -960,7 +960,19 @@ function esemenyek() {
       'href', gong.be ? '#i-speaker-high' : '#i-speaker-slash'
     );
     gomb.querySelector('span').textContent = gong.be ? 'Hangjelzés be' : 'Hangjelzés ki';
-    if (gong.be) gong.ebreszt();
+    // bekapcsoláskor rögtön hallható, hogy tényleg működik
+    if (gong.be) gong.probal('rendben');
+  });
+
+  $('btn-hang-proba').addEventListener('click', async () => {
+    const allapot = $('hang-proba-allapot');
+    const szolt = await gong.probal('figyelem');
+    allapot.className = `muted small${szolt ? '' : ' figyelem'}`;
+    allapot.textContent = szolt
+      ? 'Most szólnia kellett. Ha nem hallottad: nézd meg a média-hangerőt, ' +
+        'iPhone-on pedig a néma kapcsolót.'
+      : 'A böngésző nem engedte a hangot. Próbáld újra, vagy indíts egy mérést: ' +
+        'a hangkimenet gombnyomásra oldódik fel.';
   });
 
   $('btn-osm').addEventListener('click', osmLekeres);
