@@ -52,6 +52,9 @@ export class Ora {
     this.belso = mk('path', { class: 'ora-belso', fill: 'none' });
     this.skalaJelek = mk('g', { class: 'ora-jelek' });
     this.limitJel = mk('polygon', { class: 'ora-limitjel' });
+    // vékony, második mutató: a pillanatnyi sebesség — a vastag mutató a
+    // szakaszátlagot mutatja, a kettő távolsága maga az információ
+    this.mutatoPill = mk('path', { class: 'ora-mutato-pill' });
     this.mutato = mk('path', { class: 'ora-mutato' });
     this.tengely = mk('circle', { class: 'ora-tengely', cx: CX, cy: CY, r: 9 });
 
@@ -63,10 +66,14 @@ export class Ora {
     });
     this.egysegSzoveg.textContent = 'km/h';
 
+    this.mostSzoveg = mk('text', {
+      class: 'ora-most', x: CX, y: CY + 58, 'text-anchor': 'middle',
+    });
+
     svg.append(
       this.hatter, this.zonaOk, this.zonaHatar, this.zonaBirsag, this.belso,
-      this.skalaJelek, this.limitJel, this.mutato, this.tengely,
-      this.ertekSzoveg, this.egysegSzoveg
+      this.skalaJelek, this.limitJel, this.mutatoPill, this.mutato, this.tengely,
+      this.ertekSzoveg, this.egysegSzoveg, this.mostSzoveg
     );
 
     this.jelenlegi = { min: null, max: null, limit: null, hatar: null };
@@ -78,10 +85,12 @@ export class Ora {
   }
 
   /**
-   * @param {{ertek:number, limit:number, birsagHatar:number, allapot:string}} adat
+   * @param {{ertek:number, pillanat:?number, limit:number, birsagHatar:number,
+   *           allapot:string}} adat
+   *        ertek: a szakaszátlag, pillanat: az éppen mért sebesség
    *        allapot: 'ok' | 'hatar' | 'birsag' | 'semleges'
    */
-  frissit({ ertek, limit, birsagHatar, allapot }) {
+  frissit({ ertek, pillanat, limit, birsagHatar, allapot }) {
     const s = skala(limit, birsagHatar);
     const ujSkala =
       s.min !== this.jelenlegi.min || s.max !== this.jelenlegi.max ||
@@ -136,5 +145,19 @@ export class Ora {
 
     this.ertekSzoveg.textContent = van ? String(Math.round(ertek)) : '—';
     this.ertekSzoveg.setAttribute('class', `ora-ertek ${allapot}`);
+
+    const vanPill = isFinite(pillanat) && pillanat > 0;
+    if (vanPill) {
+      const ap = this.#szog(pillanat, s);
+      const [px, py] = pont(ap, R - 12);
+      const [ph, phy] = pont(ap + 180, 10);
+      this.mutatoPill.setAttribute(
+        'd', `M ${ph.toFixed(1)} ${phy.toFixed(1)} L ${px.toFixed(1)} ${py.toFixed(1)}`
+      );
+      this.mostSzoveg.textContent = `most: ${Math.round(pillanat)}`;
+    } else {
+      this.mutatoPill.setAttribute('d', '');
+      this.mostSzoveg.textContent = '';
+    }
   }
 }
