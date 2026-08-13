@@ -12,6 +12,12 @@ import { Ora } from './gauge.js';
 import { Meres, ALLAPOT } from './track.js';
 
 const $ = (id) => document.getElementById(id);
+
+/** Görgetés a mozgásérzékenységi beállítás szerint. */
+const gorget = (node, block = 'nearest') => node.scrollIntoView({
+  behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+  block,
+});
 const el = (tag, cls, html) => {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
@@ -82,8 +88,35 @@ function eloNezet(be) {
     });
     window.atlagsebesseg.terkep = terkep;
     kapukFrissit();
+    kezdoHelyzet();
   }
   setTimeout(() => terkep.frissit(), 60);
+}
+
+/* A térkép első megnyitásakor a jelenlegi helyzet kerül középre, kb. 150
+   km-es kivágattal: ekkora területen a szakasz mindkét vége látszik.   */
+function kezdoHelyzet() {
+  if (meres.utolso) {
+    terkep.kezdoNezet(meres.utolso);
+    terkep.pozicioRajz(meres.utolso);
+    return;
+  }
+  navigator.geolocation?.getCurrentPosition(
+    (pos) => {
+      meres.utolso = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        t: pos.timestamp,
+        acc: pos.coords.accuracy,
+        spd: null,
+      };
+      terkep.kezdoNezet(meres.utolso);
+      terkep.pozicioRajz(meres.utolso);
+      elonezetFrissit();
+    },
+    () => { /* helyzet nélkül marad az országos áttekintő nézet */ },
+    { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+  );
 }
 
 /* ======================================================= szakaszbontás */
@@ -243,17 +276,17 @@ function verdiktRender(node, eredmeny) {
       (a, sz) => (sz.ertekeles.tartalek < a.ertekeles.tartalek ? sz : a)
     );
     node.innerHTML = felette
-      ? `<strong>⚠ Gyorsabb voltál a megengedettnél, de bírság nem járna.</strong><br>` +
+      ? `<strong>Gyorsabb voltál a megengedettnél, de bírság nem járna.</strong><br>` +
         `<span class="small">A legszorosabb ${nevelo(szoros.limit)} ${szoros.limit} km/h-s szakasz volt: ` +
         `${fmtSpeed1(szoros.ertekeles.mert)} km/h átlaggal. ` +
         (tartalek < 0.5
           ? 'Épp a bírsághatáron vagy.'
           : `A bírsághatárig még ${fmtSpeed1(tartalek)} km/h maradt.`) +
         `</span>`
-      : `<strong>✓ Ebben a szimulációban nem lépted túl az átlagsebesség-határt.</strong><br>` +
+      : `<strong>Ebben a szimulációban nem lépted túl az átlagsebesség-határt.</strong><br>` +
         `<span class="small">` +
         (tartalek < 0.5
-          ? 'Épp a határon vagy — egy hajszállal gyorsabban már jönne a csekk.'
+          ? 'Épp a határon vagy. Egy hajszállal gyorsabban már jönne a csekk.'
           : `A legszorosabb szakaszon még ${fmtSpeed1(tartalek)} km/h ráhagyásod volt.`) +
         `</span>`;
     return;
@@ -261,17 +294,23 @@ function verdiktRender(node, eredmeny) {
   const e = eredmeny.legsulyosabb.ertekeles;
   node.className = 'verdikt birsag';
   node.innerHTML =
-    `<strong>✕ Bírság: ${fmtForint(birsagOsszeg(eredmeny))}</strong><br>` +
+    `<strong>Bírság: ${fmtForint(birsagOsszeg(eredmeny))}</strong><br>` +
     `<span class="small">` +
     (b.length > 1 ? `${b.length} szakaszon lépted túl a határt; a legsúlyosabb: ` : '') +
     `${e.limit} km/h-s szakaszon ${fmtSpeed1(e.mert)} km/h átlag ` +
-    `(+${fmtSpeed1(e.tullepes)} km/h) — ${fmtForint(e.osszeg)}.</span>`;
+    `(+${fmtSpeed1(e.tullepes)} km/h), ${fmtForint(e.osszeg)}.</span>`;
 }
 
 function jelvenyek(sz) {
   const j = [];
-  if (sz.utepites) j.push('<span class="badge warn">🚧 útépítés</span>');
-  if (sz.lakott) j.push('<span class="badge">🏘 lakott terület</span>');
+  if (sz.utepites) {
+    j.push('<span class="badge warn"><svg class="ikon" aria-hidden="true">' +
+           '<use href="#i-traffic-cone"/></svg>útépítés</span>');
+  }
+  if (sz.lakott) {
+    j.push('<span class="badge"><svg class="ikon" aria-hidden="true">' +
+           '<use href="#i-buildings"/></svg>lakott terület</span>');
+  }
   if (sz.becsult) j.push('<span class="badge">becsült</span>');
   return j.join(' ');
 }
@@ -289,8 +328,9 @@ function szakaszLista(node, eredmeny, { szerkesztheto }) {
       : el('div', 'seg-limit', `<strong>${sz.limit}</strong><span>km/h</span>`);
 
     const info = el('div', 'seg-info',
-      `<strong>${fmtDistance(sz.tav)}</strong> · ${fmtDuration(sz.ido)} · átlag ${fmtSpeed1(e.mert)} km/h<br>` +
-      `<span class="muted small">${sz.nev ? `${sz.nev} — ` : ''}${sz.cimke}</span> ${jelvenyek(sz)}`);
+      `<strong>${fmtDistance(sz.tav)}</strong> · ${fmtDuration(sz.ido)}<br>` +
+      `<span class="muted">átlag ${fmtSpeed1(e.mert)} km/h</span><br>` +
+      `<span class="muted small">${sz.nev ? `${sz.nev}, ` : ''}${sz.cimke}</span> ${jelvenyek(sz)}`);
 
     const verd = el('div', `seg-verd ${allapot}`,
       e.birsagos
@@ -304,7 +344,7 @@ function szakaszLista(node, eredmeny, { szerkesztheto }) {
     if (szerkesztheto) {
       limitDoboz.addEventListener('click', () => limitLapNyit({
         cim: 'Szakaszrész sebességhatára',
-        alcim: `${fmtDistance(sz.tav)} — ${sz.nev || sz.cimke}`,
+        alcim: `${fmtDistance(sz.tav)}, ${sz.nev || sz.cimke}`,
         ertek: sz.limit,
         onValaszt: (v) => {
           S.felulir.set(i, v);
@@ -350,7 +390,7 @@ function szakaszPanel(eredmeny) {
       : `Megtéve: ${fmtDistance(meres.tav)}`;
     idoSor.textContent = indulasElott
       ? 'Jelöld ki a szakaszt a térképen, vagy indíts kézzel'
-      : 'Nincs kijelölt kapu — kézi leállítás';
+      : 'Nincs kijelölt kapu, kézi leállítás';
     sav.style.width = '0%';
     return;
   }
@@ -411,7 +451,7 @@ function oraEsStatusz(eredmeny) {
   const st = STATUSZ[allapot];
   $('st-fo').textContent = allapot === 'varakozik'
     ? st.fo
-    : `${st.fo}: ${van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '—'}`;
+    : `${st.fo}: ${van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '-'}`;
   $('st-cimke').textContent = st.cimke;
   $('st-megj').textContent =
     allapot === 'birsag'
@@ -420,8 +460,8 @@ function oraEsStatusz(eredmeny) {
         ? `(Kapu #1 még ${fmtDistance(meres.kezdoTav)})`
         : st.megj;
 
-  $('ki-atlag').textContent = van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '—';
-  $('ki-pill').textContent = meres.utolso ? `${fmtSpeed(meres.pillanatnyi)} km/h` : '—';
+  $('ki-atlag').textContent = van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '-';
+  $('ki-pill').textContent = meres.utolso ? `${fmtSpeed(meres.pillanatnyi)} km/h` : '-';
   $('ki-limit').textContent = `${fmtLimit(megengedett)} km/h`;
   $('ki-ido').textContent = fmtDuration(meres.ido);
   $('ki-birsag').textContent = fmtForint(birsagOsszeg(eredmeny));
@@ -429,7 +469,7 @@ function oraEsStatusz(eredmeny) {
 
   $('ki-melleklet').textContent =
     `Táv: ${fmtDistance(meres.tav)} · GPS: ` +
-    (meres.utolso ? `±${Math.round(meres.utolso.acc)} m` : '—');
+    (meres.utolso ? `±${Math.round(meres.utolso.acc)} m` : '-');
 }
 
 function gpsPill() {
@@ -451,7 +491,7 @@ function projekcio(eredmeny) {
     node.hidden = true;
     return;
   }
-  const tempo = megengedettAtlag(eredmeny);          // km/h — ezzel haladna tovább
+  const tempo = megengedettAtlag(eredmeny);          // km/h, ezzel haladna tovább
   const teljes = megtett + hatra;
   const ido = meres.ido / 1000 + hatra / (tempo / 3.6);
   const varhato = (teljes / ido) * 3.6;
@@ -519,7 +559,9 @@ function elonezetFrissit() {
   terkep?.pozicioRajz(meres.utolso);
 
   const fut = meres.allapot === ALLAPOT.VAR || meres.allapot === ALLAPOT.MER;
-  $('btn-meres').textContent = fut ? '◼ Mérés leállítása' : '▶ Mérés indítása';
+  $('btn-meres').innerHTML = fut
+    ? '<svg class="ikon" aria-hidden="true"><use href="#i-stop"/></svg>Mérés leállítása'
+    : '<svg class="ikon" aria-hidden="true"><use href="#i-play"/></svg>Mérés indítása';
   $('btn-meres').classList.toggle('stop', fut);
 }
 
@@ -532,7 +574,7 @@ function kalkSorokRender() {
     const d = el('div', 'seg edit',
       `<button class="limit-gomb k-limit" aria-label="Sebességhatár"><strong>${sor.limit}</strong><span>km/h</span></button>
        <div class="seg-info"><label>Hossz <input class="k-hossz" type="number" min="0.1" step="0.1" value="${String(sor.hossz).replace('.', ',')}" inputmode="decimal"> km</label></div>
-       <button class="seg-torol" aria-label="Sor törlése" ${S.kalkSorok.length === 1 ? 'disabled' : ''}>✕</button>`);
+       <button class="seg-torol" aria-label="Sor törlése" ${S.kalkSorok.length === 1 ? 'disabled' : ''}><svg class="ikon" aria-hidden="true"><use href="#i-x"/></svg></button>`);
     d.querySelector('.k-limit').addEventListener('click', () => limitLapNyit({
       cim: 'Szakaszrész sebességhatára',
       alcim: 'Válassz a gyakori korlátozásokból, vagy írj be egyéni értéket.',
@@ -572,7 +614,7 @@ function kalkSzamol() {
   }
 
   if (osszTav <= 0 || osszIdo <= 0) {
-    $('k-atlag').textContent = '—';
+    $('k-atlag').textContent = '-';
     $('k-verdikt').className = 'verdikt semleges';
     $('k-verdikt').textContent = 'Add meg a szakasz hosszát és a menetidőt.';
     $('k-reszletek').innerHTML = '';
@@ -612,7 +654,7 @@ function kalkSzamol() {
       const perc = nyereseg / 60000;
       kv.push([
         'A nyert idő ára',
-        `${fmtForint(eredmeny.osszegHalmozott)} — ${fmtForint(eredmeny.osszegHalmozott / Math.max(perc, 0.01))} percenként`,
+        `${fmtForint(eredmeny.osszegHalmozott)}, azaz ${fmtForint(eredmeny.osszegHalmozott / Math.max(perc, 0.01))} percenként`,
       ]);
     }
   } else if (nyereseg < 0) {
@@ -636,7 +678,7 @@ async function osmLekeres() {
   if (p.length === 0) {
     $('osm-allapot').textContent =
       'Ehhez tudnunk kell, hol vagy: indítsd el a mérést, vagy nyomd meg a térkép ' +
-      'fölött a „📍 Ide” gombot.';
+      'fölött az „Ide” gombot.';
     return;
   }
   const gomb = $('btn-osm');
@@ -650,7 +692,7 @@ async function osmLekeres() {
     S.felulir.clear();
     $('osm-allapot').textContent =
       `${utak.length} útszakasz adata megérkezett. Ahol mást láttál kint, ` +
-      `írd át a listában — a számítás azonnal frissül.`;
+      `írd át a listában, és a számítás azonnal frissül.`;
     elonezetFrissit();
   } catch (e) {
     $('osm-allapot').textContent =
@@ -663,21 +705,38 @@ async function osmLekeres() {
 /* =============================================================== indítás */
 
 function birsagTablaRender() {
-  $('info-jog').textContent = `${JOGSZABALY.nev} — a táblázat utoljára ellenőrizve: ${JOGSZABALY.ellenorizve}.`;
+  $('info-jog').textContent =
+    `${JOGSZABALY.nev}. A táblázat utoljára ellenőrizve: ${JOGSZABALY.ellenorizve}.`;
+
+  /* 24 hajszálvonalas táblázatsor helyett kategóriánként a két szám, ami
+     tényleg érdekel (meddig nincs bírság, meddig terjed), a teljes sávozás
+     pedig lenyitható. Így az oldal olvasható marad, az adat mégis megvan. */
   const doboz = $('info-tabla');
   doboz.innerHTML = '';
   for (const kat of KATEGORIAK) {
-    const t = el('table', 'jogtabla');
-    let sorok = `<caption>${kat.nev}</caption><tr><th>Túllépés</th><th>Bírság</th></tr>`;
-    sorok += `<tr><td>legfeljebb ${kat.kuszob} km/h</td><td>nincs bírság</td></tr>`;
-    let also = kat.kuszob;
+    const also = kat.savok[0].osszeg;
+    const felso = kat.savok[kat.savok.length - 1].osszeg;
+
+    const blokk = el('section', 'jog-kat');
+    blokk.append(el('h3', null, kat.nev));
+    blokk.append(el('p', 'jog-kulcs',
+      `<strong>+${kat.kuszob} km/h</strong>-ig nincs bírság, felette ` +
+      `<strong>${fmtForint(also)}</strong>-tól <strong>${fmtForint(felso)}</strong>-ig nő.`));
+
+    let sorok = '';
+    let hatar = kat.kuszob;
     for (const sav of kat.savok) {
-      const cimke = sav.max === Infinity ? `${also} km/h felett` : `${also + 1}–${sav.max} km/h`;
-      sorok += `<tr><td>${cimke}</td><td>${fmtForint(sav.osszeg)}</td></tr>`;
-      also = sav.max;
+      const cimke = sav.max === Infinity
+        ? `${hatar} km/h felett`
+        : `${hatar + 1}\u2013${sav.max} km/h`.replace('\u2013', '-');
+      sorok += `<dt>${cimke}</dt><dd>${fmtForint(sav.osszeg)}</dd>`;
+      hatar = sav.max;
     }
-    t.innerHTML = sorok;
-    doboz.append(t);
+    const reszlet = el('details', 'jog-savok');
+    reszlet.innerHTML = `<summary>Sávok részletesen</summary><dl class="kv">${sorok}</dl>`;
+    blokk.append(reszlet);
+
+    doboz.append(blokk);
   }
 }
 
@@ -685,12 +744,12 @@ function kapukFrissit() {
   const { start, end } = S.kapuk;
   terkep?.kapukRajz(start, end, S.kapuk.sugar);
   $('kapu-allapot').textContent = !start && !end
-    ? 'Nincs kijelölt szakasz — kézi indítás és leállítás.'
+    ? 'Nincs kijelölt szakasz. Kézi indítás és leállítás.'
     : start && end
-      ? `Szakasz kijelölve. Légvonalban ${fmtDistance(haversine(start, end))} — a mérés automatikusan indul és áll le.`
+      ? `Szakasz kijelölve. Légvonalban ${fmtDistance(haversine(start, end))}, a mérés automatikusan indul és áll le.`
       : start
         ? 'A szakasz eleje kijelölve; a végét kézzel kell leállítanod.'
-        : 'Csak a végpont van kijelölve — jelöld ki a szakasz elejét is, vagy indíts kézzel.';
+        : 'Csak a végpont van kijelölve. Jelöld ki a szakasz elejét is, vagy indíts kézzel.';
   elonezetFrissit();
 }
 
@@ -712,7 +771,7 @@ function ujSzimulacio() {
   S.utak = null;
   $('osm-allapot').textContent =
     'A lekérés a nyomvonal koordinátáit elküldi az Overpass API-nak. Ez az egyetlen ' +
-    'alkalom, amikor adat hagyja el a készüléket — és az sem rólad szól, hanem az útról.';
+    'alkalom, amikor adat hagyja el a készüléket, és az sem rólad szól, hanem az útról.';
   elonezetFrissit();
 }
 
@@ -723,7 +782,7 @@ function esemenyek() {
     cim: 'Sebességhatár a szakaszon',
     alcim: S.utak
       ? 'A tábla most a helyben érvényes, lekért korlátozást mutatja. Amit itt ' +
-        'megadsz, felülírja azt — minden szakaszrészre ez az érték kerül.'
+        'megadsz, felülírja azt: minden szakaszrészre ez az érték kerül.'
       : 'Ezzel számol az app, amíg le nem kéred a tényleges határokat.',
     ertek: aktualisHatar().limit,
     osmGomb: !!S.utak && S.kezi != null,
@@ -749,7 +808,7 @@ function esemenyek() {
 
   $('btn-cta').addEventListener('click', () => {
     $('mod-valaszto').hidden = false;
-    $('mod-valaszto').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    gorget($('mod-valaszto'));
   });
   $('mod-vezetek').addEventListener('click', () => eloNezet(true));
   $('mod-kiprobalnam').addEventListener('click', () => fulre('scr-kalk'));
@@ -770,7 +829,7 @@ function esemenyek() {
   });
   $('btn-reszletek').addEventListener('click', () => {
     $('szakasz-kartya').hidden = false;
-    $('szakasz-kartya').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    gorget($('szakasz-kartya'), 'start');
   });
 
   $('btn-start-jelol').addEventListener('click', () => jelolMod('start'));
@@ -796,8 +855,8 @@ function esemenyek() {
   $('btn-osm').addEventListener('click', osmLekeres);
 
   $('btn-kozepre').addEventListener('click', () => {
-    terkep.kovetesVissza();
     if (meres.utolso) {
+      terkep.kovetesVissza();
       terkep.pozicioRajz(meres.utolso);
       return;
     }

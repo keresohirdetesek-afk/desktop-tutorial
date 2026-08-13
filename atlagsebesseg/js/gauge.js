@@ -150,7 +150,7 @@ export class Ora {
     this.mutato.setAttribute('class', `ora-mutato ${allapot}`);
     this.tengely.setAttribute('class', `ora-tengely${van ? '' : ' halvany'}`);
 
-    this.ertekSzoveg.textContent = van ? String(Math.round(ertek)) : '—';
+    this.ertekSzoveg.textContent = van ? String(Math.round(ertek)) : '-';
     this.ertekSzoveg.setAttribute('class', `ora-ertek ${allapot}${van ? '' : ' halvany'}`);
 
     const vanPill = isFinite(pillanat) && pillanat > 0;

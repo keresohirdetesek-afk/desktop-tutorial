@@ -63,26 +63,26 @@ export function decimate(points, minMeters) {
 /* ------------------------------------------------------------ formázás */
 
 export function fmtSpeed(kmh) {
-  if (!isFinite(kmh) || kmh < 0) return '—';
+  if (!isFinite(kmh) || kmh < 0) return '-';
   return (kmh < 100 ? kmh.toFixed(1) : Math.round(kmh).toString()).replace('.', ',');
 }
 
 /** Mindig egy tizedessel — ahol a mért érték és a túllépés együtt szerepel,
     a kettő így ad ki pontosan kerek különbséget. */
 export function fmtSpeed1(kmh) {
-  if (!isFinite(kmh)) return '—';
+  if (!isFinite(kmh)) return '-';
   return kmh.toFixed(1).replace('.', ',');
 }
 
 export function fmtDistance(m) {
-  if (!isFinite(m)) return '—';
+  if (!isFinite(m)) return '-';
   if (m < 1000) return `${Math.round(m)} m`;
   return `${(m / 1000).toFixed(m < 10000 ? 2 : 1).replace('.', ',')} km`;
 }
 
 /** Időtartam ezredmásodpercből: 1:23:45 vagy 23:45 alakban. */
 export function fmtDuration(ms) {
-  if (!isFinite(ms) || ms < 0) return '—';
+  if (!isFinite(ms) || ms < 0) return '-';
   const s = Math.round(ms / 1000);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
