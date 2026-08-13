@@ -351,6 +351,9 @@ button, input, select { font: inherit; color: inherit; }
 .ora-cimke { fill: var(--muted); font-size: 12px; font-weight: 600; }
 .ora-limitjel { fill: var(--text); }
 .ora-mutato { stroke: var(--text); stroke-width: 5; stroke-linecap: round; }
+/* a pillanatnyi sebesség vékony, narancs mutatója */
+.ora-mutato-pill { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; opacity: 0.95; }
+.ora-most { fill: var(--accent); font-size: 12px; font-weight: 700; }
 .ora-tengely { fill: var(--accent); }
 
 .ora-ertek { fill: var(--text); font-size: 40px; font-weight: 700; letter-spacing: -1.5px; }

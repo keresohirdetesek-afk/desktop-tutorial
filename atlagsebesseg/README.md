@@ -28,8 +28,15 @@ szöveg írásakor ezt tartsuk.
   *szakaszátlagot* mutatja — a skála a korlátozáshoz igazodik (110-es
   határnál 80–140), a színek a szabályos / túllépés-bírság-nélkül / bírságos
   tartományt jelölik, a fehér háromszög a korlátozás helyét, a sarokban
-  pedig a sebességtábla. Utána a státuszsáv, végül négy adat: mért átlag,
-  megengedett átlag, eltelt idő, bírságveszély forintban.
+  pedig a sebességtábla. Utána a státuszsáv, végül hat adat: mért átlag,
+  pillanatnyi sebesség, megengedett átlag, a helyben érvényes korlátozás,
+  eltelt idő és a bírságveszély forintban.
+- **Két mutató egy órán:** a vastag a szakaszátlagot, a vékony narancs az
+  éppen mért sebességet mutatja — a kettő távolsága maga az információ.
+- **A tábla a helyben érvényes korlátozást mutatja**, ha egyszer lekérted a
+  határokat: ahogy az útépítési szakaszra érsz, 130-ról 80-ra vált. Ez
+  független a „megengedett átlag" mezőtől, ami az egész szakaszra vonatkozó,
+  hosszal súlyozott érték. A tábla bármikor felülírható koppintással.
 - **Előrejelzés:** „ha innen 130 km/h-val haladsz tovább, várhatóan
   126 km/h lesz a szakaszátlagod".
 - **Eredménykártya a végén:** szakasz, idő, átlag, megengedett átlag, és egy

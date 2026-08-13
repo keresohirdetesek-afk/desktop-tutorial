@@ -141,6 +141,19 @@ function birsagHatarAtlag(eredmeny) {
   return (eredmeny.osszTav / (eredmeny.minIdo / 1000)) * 3.6;
 }
 
+/* Ami a jelenlegi helyeden érvényes. Lekért adat esetén a valóban ott lévő
+   korlátozás, nem a beállított alapérték — ez kerül a táblára.          */
+function aktualisHatar() {
+  if (S.kezi) return { limit: S.kezi, tipus: 'kezi' };
+  if (S.utak && meres.utolso) {
+    const [h] = pontonkentiHatar([meres.utolso], S.utak);
+    if (h) return { limit: h.limit, tipus: 'osm', becsult: h.becsult, nev: h.nev };
+  }
+  return { limit: S.alap, tipus: 'alap' };
+}
+
+const TABLA_SUGO = { kezi: 'kézi ✎', osm: 'itt érvényes', alap: 'koppints' };
+
 /* A megengedett átlag egyetlen korlátozásnál kerek szám (90, 130) — ilyenkor
    a tizedes csak zajt vinne bele. Vegyes szakasznál viszont számít.      */
 function fmtLimit(v) {
@@ -357,13 +370,20 @@ function oraEsStatusz(eredmeny) {
   const megengedett = megengedettAtlag(eredmeny);
   const hatar = birsagHatarAtlag(eredmeny);
 
+  const fut = meres.allapot === ALLAPOT.MER;
   ora.frissit({
     ertek: van ? eredmeny.osszAtlag : 0,
+    pillanat: fut && meres.utolso ? meres.pillanatnyi : null,
     limit: Math.round(megengedett),
     birsagHatar: Math.round(hatar),
     allapot,
   });
-  $('ora-tabla').textContent = fmtLimit(megengedett);
+
+  const hely = aktualisHatar();
+  $('ora-tabla').textContent = fmtLimit(hely.limit);
+  $('tabla-sugo').textContent =
+    hely.tipus === 'osm' && hely.becsult ? 'becsült' : TABLA_SUGO[hely.tipus];
+  $('ki-hely-limit').textContent = `${fmtLimit(hely.limit)} km/h`;
 
   const sav = $('statuszsav');
   sav.className = `statuszsav ${allapot}`;
@@ -376,15 +396,15 @@ function oraEsStatusz(eredmeny) {
     : STATUSZ[allapot].megj;
 
   $('ki-atlag').textContent = van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '—';
+  $('ki-pill').textContent = meres.utolso ? `${fmtSpeed(meres.pillanatnyi)} km/h` : '—';
   $('ki-limit').textContent = `${fmtLimit(megengedett)} km/h`;
   $('ki-ido').textContent = fmtDuration(meres.ido);
   $('ki-birsag').textContent = fmtForint(birsagOsszeg(eredmeny));
   $('ki-birsag').style.color = eredmeny.birsagosak.length ? 'var(--danger)' : '';
 
   $('ki-melleklet').textContent =
-    `Táv: ${fmtDistance(meres.tav)} · Pillanatnyi: ` +
-    (meres.utolso ? `${fmtSpeed(meres.pillanatnyi)} km/h` : '—') +
-    ` · GPS: ${meres.utolso ? `±${Math.round(meres.utolso.acc)} m` : '—'}`;
+    `Táv: ${fmtDistance(meres.tav)} · GPS: ` +
+    (meres.utolso ? `±${Math.round(meres.utolso.acc)} m` : '—');
 }
 
 function gpsPill() {
@@ -575,9 +595,15 @@ function kalkSzamol() {
 /* ============================================================ OSM lekérés */
 
 async function osmLekeres() {
-  const p = meres.pontok;
-  if (p.length < 2) {
-    $('osm-allapot').textContent = 'Előbb rögzíts egy nyomvonalat, utána kérhetők le a határok.';
+  // Nyomvonal nélkül is van értelme: a jelenlegi helyzet körül lekérve máris
+  // a valódi korlátozás kerül a táblára, még indulás előtt.
+  const p = meres.pontok.length >= 2
+    ? meres.pontok
+    : (meres.utolso ? [meres.utolso] : []);
+  if (p.length === 0) {
+    $('osm-allapot').textContent =
+      'Ehhez tudnunk kell, hol vagy: indítsd el a mérést, vagy nyomd meg a térkép ' +
+      'fölött a „📍 Ide” gombot.';
     return;
   }
   const gomb = $('btn-osm');
@@ -663,9 +689,10 @@ function esemenyek() {
   $('ora-tabla').addEventListener('click', () => limitLapNyit({
     cim: 'Sebességhatár a szakaszon',
     alcim: S.utak
-      ? 'Az OpenStreetMap adatát írod felül — minden szakaszrészre ez az érték kerül.'
+      ? 'A tábla most a helyben érvényes, lekért korlátozást mutatja. Amit itt ' +
+        'megadsz, felülírja azt — minden szakaszrészre ez az érték kerül.'
       : 'Ezzel számol az app, amíg le nem kéred a tényleges határokat.',
-    ertek: utolsoEredmeny ? megengedettAtlag(utolsoEredmeny) : S.alap,
+    ertek: aktualisHatar().limit,
     osmGomb: !!S.utak && S.kezi != null,
     onValaszt: limitBeallit,
     onOsm: () => {
@@ -736,11 +763,24 @@ function esemenyek() {
 
   $('btn-kozepre').addEventListener('click', () => {
     terkep.kovetesVissza();
-    if (meres.utolso) terkep.pozicioRajz(meres.utolso);
-    else navigator.geolocation?.getCurrentPosition(
-      (pos) => terkep.pozicioRajz({
-        lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy,
-      }),
+    if (meres.utolso) {
+      terkep.pozicioRajz(meres.utolso);
+      return;
+    }
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => {
+        // mérés nélkül is jegyezzük meg, hova nézünk: enélkül a tábla és a
+        // határlekérés nem tudná, hol vagy
+        meres.utolso = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          t: pos.timestamp,
+          acc: pos.coords.accuracy,
+          spd: null,
+        };
+        terkep.pozicioRajz(meres.utolso);
+        elonezetFrissit();
+      },
       () => ($('gps-uzenet').textContent = 'Nem sikerült lekérni a helyzetedet.'),
       { enableHighAccuracy: true, timeout: 15000 }
     );
