@@ -143,7 +143,7 @@ button, input, select { font: inherit; color: inherit; }
   font-size: 12px;
   cursor: pointer;
 }
-.tab span { font-size: 19px; line-height: 1; }
+.tab .ikon { width: 22px; height: 22px; }
 .tab.active { color: var(--accent); }
 
 /* ------------------------------------------------------------ gombok */
@@ -187,7 +187,7 @@ button, input, select { font: inherit; color: inherit; }
 
 /* ------------------------------------------------------------ térkép */
 
-#map { height: 42vh; min-height: 220px; background: var(--surface-2); z-index: 0; }
+#map { height: 42dvh; min-height: 220px; background: var(--surface-2); z-index: 0; }
 
 .map-tools { display: flex; gap: 8px; padding: 8px 12px 0; overflow-x: auto; }
 
@@ -230,7 +230,7 @@ button, input, select { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .mod:hover { border-color: var(--accent); }
-.mod-ikon { font-size: 26px; line-height: 1; }
+.mod-ikon { display: inline-flex; color: var(--accent); }
 .mod-szoveg { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--muted); }
 .mod-szoveg strong { font-size: 15px; color: var(--text); }
 
@@ -578,10 +578,30 @@ input[type="number"], select {
 
 .tick { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 
-.jogtabla { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 12px; }
-.jogtabla caption { text-align: left; font-weight: 650; padding-bottom: 5px; }
-.jogtabla th, .jogtabla td { border-bottom: 1px solid var(--border); padding: 5px 4px; text-align: left; }
-.jogtabla td:last-child, .jogtabla th:last-child { text-align: right; white-space: nowrap; }
+/* Bírságsávok: kategóriánként a két lényeges szám, a részletezés zárva. */
+.jog-kat { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; }
+.jog-kat + .jog-kat { border-top: 1px solid var(--border); }
+.jog-kat h3 { margin: 0; font-size: 14px; font-weight: 650; }
+.jog-kulcs { font-size: 14px; color: var(--muted); }
+.jog-kulcs strong { color: var(--text); }
+
+.jog-savok summary {
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+  padding: 2px 0;
+}
+.jog-savok summary::-webkit-details-marker { display: none; }
+.jog-savok summary::after { content: ' +'; }
+.jog-savok[open] summary::after { content: ' -'; }
+.jog-savok .kv { padding-top: 6px; }
+
+/* Az adatvédelmi blokk saját arca, hogy ne öt egyforma kártya jöjjön. */
+.card.kiemelt {
+  background: var(--surface-2);
+  border-left: 4px solid var(--accent);
+}
 
 /* --------------------------------------------------------- hirdetés */
 
@@ -642,7 +662,7 @@ input[type="number"], select {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 85vh;
+  max-height: 85dvh;
   overflow-y: auto;
 }
 
@@ -710,3 +730,50 @@ input[type="number"], select {
   font-weight: 500;
   color: var(--muted);
 }
+
+/* ---------------------------------------------- fókusz és mozgásérzék */
+
+/* Billentyűzetes és képernyőolvasós használathoz látható fókuszgyűrű.
+   :focus-visible, hogy egérrel ne villogjon feleslegesen.            */
+:where(button, a, input, select, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* A sebességtáblánál a kör alakot követi a gyűrű. */
+.tabla:focus-visible,
+.limit-jel:focus-visible { outline-offset: 3px; border-radius: 999px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------- ikonok */
+
+/* Phosphor Icons (MIT), sprite-ként a lap tetején. Egyetlen ikoncsalád
+   emoji helyett: az emoji platformonként máshogy néz ki, és nem veszi
+   fel a téma színét.                                                  */
+.ikon {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  fill: currentColor;
+  vertical-align: -0.2em;
+}
+.nagy-ikon { width: 28px; height: 28px; }
+
+.btn.nagy, .chip, .btn.block, .seg-torol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.badge { display: inline-flex; align-items: center; gap: 4px; }
+.ikon-gomb { display: grid; place-items: center; }
+.ikon-gomb .ikon { width: 16px; height: 16px; }

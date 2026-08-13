@@ -118,11 +118,24 @@ export class Terkep {
       fillColor: SZIN.semleges,
       fillOpacity: 1,
     }).addTo(this.pozicio);
-    if (this.kovet) this.map.setView([p.lat, p.lon], Math.max(this.map.getZoom(), 15), { animate: true });
+    // követéskor csak középre húzunk: a nagyítás a felhasználóé marad
+    if (this.kovet) this.map.panTo([p.lat, p.lon], { animate: true });
   }
 
   kovetesVissza() {
     this.kovet = true;
+  }
+
+  /* Nyitáskor kb. 150 km-es kivágat: ekkora területen már látszik a
+     szakasz mindkét vége, így könnyű kijelölni a kapukat.            */
+  kezdoNezet(p, atmeroKm = 150) {
+    if (!p) return;
+    const szelesseg = this.map.getSize().x || 390;
+    const mPerPx = (atmeroKm * 1000) / szelesseg;
+    const foldMPerPx = (156543.03392 * Math.cos((p.lat * Math.PI) / 180));
+    const zoom = Math.round(Math.log2(foldMPerPx / mPerPx));
+    this.map.setView([p.lat, p.lon], Math.max(3, Math.min(19, zoom)));
+    this.kovet = false;
   }
 
   illeszt(pontok) {
