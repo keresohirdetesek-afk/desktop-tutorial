@@ -6,7 +6,7 @@ import {
   trackLength, haversine,
 } from './geo.js';
 import { ertekelSzakaszok, birsagmentesMax, KATEGORIAK, JOGSZABALY } from './birsag.js';
-import { utakLekerese, pontonkentiHatar, szakaszokra } from './limits.js';
+import { utakLekerese, utakPontKorul, pontonkentiHatar, szakaszokra } from './limits.js';
 import { Terkep } from './map.js';
 import { Ora } from './gauge.js';
 import { Meres, ALLAPOT } from './track.js';
@@ -32,6 +32,11 @@ const S = {
   felulir: new Map(),  // szakaszindex -> kézzel megadott határ
   alap: 90,
   kezi: null,          // kézzel megadott határ az egész szakaszra
+  autoHatar: true,     // menet közbeni, automatikus határlekérés
+  utakMap: new Map(),  // way-id -> way, hogy a részletek összeadódjanak
+  lekeresKozep: null,  // hol jártunk a legutóbbi lekéréskor
+  lekeresFut: false,
+  lekeresAllapot: 'nincs',   // nincs | fut | kesz | hiba
   kalkSorok: [{ hossz: 10, limit: 90 }],
 };
 
@@ -118,6 +123,51 @@ function kezdoHelyzet() {
     { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
   );
 }
+
+/* ------------------------------------------------- automatikus határok
+
+   A határok eddig csak gombnyomásra jöttek le, a Haladó beállítások alól.
+   Élesben ez pont akkor nem segít, amikor kellene: a szakasz közepén a
+   táblán a beállított alapérték állt, nem az, ami tényleg ki van téve.
+   Mostantól a mérés magától kér le, és menet közben frissít.
+
+   Nem a teljes nyomvonal mentén kérdez, hanem egy kis korongot a jelenlegi
+   helyzet körül: az gyors, ritkán fut időtúllépésre, és előre is rálát.  */
+
+const LEKERES_SUGAR = 1800;   // m, ekkora körből kérünk adatot
+const UJRA_TAVOLSAG = 1200;   // m, ennyit haladva kérünk újat
+
+async function hatarokFrissitese() {
+  if (!S.autoHatar || S.lekeresFut || !meres.utolso) return;
+  const kell =
+    !S.lekeresKozep || haversine(meres.utolso, S.lekeresKozep) > UJRA_TAVOLSAG;
+  if (!kell) return;
+
+  S.lekeresFut = true;
+  S.lekeresAllapot = 'fut';
+  const kozep = meres.utolso;
+  try {
+    const utak = await utakPontKorul(kozep, LEKERES_SUGAR);
+    for (const w of utak) S.utakMap.set(w.id, w);
+    // új tömb, hogy az illesztés gyorsítótára frissüljön
+    S.utak = [...S.utakMap.values()];
+    S.lekeresKozep = kozep;
+    S.lekeresAllapot = 'kesz';
+  } catch {
+    // a hálózat elmehet alagútban; a következő fixnél újrapróbáljuk
+    S.lekeresAllapot = 'hiba';
+  } finally {
+    S.lekeresFut = false;
+    elonezetFrissit();
+  }
+}
+
+const HATAR_ALLAPOT = {
+  nincs: 'Sebességhatárok: a beállított alapértékkel számolunk.',
+  fut: 'Sebességhatárok: lekérés folyamatban…',
+  kesz: 'Sebességhatárok: automatikusan frissítve az útvonal mentén.',
+  hiba: 'Sebességhatárok: most nem elérhető a lekérés, a beállított értékkel számolunk.',
+};
 
 /* ======================================================= szakaszbontás */
 
@@ -541,6 +591,8 @@ function elonezetFrissit() {
   const eredmeny = ertekelSzakaszok(szakaszok);
   utolsoEredmeny = eredmeny;
 
+  hatarokFrissitese();
+
   szakaszPanel(eredmeny);
   oraEsStatusz(eredmeny);
   projekcio(eredmeny);
@@ -548,6 +600,11 @@ function elonezetFrissit() {
   gpsPill();
 
   $('gps-uzenet').textContent = meres.figyelmeztet ? meres.uzenet : '';
+  const hatarSor = $('hatar-allapot');
+  hatarSor.textContent = S.autoHatar
+    ? HATAR_ALLAPOT[S.lekeresAllapot]
+    : 'Sebességhatárok: az automatikus lekérés ki van kapcsolva.';
+  hatarSor.className = `muted small center${S.lekeresAllapot === 'hiba' ? ' figyelem' : ''}`;
 
   const mutat = eredmeny.szakaszok.length > 1 || meres.allapot === ALLAPOT.KESZ;
   $('szakasz-kartya').hidden = !mutat;
@@ -688,7 +745,10 @@ async function osmLekeres() {
     const utak = await utakLekerese(p, {
       onProgress: (i, n) => ($('osm-allapot').textContent = `Lekérés… (${i}/${n})`),
     });
-    S.utak = utak;
+    for (const w of utak) S.utakMap.set(w.id, w);
+    S.utak = [...S.utakMap.values()];
+    S.lekeresKozep = meres.utolso || S.lekeresKozep;
+    S.lekeresAllapot = 'kesz';
     S.felulir.clear();
     $('osm-allapot').textContent =
       `${utak.length} útszakasz adata megérkezett. Ahol mást láttál kint, ` +
@@ -769,6 +829,9 @@ function ujSzimulacio() {
   S.felulir.clear();
   S.kezi = null;
   S.utak = null;
+  S.utakMap.clear();
+  S.lekeresKozep = null;
+  S.lekeresAllapot = 'nincs';
   $('osm-allapot').textContent =
     'A lekérés a nyomvonal koordinátáit elküldi az Overpass API-nak. Ez az egyetlen ' +
     'alkalom, amikor adat hagyja el a készüléket, és az sem rólad szól, hanem az útról.';
@@ -853,6 +916,12 @@ function esemenyek() {
   });
 
   $('btn-osm').addEventListener('click', osmLekeres);
+
+  $('chk-auto-hatar').addEventListener('change', (e) => {
+    S.autoHatar = e.target.checked;
+    if (S.autoHatar) hatarokFrissitese();
+    elonezetFrissit();
+  });
 
   $('btn-kozepre').addEventListener('click', () => {
     if (meres.utolso) {

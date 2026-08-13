@@ -6,8 +6,9 @@
    korlátozásához mérjük.
 
    Adatforrás: OpenStreetMap, az Overpass API-n keresztül lekérdezve.
-   A lekérdezés a böngészőből indul, kizárólag akkor, ha a felhasználó
-   megnyomja a gombot — más szerverrel az app nem beszél.                */
+   A lekérdezés a böngészőből indul: mérés közben magától, nagyjából
+   kilométerenként, hogy a táblán a helyben érvényes érték álljon. A Haladó
+   beállításokban kikapcsolható, akkor semmilyen kérés nem megy ki.       */
 
 import { decimate, pointToSegment } from './geo.js';
 
@@ -86,7 +87,7 @@ export function utHatara(tags) {
   // Ideiglenes (útépítési) korlátozás mindent felülír.
   const ideiglenes = szamotOlvas(tags['temporary:maxspeed']);
   if (ideiglenes) {
-    return { limit: ideiglenes, cimke: 'útépítés — ideiglenes korlátozás', becsult: false, utepites: true, lakott: false };
+    return { limit: ideiglenes, cimke: 'útépítés, ideiglenes korlátozás', becsult: false, utepites: true, lakott: false };
   }
 
   const kitett = szamotOlvas(tags.maxspeed);
@@ -138,6 +139,29 @@ async function egyKeres(vegpont, query, signal) {
   if (!res.ok) throw new Error(`Overpass hiba: HTTP ${res.status}`);
   const json = await res.json();
   return json.elements || [];
+}
+
+/**
+ * Utak a megadott pont körüli körben. Ez fut menet közben, folyamatosan:
+ * egy kis korong sokkal gyorsabb és megbízhatóbb, mint egy hosszú nyomvonal
+ * mentén futó lekérdezés, és a rálátás előre is megvan belőle.
+ * @param {{lat:number, lon:number}} pont
+ * @param {number} sugar méterben
+ */
+export async function utakPontKorul(pont, sugar = 1500, { signal } = {}) {
+  const query = `[out:json][timeout:25];
+way(around:${Math.round(sugar)},${pont.lat.toFixed(5)},${pont.lon.toFixed(5)})` +
+    `["highway"]["highway"!~"^(${KIHAGYOTT})$"];
+out tags geom;`;
+  let hiba = null;
+  for (const vegpont of OVERPASS_VEGPONTOK) {
+    try {
+      return await egyKeres(vegpont, query, signal);
+    } catch (e) {
+      hiba = e;
+    }
+  }
+  throw hiba || new Error('Nem sikerült lekérdezni a sebességhatárokat.');
 }
 
 /**
@@ -274,7 +298,7 @@ function hezagokPotlasa(hatarok) {
 export function szakaszokra(points, hatarok, alapertelmezett) {
   if (points.length < 2) return [];
   const kitoltott = hezagokPotlasa(hatarok).map(
-    (h) => h || { limit: alapertelmezett, cimke: 'nincs adat — kézzel megadott', becsult: true }
+    (h) => h || { limit: alapertelmezett, cimke: 'nincs adat, kézzel megadott', becsult: true }
   );
 
   const nyers = [];

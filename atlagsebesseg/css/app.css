@@ -777,3 +777,12 @@ input[type="number"], select {
 .badge { display: inline-flex; align-items: center; gap: 4px; }
 .ikon-gomb { display: grid; place-items: center; }
 .ikon-gomb .ikon { width: 16px; height: 16px; }
+
+/* A határlekérés hibája ne vesszen el a halvány segédszövegek között. */
+.figyelem { color: var(--warn) !important; }
+
+input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent);
+}
