@@ -10,6 +10,14 @@ bevezetésre kerül.
 **Nincs regisztráció. Nem követünk. Csak számolunk.** A mérés a böngésző
 memóriájában él, és az oldal bezárásával nyomtalanul eltűnik.
 
+### Döntés: nincsenek fotók
+
+Az oldalon szándékosan nincs fotó vagy illusztráció. A vizuális szerepet a
+térkép, a mérőóra és a sebességtáblák töltik be. Külső képforrás (stock,
+CDN) ütközne azzal, hogy az app csak két, kikapcsolható kérést indít, saját
+képanyagot pedig nem tartunk fenn. Egy tervezői átnézés ezt hiányként
+jelezheti; ez tudatos döntés, nem elmaradt munka.
+
 ### Márkanév és szövegezés
 
 A megjelenő márkanév **Átlagsebesség.hu** (a cím `atlagsebesseg.hu`). A
