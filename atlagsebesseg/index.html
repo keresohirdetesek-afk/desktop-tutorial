@@ -79,6 +79,12 @@
 
     <!-- ------------------------------------------------- 2. élő nézet -->
     <div id="meres-elo" hidden>
+      <!-- A fő gomb legfelül és tapadósan: vezetés közben nem lehet
+           görgetéssel keresgélni, hol áll le a mérés. -->
+      <div class="fo-gomb-sav">
+        <button id="btn-meres" class="btn nagy"><svg class="ikon" aria-hidden="true"><use href="#i-play"/></svg>MÉRÉS INDÍTÁSA</button>
+      </div>
+
       <div class="pad">
 
         <!-- eredménykártya: a mérés lezárása után jelenik meg -->
@@ -145,7 +151,6 @@
           <p id="ki-melleklet" class="muted small center">Táv: 0 m · GPS: -</p>
           <p id="gps-uzenet" class="muted small center"></p>
 
-          <button id="btn-meres" class="btn nagy"><svg class="ikon" aria-hidden="true"><use href="#i-play"/></svg>MÉRÉS INDÍTÁSA</button>
           <button id="btn-ujra" class="btn ghost small">Új mérés</button>
         </section>
       </div>
@@ -297,14 +302,37 @@
       </section>
 
       <section class="card result">
-        <div class="big">
-          <span class="big-val" id="k-atlag">-</span>
-          <span class="big-unit">km/h</span>
-          <span class="big-lbl">átlagsebesség a szakaszon</span>
+        <div class="ora-doboz">
+          <svg id="k-ora" class="ora" role="img" aria-label="A szakasz átlagsebessége"></svg>
+          <span class="tabla" id="k-tabla">-</span>
+          <span class="tabla-sugo">megengedett</span>
         </div>
+
+        <div class="statuszsav semleges" id="k-statuszsav">
+          <span class="statusz-fo" id="k-st-fo">ÁTLAGSEBESSÉG: -</span>
+          <span class="statusz-al">STÁTUSZ: <strong id="k-st-cimke">[○ NINCS ADAT]</strong></span>
+        </div>
+
+        <!-- a szakasz arányos képe: a szélesség a hossz, a szín az ítélet -->
+        <div class="utsav" id="k-utsav" hidden></div>
+
+        <div class="merleg" id="k-merleg" hidden>
+          <div class="merleg-tetel nyereseg">
+            <span class="merleg-lbl">Ennyit nyersz</span>
+            <span class="merleg-val" id="k-nyereseg">-</span>
+          </div>
+          <div class="merleg-tetel ar">
+            <span class="merleg-lbl">Ennyibe kerül</span>
+            <span class="merleg-val" id="k-ar">-</span>
+          </div>
+        </div>
+
         <div id="k-verdikt" class="verdikt semleges">-</div>
         <div id="k-reszletek" class="seglist"></div>
-        <dl class="kv" id="k-kv"></dl>
+        <details class="halado">
+          <summary>Számok részletesen</summary>
+          <div class="halado-tartalom"><dl class="kv" id="k-kv"></dl></div>
+        </details>
       </section>
 
       <div class="hirdetes" data-slot="kalk-also"><span>Hirdetés helye</span></div>

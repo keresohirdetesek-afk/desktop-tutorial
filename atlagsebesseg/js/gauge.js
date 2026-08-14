@@ -35,11 +35,13 @@ function iv(szogA, szogB, r) {
   return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${nagy} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
 }
 
-/** A korlátozáshoz illeszkedő skála alsó és felső vége. */
-export function skala(limit, birsagHatar) {
+/** A korlátozáshoz illeszkedő skála alsó és felső vége.
+    A mért érték is beleszámít: enélkül nagy túllépésnél a mutató a skála
+    végén megülne, és ellentmondana a közepén álló számnak.            */
+export function skala(limit, birsagHatar, ertek = 0) {
   const min = Math.max(0, Math.floor((limit - 30) / 10) * 10);
-  const max = Math.ceil(Math.max(birsagHatar + 10, limit + 30) / 10) * 10;
-  return { min, max };
+  const felso = Math.max(birsagHatar + 10, limit + 30, (ertek || 0) + 10);
+  return { min, max: Math.ceil(felso / 10) * 10 };
 }
 
 export class Ora {
@@ -94,10 +96,11 @@ export class Ora {
    *        allapot: 'ok' | 'hatar' | 'birsag' | 'semleges'
    */
   frissit({ ertek, pillanat, limit, birsagHatar, allapot }) {
-    const s = skala(limit, birsagHatar);
+    const s = skala(limit, birsagHatar, ertek);
     const ujSkala =
       s.min !== this.jelenlegi.min || s.max !== this.jelenlegi.max ||
       limit !== this.jelenlegi.limit || birsagHatar !== this.jelenlegi.hatar;
+    // a skála a mért értékkel nőhet, de ne ugráljon vissza minden fixnél
 
     if (ujSkala) {
       this.jelenlegi = { ...s, limit, hatar: birsagHatar };

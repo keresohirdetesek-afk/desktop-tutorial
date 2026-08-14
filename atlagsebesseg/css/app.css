@@ -342,7 +342,7 @@ button, input, select { font: inherit; color: inherit; }
 .ora-zona.hatar { stroke: #ffb020; }
 .ora-zona.birsag { stroke: #ff4d43; }
 
-.ora-belso { stroke-width: 9; stroke-linecap: round; opacity: 0.9; stroke: var(--muted); }
+.ora-belso { stroke-width: 7; stroke-linecap: round; opacity: 0.75; stroke: var(--muted); }
 .ora-belso.ok { stroke: #35c46a; }
 .ora-belso.hatar { stroke: #ffb020; }
 .ora-belso.birsag { stroke: #ff4d43; }
@@ -791,3 +791,79 @@ input[type="checkbox"] {
 .hang-kapcsolo { align-self: center; }
 .hang-kapcsolo[aria-pressed="false"] { opacity: 1; color: var(--muted); }
 .hang-kapcsolo[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); }
+
+/* ------------------------------------------------- tapadó fő cselekvés */
+
+/* A mérés indítása és leállítása egyetlen mozdulat legyen: a gomb a lap
+   tetején marad, akkor is, ha a térképig görgetsz.                     */
+.fo-gomb-sav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ------------------------------------------------ kalkulátor: útsáv */
+
+/* A szakasz arányos képe. A szélesség a hossz, a szín az ítélet: egy
+   pillantásból látszik, melyik rész viszi el az egészet.              */
+.utsav {
+  display: flex;
+  gap: 3px;
+  height: 46px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.utsav-resz {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  gap: 1px;
+  color: #0d1b12;
+  font-weight: 700;
+  overflow: hidden;
+}
+.utsav-resz.ok { background: #35c46a; }
+.utsav-resz.hatar { background: #ffb020; }
+.utsav-resz.birsag { background: #ff4d43; color: #2b0906; }
+
+.utsav-limit { font-size: 15px; line-height: 1; }
+.utsav-hossz { font-size: 10px; opacity: 0.8; white-space: nowrap; }
+
+/* ------------------------------------------------ kalkulátor: mérleg */
+
+/* A projekt legjobban megosztható üzenete: mennyi időt nyersz, és
+   mennyibe kerül. Egymás mellett, hogy az arány is látsszon.          */
+.merleg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.merleg-tetel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  text-align: center;
+}
+.merleg-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+.merleg-val { font-size: clamp(17px, 5.2vw, 21px); font-weight: 700; line-height: 1.15; text-wrap: balance; }
+
+.merleg-tetel.nyereseg .merleg-val { color: var(--ok); }
+.merleg-tetel.ar .merleg-val { color: var(--danger); }
+.merleg-tetel.ar.ingyen .merleg-val { color: var(--ok); }
+
+/* Vegyes korlátozásnál a megengedett átlag sehol nincs kitáblázva, ezért
+   nem közúti táblát rajzolunk köré, hanem semleges jelet. */
+.tabla.atlagjel {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  color: var(--text);
+  font-size: clamp(12px, 3.6vw, 15px);
+}

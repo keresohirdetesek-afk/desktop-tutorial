@@ -86,9 +86,13 @@ szöveg írásakor ezt tartsuk.
   koppintás átírni.
 - **Élő tanács vezetés közben:** „a hátralévő kb. 6,4 km-en legfeljebb
   84 km/h átlaggal maradsz a bírsághatár alatt”.
-- **Kalkulátor GPS nélkül:** szakaszhossz(ok) + menetidő vagy tempó →
-  átlagsebesség, bírság, bírságmentes minimum menetidő, és hogy a nyert
-  időnek mennyi az ára forintban.
+- **Kalkulátor GPS nélkül**, a mérőképernyővel azonos műszer-nyelven:
+  ugyanaz a sebességóra mutatja az átlagot, alatta státuszsáv, majd a
+  szakasz arányos képe (a szélesség a hossz, a szín az ítélet), végül a
+  projekt legjobban megosztható üzenete két csempén: *ennyit nyersz* és
+  *ennyibe kerül*. A részletes számok lenyithatók.
+  Vegyes korlátozásnál a megengedett átlag nem közúti táblában jelenik meg,
+  hanem semleges `Ø` jelként: az az érték sehol nincs kitáblázva.
 - **Telepíthető (PWA), offline is működik** — a térképcsempéken kívül.
 
 ## Használat
