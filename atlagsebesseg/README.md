@@ -58,11 +58,13 @@ szöveg írásakor ezt tartsuk.
   kapcsoló a webes hangot is elnémítja, a média-hangerőtől függetlenül.
 - **Előrejelzés:** „ha innen 130 km/h-val haladsz tovább, várhatóan
   126 km/h lesz a szakaszátlagod".
-- **A bírságok szakaszrészenként keletkeznek, és összeadódnak.** Ha három
-  eltérő korlátozású részen is túllépted a határt, három tétel jár, és az
-  eredmény a hármuk összegét mutatja. Az ítélet ki is írja a tételeket, a
-  „Számok részletesen" alatt pedig részenként soronként szerepelnek.
-  Ezt a `js/birsag.js` `ertekelSzakaszok()` `osszegHalmozott` mezője adja.
+- **Egy szakasz, egy bírság.** A szakaszellenőrzés a szakasz egészét méri,
+  és egy áthaladás egy szabálysértés, ezért a részenkénti tételek **nem**
+  adódnak össze: a bírságot a legsúlyosabb rész szabja meg. A többi
+  túllépés a részletes listában és a „Számok részletesen" alatt látszik,
+  csak nem növeli az összeget. Az `app.js` `birsagOsszeg()` egyetlen helyen
+  dönti el ezt; a `js/birsag.js` `osszegHalmozott` mezője megmarad, ha
+  valaha mégis halmozó modellre kellene váltani.
 - **Világos és sötét téma.** A fejléc gombja körbelépteti a rendszer, a
   világos és a sötét beállítást; a Tudnivalók között gombsorral is
   választható. A választás a `<html data-theme>` attribútumba kerül, a

@@ -265,11 +265,13 @@ function allapotJel(eredmeny) {
   return 'ok';
 }
 
+/* Egy szakasz, egy bírság. A szakaszellenőrzés a szakasz egészét méri, és
+   egy áthaladás egy szabálysértés: akkor sem jár több csekk, ha a szakaszon
+   belül több, eltérő korlátozású részen is a határ fölött voltál. A tételt
+   a legsúlyosabb rész szabja meg, mert az ottani túllépés a legnagyobb. */
 function birsagOsszeg(eredmeny) {
   if (!eredmeny.birsagosak.length) return 0;
-  return eredmeny.birsagosak.length > 1
-    ? eredmeny.osszegHalmozott
-    : eredmeny.legsulyosabb.ertekeles.osszeg;
+  return eredmeny.legsulyosabb.ertekeles.osszeg;
 }
 
 /* ------------------------------------------- sebességhatár-választó */
@@ -356,25 +358,13 @@ function verdiktRender(node, eredmeny) {
     `<strong>Bírság: ${fmtForint(birsagOsszeg(eredmeny))}</strong><br>` +
     `<span class="small">` +
     (b.length > 1
-      ? `${b.length} szakaszrészen lépted túl a határt, és a tételek ` +
-        `<strong>összeadódnak</strong>: ${osszegzes(b)}. A legsúlyosabb ` +
-        `${nevelo(e.limit)} ${e.limit} km/h-s rész: ${fmtSpeed1(e.mert)} km/h ` +
-        `átlag (+${fmtSpeed1(e.tullepes)} km/h), ${fmtForint(e.osszeg)}.`
+      ? `${b.length} szakaszrészen lépted túl a határt, de <strong>egy ` +
+        `szakasz egy bírság</strong>: a legsúlyosabb rész számít, ` +
+        `${nevelo(e.limit)} ${e.limit} km/h-s részen ${fmtSpeed1(e.mert)} km/h ` +
+        `átlag (+${fmtSpeed1(e.tullepes)} km/h).`
       : `${e.limit} km/h-s szakaszon ${fmtSpeed1(e.mert)} km/h átlag ` +
-        `(+${fmtSpeed1(e.tullepes)} km/h), ${fmtForint(e.osszeg)}.`) +
+        `(+${fmtSpeed1(e.tullepes)} km/h).`) +
     `</span>`;
-}
-
-/** „50 000 + 210 000 + 468 000 Ft”, hosszú listánál rövidítve. */
-function osszegzes(birsagosak) {
-  const tetelek = birsagosak.map((x) => x.ertekeles.osszeg);
-  if (tetelek.length > 4) {
-    return `${tetelek.length} tétel, összesen ${fmtForint(
-      tetelek.reduce((a, x) => a + x, 0)
-    )}`;
-  }
-  const szamok = tetelek.map((x) => x.toLocaleString('hu-HU'));
-  return `${szamok.join(' + ')} Ft`;
 }
 
 function jelvenyek(sz) {
@@ -408,9 +398,16 @@ function szakaszLista(node, eredmeny, { szerkesztheto }) {
       `<span class="muted">átlag ${fmtSpeed1(e.mert)} km/h</span><br>` +
       `<span class="muted small">${sz.nev ? `${sz.nev}, ` : ''}${sz.cimke}</span> ${jelvenyek(sz)}`);
 
+    /* Bírságos részen csak azon áll forintösszeg, amelyik a szakasz
+       bírságát megszabja: a többinél a túllépés látszik, hogy ne tűnjön
+       úgy, mintha részenként külön csekk jönne.                       */
+    const donto = eredmeny.legsulyosabb === sz;
     const verd = el('div', `seg-verd ${allapot}`,
       e.birsagos
-        ? fmtForint(e.osszeg)
+        ? (donto
+          ? `${fmtForint(e.osszeg)}<small>ez szabja meg a bírságot</small>`
+          : `+${fmtSpeed1(e.tullepes)}<span class="small"> km/h</span>` +
+            `<small>a határ felett</small>`)
         : `+${fmtSpeed1(Math.max(0, e.tartalek))}<span class="small"> km/h</span>` +
           `<small>a bírsághatárig</small>`);
 
@@ -824,7 +821,7 @@ function kalkSzamol() {
   merleg.hidden = nyereseg <= 0;
   if (nyereseg > 0) {
     $('k-nyereseg').textContent = fmtDurationWords(nyereseg);
-    const ar = eredmeny.osszegHalmozott;
+    const ar = birsagOsszeg(eredmeny);
     $('k-ar').textContent = ar > 0 ? fmtForint(ar) : 'semmibe';
     merleg.querySelector('.ar').classList.toggle('ingyen', ar === 0);
   }
@@ -836,25 +833,33 @@ function kalkSzamol() {
     ['Szabályos menetidő (végig a korlátozással)', fmtDuration(eredmeny.szabalyosIdo)],
     ['Bírságmentes minimum menetidő', fmtDuration(eredmeny.minIdo)],
   ];
-  /* A bírságok szakaszrészenként külön keletkeznek, és összeadódnak.
-     Kiírva is látszik, hogy az összeg honnan jön ki.                  */
+  /* Egy szakasz egy bírság: a tételt a legsúlyosabb rész szabja meg.
+     A többi túllépés attól még látszik, csak nem adódik hozzá.        */
   if (eredmeny.birsagosak.length) {
-    for (const x of eredmeny.birsagosak) {
+    const l = eredmeny.legsulyosabb;
+    kv.push([
+      'Bírság (egy szakasz, egy bírság)',
+      `${fmtForint(l.ertekeles.osszeg)} a ${l.limit} km/h-s rész alapján`,
+    ]);
+    const tobbi = eredmeny.birsagosak.filter((x) => x !== l);
+    if (tobbi.length) {
       kv.push([
-        `Bírság: ${x.limit} km/h-s rész (${fmtDistance(x.tav)})`,
-        fmtForint(x.ertekeles.osszeg),
+        'További bírságos részek (nem adódnak hozzá)',
+        tobbi
+          .map((x) => `${x.limit} km/h: +${fmtSpeed1(x.ertekeles.tullepes)} km/h`)
+          .join(' · '),
       ]);
     }
-    kv.push(['Bírság összesen', fmtForint(eredmeny.osszegHalmozott)]);
   }
   if (nyereseg > 0) {
     kv.push(['Időnyereség a szabályoshoz képest', fmtDurationWords(nyereseg)]);
-    if (eredmeny.osszegHalmozott > 0) {
+    const ar = birsagOsszeg(eredmeny);
+    if (ar > 0) {
       const perc = nyereseg / 60000;
       kv.push([
         'A nyert idő ára',
-        `${fmtForint(eredmeny.osszegHalmozott)}, azaz ` +
-        `${fmtForint(eredmeny.osszegHalmozott / Math.max(perc, 0.01))} percenként`,
+        `${fmtForint(ar)}, azaz ` +
+        `${fmtForint(ar / Math.max(perc, 0.01))} percenként`,
       ]);
     }
   } else if (nyereseg < 0) {
