@@ -58,6 +58,15 @@ szöveg írásakor ezt tartsuk.
   kapcsoló a webes hangot is elnémítja, a média-hangerőtől függetlenül.
 - **Előrejelzés:** „ha innen 130 km/h-val haladsz tovább, várhatóan
   126 km/h lesz a szakaszátlagod".
+- **A bírságok szakaszrészenként keletkeznek, és összeadódnak.** Ha három
+  eltérő korlátozású részen is túllépted a határt, három tétel jár, és az
+  eredmény a hármuk összegét mutatja. Az ítélet ki is írja a tételeket, a
+  „Számok részletesen" alatt pedig részenként soronként szerepelnek.
+  Ezt a `js/birsag.js` `ertekelSzakaszok()` `osszegHalmozott` mezője adja.
+- **Világos és sötét téma.** A fejléc gombja körbelépteti a rendszer, a
+  világos és a sötét beállítást; a Tudnivalók között gombsorral is
+  választható. A választás a `<html data-theme>` attribútumba kerül, a
+  térkép csempekészlete pedig azonnal követi.
 - **Eredménykártya a végén:** szakasz, idő, átlag, megengedett átlag, és egy
   mondatos verdikt.
 - A technikai kapcsolók (kiváltási sugár, alapértelmezett határ, Overpass
@@ -180,6 +189,7 @@ atlagsebesseg/
 ├── css/app.css
 ├── js/
 │   ├── app.js          összefogó réteg, megjelenítés
+│   ├── tema.js         világos/sötét téma, a fejléc gombja
 │   ├── birsag.js       410/2007. bírságtáblázat és értékelés
 │   ├── geo.js          távolság, pont–szakasz vetítés, formázás
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
@@ -213,6 +223,12 @@ követésmentes.
 - Nincs regisztráció, nincs bejelentkezés, nincs analitika.
 - A GPS-pontok kizárólag a memóriában vannak — se `localStorage`, se
   IndexedDB, se fájl.
+- Egyetlen kulcs kerül a `localStorage`-ba: `atlagsebesseg-tema`, értéke
+  `vilagos` vagy `sotet`. Enélkül a téma minden újratöltéskor visszaugrana.
+  Nem személyes adat, nem azonosító, és a rendszerkövetés visszaállításakor
+  törlődik. Ha ez sem fér bele, egyetlen sor a `js/tema.js`-ben (a
+  `localStorage.setItem` hívás) kiveszi, és a választás csak a lap
+  bezárásáig él.
 - Külső kérés csak kettő fordul elő, mindkettő kikapcsolható:
   a térképcsempék (OpenStreetMap) és a sebességhatárok lekérése
   (Overpass API, csak gombnyomásra).
