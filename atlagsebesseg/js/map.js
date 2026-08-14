@@ -4,11 +4,24 @@
 
 const L = window.L;
 
+/* Két csempekészlet: sötét témában a világos térkép vakító folt lenne a
+   képernyőn, éjszakai vezetésnél pedig egyenesen zavaró. Mindkettő
+   ingyenes és kulcs nélküli.                                          */
 export const CSEMPE = {
-  url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  attrib: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> közreműködők',
+  vilagos: {
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attrib: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> közreműködők',
+  },
+  sotet: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attrib: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> közreműködők, ' +
+            '© <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+  },
   maxZoom: 19,
 };
+
+const sotetTema = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 // Magyarország közepe, ha még nincs helyzet
 const KEZDO = [47.1625, 19.5033];
@@ -32,16 +45,29 @@ export class Terkep {
     this.pozicio = L.layerGroup().addTo(this.map);
     this.kovet = true;
 
+    this.temaKovetes();
     this.map.on('click', (e) => onTap?.({ lat: e.latlng.lat, lon: e.latlng.lng }));
     this.map.on('dragstart', () => { this.kovet = false; });
   }
 
   csempekBe() {
     if (this.csempeReteg) return;
-    this.csempeReteg = L.tileLayer(CSEMPE.url, {
+    const keszlet = sotetTema() ? CSEMPE.sotet : CSEMPE.vilagos;
+    this.csempeReteg = L.tileLayer(keszlet.url, {
       maxZoom: CSEMPE.maxZoom,
-      attribution: CSEMPE.attrib,
+      attribution: keszlet.attrib,
+      subdomains: keszlet.subdomains || 'abc',
     }).addTo(this.map);
+    this.csempeSotet = sotetTema();
+  }
+
+  /** Témaváltáskor cseréljük a csempekészletet. */
+  temaKovetes() {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (!this.csempeReteg || this.csempeSotet === sotetTema()) return;
+      this.csempekKi();
+      this.csempekBe();
+    });
   }
 
   csempekKi() {

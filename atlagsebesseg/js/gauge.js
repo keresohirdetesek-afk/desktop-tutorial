@@ -59,10 +59,22 @@ export class Ora {
     this.belso = mk('path', { class: 'ora-belso', fill: 'none' });
     this.skalaJelek = mk('g', { class: 'ora-jelek' });
     this.limitJel = mk('path', { class: 'ora-limitjel' });
-    // vékony, második mutató: a pillanatnyi sebesség — a vastag mutató a
-    // szakaszátlagot mutatja, a kettő távolsága maga az információ
-    this.mutatoPill = mk('path', { class: 'ora-mutato-pill' });
-    this.mutato = mk('path', { class: 'ora-mutato' });
+    /* A mutatók vízszintesen megrajzolva, forgatott csoportban ülnek.
+       Így a mozgásukat a CSS tudja átúsztatni: az SVG `d` attribútumot
+       nem lehet megbízhatóan animálni, a `transform`-ot igen.        */
+    this.mutatoPillG = mk('g', { class: 'ora-mutato-g' });
+    this.mutatoPill = mk('path', {
+      class: 'ora-mutato-pill',
+      d: `M ${CX - 8} ${CY} L ${CX + R - 10} ${CY}`,
+    });
+    this.mutatoPillG.append(this.mutatoPill);
+
+    this.mutatoG = mk('g', { class: 'ora-mutato-g' });
+    this.mutato = mk('path', {
+      class: 'ora-mutato',
+      d: `M ${CX - 12} ${CY} L ${CX + R - 22} ${CY}`,
+    });
+    this.mutatoG.append(this.mutato);
     this.tengely = mk('circle', { class: 'ora-tengely', cx: CX, cy: CY, r: 8 });
 
     this.ertekSzoveg = mk('text', {
@@ -79,11 +91,37 @@ export class Ora {
 
     svg.append(
       this.hatter, this.zonaOk, this.zonaHatar, this.zonaBirsag, this.belso,
-      this.skalaJelek, this.limitJel, this.mutatoPill, this.mutato, this.tengely,
+      this.skalaJelek, this.limitJel, this.mutatoPillG, this.mutatoG, this.tengely,
       this.ertekSzoveg, this.egysegSzoveg, this.mostSzoveg
     );
 
     this.jelenlegi = { min: null, max: null, limit: null, hatar: null };
+    this.mutatottErtek = 0;   // a számláló animációhoz
+    this.animacio = null;
+  }
+
+  /** A nagy szám átszámlál az új értékre, hogy a műszer élőnek hasson. */
+  #szamlal(cel) {
+    const kerek = Math.round(cel);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      this.mutatottErtek = kerek;
+      this.ertekSzoveg.textContent = String(kerek);
+      return;
+    }
+    const kezdo = this.mutatottErtek;
+    if (kezdo === kerek) return;
+    cancelAnimationFrame(this.animacio);
+    const t0 = performance.now();
+    const HOSSZ = 320;
+    const lepes = (most) => {
+      const t = Math.min(1, (most - t0) / HOSSZ);
+      const lagy = 1 - Math.pow(1 - t, 3);
+      const ertek = Math.round(kezdo + (kerek - kezdo) * lagy);
+      this.ertekSzoveg.textContent = String(ertek);
+      this.mutatottErtek = ertek;
+      if (t < 1) this.animacio = requestAnimationFrame(lepes);
+    };
+    this.animacio = requestAnimationFrame(lepes);
   }
 
   #szog(ertek, { min, max }) {
@@ -145,30 +183,26 @@ export class Ora {
     this.belso.setAttribute('class', `ora-belso ${allapot}`);
 
     // mérés előtt ne álljon a mutató a skála alján, mintha nullát mérnénk
-    if (van) {
-      const [mx, my] = pont(a, R - 22);
-      const [hx, hy] = pont(a + 180, 12);
-      this.mutato.setAttribute('d', `M ${hx.toFixed(1)} ${hy.toFixed(1)} L ${mx.toFixed(1)} ${my.toFixed(1)}`);
-    } else {
-      this.mutato.setAttribute('d', '');
-    }
+    this.mutatoG.setAttribute('transform', `rotate(${(-a).toFixed(2)} ${CX} ${CY})`);
+    this.mutatoG.style.visibility = van ? 'visible' : 'hidden';
     this.mutato.setAttribute('class', `ora-mutato ${allapot}`);
     this.tengely.setAttribute('class', `ora-tengely${van ? '' : ' halvany'}`);
 
-    this.ertekSzoveg.textContent = van ? String(Math.round(ertek)) : '-';
+    if (van) {
+      this.#szamlal(ertek);
+    } else {
+      this.mutatottErtek = 0;
+      this.ertekSzoveg.textContent = '-';
+    }
     this.ertekSzoveg.setAttribute('class', `ora-ertek ${allapot}${van ? '' : ' halvany'}`);
 
     const vanPill = isFinite(pillanat) && pillanat > 0;
+    this.mutatoPillG.style.visibility = vanPill ? 'visible' : 'hidden';
     if (vanPill) {
       const ap = this.#szog(pillanat, s);
-      const [px, py] = pont(ap, R - 10);
-      const [ph, phy] = pont(ap + 180, 8);
-      this.mutatoPill.setAttribute(
-        'd', `M ${ph.toFixed(1)} ${phy.toFixed(1)} L ${px.toFixed(1)} ${py.toFixed(1)}`
-      );
+      this.mutatoPillG.setAttribute('transform', `rotate(${(-ap).toFixed(2)} ${CX} ${CY})`);
       this.mostSzoveg.textContent = `most: ${Math.round(pillanat)}`;
     } else {
-      this.mutatoPill.setAttribute('d', '');
       this.mostSzoveg.textContent = '';
     }
   }

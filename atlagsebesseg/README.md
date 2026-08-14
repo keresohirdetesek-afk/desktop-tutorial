@@ -93,6 +93,17 @@ szöveg írásakor ezt tartsuk.
   *ennyibe kerül*. A részletes számok lenyithatók.
   Vegyes korlátozásnál a megengedett átlag nem közúti táblában jelenik meg,
   hanem semleges `Ø` jelként: az az érték sehol nincs kitáblázva.
+- **Megosztható eredménykép.** A böngésző rajzolja vászonra a készüléken
+  (1080×1180, álló), és a telefon megosztólapjával küldhető; ahol az nincs,
+  letöltésként. Semmilyen adat nem megy szerverre, és a megosztást is a
+  felhasználó indítja.
+- **Műszer-tipográfia.** A számok táblázatos számjegyű betűvel (JetBrains
+  Mono, OFL, helyben tárolva, ~42 KB), így változáskor nem ugrálnak.
+- **Sima mozgás.** A mutató forgatott csoportban ül, ezért a CSS át tudja
+  úsztatni; a nagy szám átszámlál. Mozgásérzékeny beállításnál mindkettő
+  azonnalira vált.
+- **Sötét térkép sötét témában** (CARTO dark, ingyenes, kulcs nélküli), hogy
+  éjszaka ne vakítson. Témaváltáskor magától cserél.
 - **Telepíthető (PWA), offline is működik** — a térképcsempéken kívül.
 
 ## Épeszűségi korlát: 250 km/h

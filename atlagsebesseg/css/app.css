@@ -39,6 +39,37 @@
   }
 }
 
+/* Műszer-betű a számoknak. Táblázatos számjegyek: vezetés közben a
+   változó érték nem ugráltatja a körülötte lévő szöveget. Csak latin
+   karakterkészlet, két vastagság, helyben tárolva (~42 KB összesen).
+   JetBrains Mono, OFL licenc — a licenc a vendor/fonts mappában.      */
+@font-face {
+  font-family: 'Muszer';
+  src: url('../vendor/fonts/jetbrains-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Muszer';
+  src: url('../vendor/fonts/jetbrains-mono-700.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* Ahol szám áll, ott azonos szélességű számjegy kell. */
+.ora-ertek, .ora-cimke, .ora-egyseg, .ora-most,
+.adat-val, .merleg-val, .statusz-fo, .tabla, .limit-jel,
+.seg-limit strong, .seg-verd, .limit-gomb strong,
+.eredmeny-adatok dd, .kv dd, .utsav-limit, .utsav-hossz,
+.kapu-kozep, .big-val, .jog-kulcs strong {
+  font-family: 'Muszer', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* A rendszerbetű számjegyei is legyenek azonos szélességűek. */
+body { font-variant-numeric: tabular-nums; }
+
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
@@ -351,6 +382,8 @@ button, input, select { font: inherit; color: inherit; }
 .ora-cimke { fill: var(--muted); font-size: 12px; font-weight: 600; }
 .ora-limitjel { stroke: var(--text); stroke-width: 4; }
 .ora-mutato { stroke: var(--text); stroke-width: 5; stroke-linecap: round; }
+/* A mutatók forgatott csoportban ülnek, így az elmozdulás átúszik. */
+.ora-mutato-g { transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
 /* a pillanatnyi sebesség vékony, narancs mutatója */
 .ora-mutato-pill { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; opacity: 0.95; }
 .ora-most { fill: var(--accent); font-size: 12px; font-weight: 700; }

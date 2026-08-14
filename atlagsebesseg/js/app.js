@@ -11,6 +11,7 @@ import { Terkep } from './map.js';
 import { Ora } from './gauge.js';
 import { Meres, ALLAPOT } from './track.js';
 import { Gong } from './hang.js';
+import { keszitKep, megoszt } from './megosztas.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -594,6 +595,15 @@ function projekcio(eredmeny) {
     `várhatóan <strong>${Math.round(varhato)} km/h</strong> lesz a szakaszátlagod.`;
 }
 
+/* A képre rövid mondat kell: a kártyán olvasható hosszú szöveg ott nem
+   fér ki, és megosztva úgyis a szám a lényeg.                          */
+const MEGOSZT_VERDIKT = {
+  ok: () => 'Végig a megengedett átlag alatt maradtam.',
+  hatar: () => 'A megengedett átlag felett, de bírság nélkül.',
+  birsag: (e) => `Ezen a szakaszon ${fmtForint(birsagOsszeg(e))} bírság járna.`,
+  semleges: () => 'Átlagsebesség-szimuláció.',
+};
+
 /* ========================================================= eredménykártya */
 
 /* A lezárás után az eredménykártya veszi át a szerepet — a futó mérés
@@ -607,6 +617,7 @@ function eredmenyKartya(eredmeny) {
 
   $('eredmeny-alcim').textContent =
     szakaszNev(eredmeny, !!(S.kapuk.start && S.kapuk.end));
+  utolsoEredmeny = eredmeny;
 
   const sorok = [
     ['Szakasz', fmtDistance(eredmeny.osszTav)],
@@ -1003,6 +1014,43 @@ function esemenyek() {
       elozoAllapot = 'semleges';
       gong.ebreszt();          // hangot csak felhasználói mozdulat után enged a böngésző
       meres.indit({ ...S.kapuk });
+    }
+  });
+
+  $('btn-megoszt').addEventListener('click', async () => {
+    const gomb = $('btn-megoszt');
+    const allapot = $('megoszt-allapot');
+    if (!utolsoEredmeny || utolsoEredmeny.szakaszok.length === 0) return;
+    gomb.disabled = true;
+    allapot.hidden = false;
+    allapot.textContent = 'Kép készítése…';
+    try {
+      const e = utolsoEredmeny;
+      const jel = allapotJel(e);
+      const blob = await keszitKep({
+        atlag: String(Math.round(e.osszAtlag)),
+        megengedett: fmtLimit(megengedettAtlag(e)),
+        tav: fmtDistance(e.osszTav),
+        ido: fmtDuration(e.osszIdo),
+        allapot: jel,
+        szakaszNev: szakaszNev(e, !!(S.kapuk.start && S.kapuk.end)),
+        verdikt: MEGOSZT_VERDIKT[jel](e),
+        szakaszok: e.szakaszok.map((sz) => ({
+          limit: sz.limit,
+          tav: sz.tav,
+          allapot: sz.ertekeles.birsagos
+            ? 'birsag'
+            : sz.ertekeles.tartalek <= 5 ? 'hatar' : 'ok',
+        })),
+      });
+      const eredmeny = await megoszt(blob);
+      allapot.textContent = eredmeny === 'letoltve'
+        ? 'A kép letöltve. Innen bárhová továbbküldheted.'
+        : eredmeny === 'megszakitva' ? 'Megosztás megszakítva.' : 'Elküldve.';
+    } catch {
+      allapot.textContent = 'A kép készítése nem sikerült.';
+    } finally {
+      gomb.disabled = false;
     }
   });
 
