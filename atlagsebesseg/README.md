@@ -95,6 +95,22 @@ szöveg írásakor ezt tartsuk.
   hanem semleges `Ø` jelként: az az érték sehol nincs kitáblázva.
 - **Telepíthető (PWA), offline is működik** — a térképcsempéken kívül.
 
+## Épeszűségi korlát: 250 km/h
+
+Személyautóval reálisan elérhető felső sebesség. Ennél nagyobb érték nem
+vezetésből származik, hanem GPS-ugrásból: alagútból kilépve, sűrű városban
+vagy hídon a vevő néha több száz métert téved egy fix alatt. Ha ezt
+beszámolnánk, a nyomvonal hossza és vele az átlag maradandóan elromlana.
+
+Ezért a `MAX_SEBESSEG` (`js/geo.js`) három helyen fog:
+
+- **Mérés közben** eldobjuk azt a fixet, ami a előzőhöz képest 250 km/h
+  fölötti elmozdulást jelentene. Öt egymás utáni eldobás után mégis
+  elfogadunk egyet, hogy hosszabb jelkiesés után ne akadjunk el.
+- **A kijelzett pillanatnyi sebesség** erre az értékre van vágva.
+- **A kalkulátor** nem számol bírságot irreális tempóra: megmondja, hogy a
+  megadott hossz vagy menetidő hibás lehet.
+
 ## Használat
 
 Statikus oldal, elég egy HTTPS-t adó fájlkiszolgáló. Helyi próbához:

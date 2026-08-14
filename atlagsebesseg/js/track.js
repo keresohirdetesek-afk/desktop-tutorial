@@ -8,11 +8,14 @@
 
    A pontokat csak a memóriában tartjuk — semmi nem kerül lemezre.        */
 
-import { haversine } from './geo.js';
+import { haversine, MAX_SEBESSEG } from './geo.js';
 
 const MAX_PONTATLANSAG = 60;  // m — ennél rosszabb GPS-fixet eldobunk
 const MIN_LEPES = 4;          // m — ennél kisebb elmozdulás nem új pont
 const MIN_IDO = 900;          // ms — de legalább ennyi időnként rögzítünk
+// Ennyi egymás utáni gyanús fix után mégis elfogadunk egyet: a vevő
+// hosszabb kiesés után jogosan „ugrik” nagyot, és nem akadhatunk el.
+const MAX_ELDOBAS = 5;
 
 export const ALLAPOT = {
   ALLO: 'allo',           // nem fut a GPS
@@ -39,6 +42,7 @@ export class Meres {
     this.kozelites = null;   // legkisebb eddigi távolság a figyelt ponttól
     this.kozelitoPont = null;
     this.allasKezdet = null;   // mióta állunk a végponti kapun belül
+    this.eldobott = 0;        // egymás utáni, ugrásnak tűnő fixek
     this.uzenet = '';
     // csak a valódi gond kerül a felületre; a szokásos állapotot a
     // szakaszpanel mondja el, azt nem kell megismételni
@@ -95,14 +99,14 @@ export class Meres {
   /** Pillanatnyi sebesség: a GPS-től, ha megadja, különben az utolsó pontokból. */
   get pillanatnyi() {
     if (this.utolso && typeof this.utolso.spd === 'number' && this.utolso.spd >= 0) {
-      return this.utolso.spd * 3.6;
+      return Math.min(this.utolso.spd * 3.6, MAX_SEBESSEG);
     }
     const n = this.pontok.length;
     if (n < 2) return 0;
     const a = this.pontok[n - 2];
     const b = this.pontok[n - 1];
     const dt = (b.t - a.t) / 1000;
-    return dt > 0 ? (haversine(a, b) / dt) * 3.6 : 0;
+    return dt > 0 ? Math.min((haversine(a, b) / dt) * 3.6, MAX_SEBESSEG) : 0;
   }
 
   /* --------------------------------------------------------- belső rész */
@@ -167,6 +171,18 @@ export class Meres {
 
   #meres(p) {
     const utolsoPont = this.pontok[this.pontok.length - 1];
+
+    // GPS-ugrás kiszűrése: autóval 250 km/h fölött nem közlekedünk
+    if (utolsoPont && this.#ugras(utolsoPont, p)) {
+      this.eldobott++;
+      if (this.eldobott <= MAX_ELDOBAS) {
+        this.uzenet = 'GPS-ugrás, a fix kihagyva.';
+        this.figyelmeztet = true;
+        return;
+      }
+    }
+    this.eldobott = 0;
+
     if (
       !utolsoPont ||
       haversine(utolsoPont, p) >= MIN_LEPES ||
@@ -201,6 +217,13 @@ export class Meres {
     } else {
       this.uzenet = 'Mérés fut.';
     }
+  }
+
+  /** Két fix között elvárható-e ekkora elmozdulás ennyi idő alatt? */
+  #ugras(a, b) {
+    const dt = (b.t - a.t) / 1000;
+    if (dt <= 0) return true;
+    return (haversine(a, b) / dt) * 3.6 > MAX_SEBESSEG;
   }
 
   #hiba(err) {
