@@ -7,6 +7,8 @@
    A számok az ív *külső* oldalán vannak: belül a nagy érték ül, és ha a
    feliratok is ott lennének, keskeny kijelzőn egymásra csúsznának.      */
 
+import { MAX_SEBESSEG } from './geo.js';
+
 const NS = 'http://www.w3.org/2000/svg';
 
 const CX = 150;
@@ -41,7 +43,7 @@ function iv(szogA, szogB, r) {
 export function skala(limit, birsagHatar, ertek = 0) {
   const min = Math.max(0, Math.floor((limit - 30) / 10) * 10);
   const felso = Math.max(birsagHatar + 10, limit + 30, (ertek || 0) + 10);
-  return { min, max: Math.ceil(felso / 10) * 10 };
+  return { min, max: Math.min(MAX_SEBESSEG, Math.ceil(felso / 10) * 10) };
 }
 
 export class Ora {

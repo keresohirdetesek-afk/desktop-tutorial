@@ -3,7 +3,7 @@
 
 import {
   fmtSpeed, fmtSpeed1, fmtDistance, fmtDuration, fmtDurationWords, fmtForint,
-  trackLength, haversine,
+  trackLength, haversine, MAX_SEBESSEG,
 } from './geo.js';
 import { ertekelSzakaszok, birsagmentesMax, KATEGORIAK, JOGSZABALY } from './birsag.js';
 import { utakLekerese, utakPontKorul, pontonkentiHatar, szakaszokra } from './limits.js';
@@ -723,6 +723,31 @@ function kalkSzamol() {
 
   // Egyenletes tempót feltételezünk: a menetidőt hossz arányában osztjuk szét.
   const atlag = (osszTav / (osszIdo / 1000)) * 3.6;
+
+  /* Személyautóval 250 km/h fölött nem közlekedünk: ilyenkor a megadott
+     idő vagy hossz hibás, és bírságot számolni rá félrevezető lenne.   */
+  if (atlag > MAX_SEBESSEG) {
+    kalkOra.frissit({
+      ertek: MAX_SEBESSEG, pillanat: null,
+      limit: Math.round(sorok[0].limit), birsagHatar: Math.round(sorok[0].limit) + 20,
+      allapot: 'semleges',
+    });
+    $('k-tabla').textContent = '-';
+    $('k-statuszsav').className = 'statuszsav semleges';
+    $('k-st-fo').textContent = `ÁTLAGSEBESSÉG: ${Math.round(atlag)} km/h`;
+    $('k-st-cimke').textContent = '[○ IRREÁLIS]';
+    $('k-utsav').hidden = true;
+    $('k-merleg').hidden = true;
+    $('k-verdikt').className = 'verdikt hatar';
+    $('k-verdikt').innerHTML =
+      `<strong>Ez ${Math.round(atlag)} km/h átlag lenne.</strong><br>` +
+      `<span class="small">Személyautóval ${MAX_SEBESSEG} km/h fölött nem ` +
+      `közlekedünk, ezért erre nem számolunk bírságot. Nézd meg a megadott ` +
+      `hosszt és menetidőt.</span>`;
+    $('k-reszletek').innerHTML = '';
+    $('k-kv').innerHTML = '';
+    return;
+  }
   const szakaszok = sorok.map((s) => ({
     tav: s.hossz * 1000,
     ido: ((s.hossz * 1000) / (atlag / 3.6)) * 1000,

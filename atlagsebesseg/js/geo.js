@@ -1,6 +1,13 @@
 // Földrajzi és formázó segédfüggvények. Minden számítás a böngészőben fut.
 
 const R = 6371000; // Föld sugara méterben
+
+/* Személyautóval reálisan elérhető felső sebesség. Ennél nagyobb érték nem
+   vezetésből származik, hanem GPS-ugrásból: alagútból kilépve, sűrű
+   városban vagy hídon a vevő néha több száz métert téved egy fix alatt.
+   Ha ezt beszámolnánk, a nyomvonal hossza és vele az átlag maradandóan
+   elromlana.                                                            */
+export const MAX_SEBESSEG = 250;
 const RAD = Math.PI / 180;
 
 export function haversine(a, b) {
