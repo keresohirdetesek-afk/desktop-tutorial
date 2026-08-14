@@ -54,6 +54,7 @@ const STATUSZ = {
 
 let terkep = null;
 let ora = null;
+let kalkOra = null;      // ugyanaz a műszer a kalkulátor eredményénél
 const gong = new Gong();
 let elozoAllapot = 'semleges';   // a hangjelzéshez: mikor váltott az állapot
 let utolsoJelzes = 0;            // ms, a bírságos ismétlés ütemezéséhez
@@ -706,7 +707,13 @@ function kalkSzamol() {
   }
 
   if (osszTav <= 0 || osszIdo <= 0) {
-    $('k-atlag').textContent = '-';
+    kalkOra.frissit({ ertek: 0, pillanat: null, limit: 90, birsagHatar: 105, allapot: 'semleges' });
+    $('k-tabla').textContent = '-';
+    $('k-statuszsav').className = 'statuszsav semleges';
+    $('k-st-fo').textContent = 'ÁTLAGSEBESSÉG: -';
+    $('k-st-cimke').textContent = STATUSZ.semleges.cimke;
+    $('k-utsav').hidden = true;
+    $('k-merleg').hidden = true;
     $('k-verdikt').className = 'verdikt semleges';
     $('k-verdikt').textContent = 'Add meg a szakasz hosszát és a menetidőt.';
     $('k-reszletek').innerHTML = '';
@@ -728,15 +735,48 @@ function kalkSzamol() {
   }));
   const eredmeny = ertekelSzakaszok(szakaszok);
 
-  $('k-atlag').textContent = fmtLimit(atlag);
+  const megengedett = megengedettAtlag(eredmeny);
+  const allapot = allapotJel(eredmeny);
+
+  kalkOra.frissit({
+    ertek: atlag,
+    pillanat: null,
+    limit: Math.round(megengedett),
+    birsagHatar: Math.round(birsagHatarAtlag(eredmeny)),
+    allapot,
+  });
+  /* Ha minden szakaszrészen ugyanaz a korlátozás, az érték valóban ki van
+     táblázva: mehet közúti tábla. Vegyes szakaszon viszont a súlyozott
+     átlag sehol nincs kint, ezért ott semleges jelölés jár, kerekítve. */
+  const egyfeleLimit = new Set(sorok.map((x) => x.limit)).size === 1;
+  const tabla = $('k-tabla');
+  tabla.classList.toggle('atlagjel', !egyfeleLimit);
+  tabla.textContent = egyfeleLimit ? fmtLimit(megengedett) : `Ø ${Math.round(megengedett)}`;
+  tabla.nextElementSibling.textContent = egyfeleLimit ? 'megengedett' : 'megengedett átlag';
+
+  $('k-statuszsav').className = `statuszsav ${allapot}`;
+  $('k-st-fo').textContent = `ÁTLAGSEBESSÉG: ${fmtSpeed(atlag)} km/h`;
+  $('k-st-cimke').textContent = STATUSZ[allapot].cimke;
+
+  utsavRender(eredmeny);
+
   verdiktRender($('k-verdikt'), eredmeny);
   szakaszLista($('k-reszletek'), eredmeny, { szerkesztheto: false });
 
   const nyereseg = eredmeny.szabalyosIdo - osszIdo;
+  const merleg = $('k-merleg');
+  merleg.hidden = nyereseg <= 0;
+  if (nyereseg > 0) {
+    $('k-nyereseg').textContent = fmtDurationWords(nyereseg);
+    const ar = eredmeny.osszegHalmozott;
+    $('k-ar').textContent = ar > 0 ? fmtForint(ar) : 'semmibe';
+    merleg.querySelector('.ar').classList.toggle('ingyen', ar === 0);
+  }
+
   const kv = [
     ['Össztáv', fmtDistance(osszTav)],
     ['Menetidő', fmtDuration(osszIdo)],
-    ['Megengedett átlag', `${fmtLimit(megengedettAtlag(eredmeny))} km/h`],
+    ['Megengedett átlag', `${fmtLimit(megengedett)} km/h`],
     ['Szabályos menetidő (végig a korlátozással)', fmtDuration(eredmeny.szabalyosIdo)],
     ['Bírságmentes minimum menetidő', fmtDuration(eredmeny.minIdo)],
   ];
@@ -746,7 +786,8 @@ function kalkSzamol() {
       const perc = nyereseg / 60000;
       kv.push([
         'A nyert idő ára',
-        `${fmtForint(eredmeny.osszegHalmozott)}, azaz ${fmtForint(eredmeny.osszegHalmozott / Math.max(perc, 0.01))} percenként`,
+        `${fmtForint(eredmeny.osszegHalmozott)}, azaz ` +
+        `${fmtForint(eredmeny.osszegHalmozott / Math.max(perc, 0.01))} percenként`,
       ]);
     }
   } else if (nyereseg < 0) {
@@ -757,6 +798,25 @@ function kalkSzamol() {
   }
 
   $('k-kv').innerHTML = kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+}
+
+/** A szakasz arányos képe: a szélesség a hossz, a szín az ítélet. */
+function utsavRender(eredmeny) {
+  const sav = $('k-utsav');
+  sav.innerHTML = '';
+  sav.hidden = eredmeny.szakaszok.length === 0;
+  if (sav.hidden) return;
+
+  for (const sz of eredmeny.szakaszok) {
+    const e = sz.ertekeles;
+    const allapot = e.birsagos ? 'birsag' : e.tartalek <= 5 ? 'hatar' : 'ok';
+    const resz = el('div', `utsav-resz ${allapot}`,
+      `<span class="utsav-limit">${sz.limit}</span>` +
+      `<span class="utsav-hossz">${fmtDistance(sz.tav)}</span>`);
+    resz.style.flex = `${sz.tav} 1 0`;
+    resz.title = `${sz.limit} km/h, átlag ${fmtSpeed1(e.mert)} km/h`;
+    sav.append(resz);
+  }
 }
 
 /* ============================================================ OSM lekérés */
@@ -1040,6 +1100,7 @@ function indul() {
   window.atlagsebesseg = { S, meres, terkep: null, eloNezet, gong };
 
   ora = new Ora($('ora'));
+  kalkOra = new Ora($('k-ora'));
   fulek();
   esemenyek();
   kalkSorokRender();
