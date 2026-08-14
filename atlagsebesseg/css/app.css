@@ -1,6 +1,12 @@
-/* Átlagsebesség.hu — mobilra tervezett, sötét műszerfal-felület */
+/* Átlagsebesség.hu — mobilra tervezett műszerfal-felület, sötét és
+   világos témával.
+
+   A sötét az alap. A világos témát egyetlen blokk írja felül, mert a
+   `js/tema.js` mindig konkrét értéket tesz a `<html data-theme>`-be
+   (a rendszerkövetést is feloldja). Így nincs kétszer leírt paletta. */
 
 :root {
+  color-scheme: dark;
   --bg: #0e0e10;
   --surface: #17171a;
   --surface-2: #1f1f24;
@@ -14,29 +20,44 @@
   --warn: #ffbe4d;
   --radius: 14px;
 
-  /* a státuszsáv mindkét témában világos alapon, sötét betűvel olvas */
-  --band-ok-bg: #c9f0d4;
-  --band-ok-ink: #0d2a17;
-  --band-hatar-bg: #ffe6b8;
-  --band-hatar-ink: #3a2a05;
-  --band-birsag-bg: #ffd4d1;
-  --band-birsag-ink: #3d0f0c;
+  /* A státuszsáv a műszerfal jelzőfénye: sötétben mély alapon világít,
+     nem fehér táblaként vakít; nappal fordítva olvas jobban.          */
+  --band-ok-bg: #11301e;
+  --band-ok-ink: #7cecab;
+  --band-ok-keret: #2f6a48;
+  --band-hatar-bg: #33250a;
+  --band-hatar-ink: #ffcd6b;
+  --band-hatar-keret: #7a5a1c;
+  --band-birsag-bg: #3a120f;
+  --band-birsag-ink: #ff8f85;
+  --band-birsag-keret: #83322b;
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --bg: #f3f4f7;
-    --surface: #ffffff;
-    --surface-2: #eceef2;
-    --border: #d8dae1;
-    --text: #16171a;
-    --muted: #5d5f68;
-    --accent: #d4530b;
-    --accent-ink: #ffffff;
-    --danger: #c62828;
-    --ok: #1a7f45;
-    --warn: #a86400;
-  }
+/* Világos téma. A kontrasztarányok a WCAG AA szintjét tartják a
+   szövegszínekre, a narancs pedig sötétebb, hogy fehéren is olvasson. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef0f5;
+  --surface: #ffffff;
+  --surface-2: #f2f4f8;
+  --border: #d3d6de;
+  --text: #16171a;
+  --muted: #5d5f68;
+  --accent: #d4530b;
+  --accent-ink: #ffffff;
+  --danger: #c62828;
+  --ok: #1a7f45;
+  --warn: #a86400;
+
+  --band-ok-bg: #c9f0d4;
+  --band-ok-ink: #0d2a17;
+  --band-ok-keret: #7ed39a;
+  --band-hatar-bg: #ffe6b8;
+  --band-hatar-ink: #3a2a05;
+  --band-hatar-keret: #e0b45f;
+  --band-birsag-bg: #ffd4d1;
+  --band-birsag-ink: #3d0f0c;
+  --band-birsag-keret: #e88a83;
 }
 
 /* Műszer-betű a számoknak. Táblázatos számjegyek: vezetés közben a
@@ -429,9 +450,9 @@ button, input, select { font: inherit; color: inherit; }
 .statusz-al { font-size: 14px; font-weight: 600; }
 .statusz-megj { font-size: 13px; opacity: 0.85; }
 
-.statuszsav.ok { background: var(--band-ok-bg); color: var(--band-ok-ink); border-color: #7ed39a; }
-.statuszsav.hatar { background: var(--band-hatar-bg); color: var(--band-hatar-ink); border-color: #e0b45f; }
-.statuszsav.birsag { background: var(--band-birsag-bg); color: var(--band-birsag-ink); border-color: #e88a83; }
+.statuszsav.ok { background: var(--band-ok-bg); color: var(--band-ok-ink); border-color: var(--band-ok-keret); }
+.statuszsav.hatar { background: var(--band-hatar-bg); color: var(--band-hatar-ink); border-color: var(--band-hatar-keret); }
+.statuszsav.birsag { background: var(--band-birsag-bg); color: var(--band-birsag-ink); border-color: var(--band-birsag-keret); }
 
 /* --------------------------------------------------------- adatrács */
 
@@ -484,9 +505,26 @@ button, input, select { font: inherit; color: inherit; }
 .center { text-align: center; }
 .mt { margin-top: 4px; }
 
-.row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.inline { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
-.inline input { width: 84px; }
+/* Keskeny kijelzőn a címke és a mező inkább egymás alá kerül, mint hogy
+   a sor túllógjon: 320 px-en a két számmező és a feliratok nem férnek ki. */
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  flex-wrap: wrap;
+}
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.inline input { width: 84px; min-width: 52px; flex: 0 1 84px; }
 
 input[type="number"], select {
   background: var(--surface-2);
@@ -565,8 +603,8 @@ input[type="number"], select {
 .seg-limit input { width: 62px; text-align: center; padding: 5px 4px; }
 
 .seg-info { flex: 1; min-width: 0; font-size: 13px; }
-.seg-info label { color: var(--muted); }
-.seg-info input { width: 88px; }
+.seg-info label { color: var(--muted); display: flex; align-items: center; gap: 5px; min-width: 0; }
+.seg-info input { width: auto; min-width: 0; flex: 1 1 88px; max-width: 88px; }
 
 .seg-verd { font-weight: 650; white-space: nowrap; text-align: right; }
 .seg-verd.ok { color: var(--ok); }
@@ -662,11 +700,13 @@ input[type="number"], select {
 .tabla { cursor: pointer; padding: 0; font-family: inherit; }
 .tabla:active { transform: scale(0.96); }
 
+/* A felirat szélesebb, mint a tábla: „megengedett átlag” egy 44 px-es
+   dobozban szótöredékekre esne. Jobbra igazítva marad a tábla alatt. */
 .tabla-sugo {
   position: absolute;
   top: calc(clamp(42px, 13vw, 54px) + 4px);
   right: 2px;
-  width: clamp(42px, 13vw, 54px);
+  width: clamp(64px, 22vw, 86px);
   text-align: center;
   font-size: 10px;
   line-height: 1.2;
@@ -742,6 +782,32 @@ input[type="number"], select {
 .limit-gomb strong { font-size: 19px; }
 .limit-gomb span { font-size: 10px; color: var(--muted); }
 
+/* ------------------------------------------------------ témaválasztó */
+
+.tema-valaszto { display: flex; gap: 6px; }
+
+.tema-opcio {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.tema-opcio[aria-checked="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
 /* -------------------------------------------------- keskeny kijelző */
 
 /* 360 px alatt a nagybetűs státuszsáv és a szóvédjegy tördelődne. */
@@ -754,6 +820,11 @@ input[type="number"], select {
   .adat-val { font-size: 14px; }
   .btn.nagy { font-size: 15px; padding: 14px; letter-spacing: 0.3px; }
   .hero h2 { font-size: 22px; }
+  .tema-opcio { flex-direction: column; gap: 3px; font-size: 12px; }
+  /* A szóvédjegy előbbre való, mint a „GPS” felirat: a pötty magában is
+     megmondja, van-e jel, a jelentése pedig a súgócímkében ott van.    */
+  .gps-szo { display: none; }
+  .gps-pill { padding: 4px; }
 }
 
 /* A szakaszlistában a „+X km/h” önmagában nem mondja meg, mihez képest. */
@@ -843,12 +914,27 @@ input[type="checkbox"] {
 
 /* A szakasz arányos képe. A szélesség a hossz, a szín az ítélet: egy
    pillantásból látszik, melyik rész viszi el az egészet.              */
+/* A sáv szélessége a szakasz hosszát mutatja. Két dolog ronthatja el:
+   egy pár száz méteres rész pár képpontnyi csíkká zsugorodna, sok rész
+   pedig kitolná a sávot a kijelzőből. Ezért minden résznek van egy
+   olvasható minimuma, és ha így sem fér ki, a sáv maga görget: a kártya
+   és az oldal soha nem lóg túl.                                       */
 .utsav {
   display: flex;
   gap: 3px;
   height: 46px;
   border-radius: 10px;
-  overflow: hidden;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.utsav::-webkit-scrollbar { display: none; }
+
+/* Ha nem fér ki, a jobb szél elhalványul: ennyiből látszik, hogy oldalt
+   folytatódik. A pontos adatok úgyis a lenti listában vannak.        */
+.utsav.gorgetheto {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
 
 .utsav-resz {
@@ -856,11 +942,12 @@ input[type="checkbox"] {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 0;
+  min-width: 30px;
   gap: 1px;
   color: #0d1b12;
   font-weight: 700;
   overflow: hidden;
+  border-radius: 3px;
 }
 .utsav-resz.ok { background: #35c46a; }
 .utsav-resz.hatar { background: #ffb020; }
@@ -868,6 +955,11 @@ input[type="checkbox"] {
 
 .utsav-limit { font-size: 15px; line-height: 1; }
 .utsav-hossz { font-size: 10px; opacity: 0.8; white-space: nowrap; }
+
+/* Szűk részen a hossz lemarad: a levágott „3,0…” félrevezetőbb, mint a
+   puszta korlátozás. A pontos hossz a részletes listában ott marad.   */
+.utsav-resz.szuk .utsav-hossz { display: none; }
+.utsav-resz.szuk .utsav-limit { font-size: 13px; }
 
 /* ------------------------------------------------ kalkulátor: mérleg */
 

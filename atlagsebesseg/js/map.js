@@ -2,6 +2,8 @@
    A térképcsempék viszont az OpenStreetMap szervereiről érkeznek — ez az
    egyetlen külső kérés, amit az app magától indít, és kikapcsolható.   */
 
+import { sotetE, temaFigyel } from './tema.js';
+
 const L = window.L;
 
 /* Két csempekészlet: sötét témában a világos térkép vakító folt lenne a
@@ -21,7 +23,9 @@ export const CSEMPE = {
   maxZoom: 19,
 };
 
-const sotetTema = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+// A csempekészlet a ténylegesen érvényes témát követi, nem csak a
+// készülék beállítását: a fejlécben kézzel is átváltható.
+const sotetTema = () => sotetE();
 
 // Magyarország közepe, ha még nincs helyzet
 const KEZDO = [47.1625, 19.5033];
@@ -63,7 +67,7 @@ export class Terkep {
 
   /** Témaváltáskor cseréljük a csempekészletet. */
   temaKovetes() {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    temaFigyel(() => {
       if (!this.csempeReteg || this.csempeSotet === sotetTema()) return;
       this.csempekKi();
       this.csempekBe();

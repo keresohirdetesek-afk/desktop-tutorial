@@ -12,6 +12,7 @@ import { Ora } from './gauge.js';
 import { Meres, ALLAPOT } from './track.js';
 import { Gong } from './hang.js';
 import { keszitKep, megoszt } from './megosztas.js';
+import { temaMod, temaValt, temaBeallit, temaFigyel } from './tema.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -74,6 +75,8 @@ function fulek() {
       document.querySelectorAll('#tabs .tab').forEach((g) => g.classList.toggle('active', g === gomb));
       document.querySelectorAll('.screen').forEach((s) => (s.hidden = s.id !== gomb.dataset.scr));
       if (gomb.dataset.scr === 'scr-meres') setTimeout(() => terkep?.frissit(), 60);
+      // rejtett képernyőn nem mérhető a sáv: megjelenéskor pótoljuk
+      if (gomb.dataset.scr === 'scr-kalk') utsavCimkek();
     });
   });
 }
@@ -352,9 +355,26 @@ function verdiktRender(node, eredmeny) {
   node.innerHTML =
     `<strong>Bírság: ${fmtForint(birsagOsszeg(eredmeny))}</strong><br>` +
     `<span class="small">` +
-    (b.length > 1 ? `${b.length} szakaszon lépted túl a határt; a legsúlyosabb: ` : '') +
-    `${e.limit} km/h-s szakaszon ${fmtSpeed1(e.mert)} km/h átlag ` +
-    `(+${fmtSpeed1(e.tullepes)} km/h), ${fmtForint(e.osszeg)}.</span>`;
+    (b.length > 1
+      ? `${b.length} szakaszrészen lépted túl a határt, és a tételek ` +
+        `<strong>összeadódnak</strong>: ${osszegzes(b)}. A legsúlyosabb ` +
+        `${nevelo(e.limit)} ${e.limit} km/h-s rész: ${fmtSpeed1(e.mert)} km/h ` +
+        `átlag (+${fmtSpeed1(e.tullepes)} km/h), ${fmtForint(e.osszeg)}.`
+      : `${e.limit} km/h-s szakaszon ${fmtSpeed1(e.mert)} km/h átlag ` +
+        `(+${fmtSpeed1(e.tullepes)} km/h), ${fmtForint(e.osszeg)}.`) +
+    `</span>`;
+}
+
+/** „50 000 + 210 000 + 468 000 Ft”, hosszú listánál rövidítve. */
+function osszegzes(birsagosak) {
+  const tetelek = birsagosak.map((x) => x.ertekeles.osszeg);
+  if (tetelek.length > 4) {
+    return `${tetelek.length} tétel, összesen ${fmtForint(
+      tetelek.reduce((a, x) => a + x, 0)
+    )}`;
+  }
+  const szamok = tetelek.map((x) => x.toLocaleString('hu-HU'));
+  return `${szamok.join(' + ')} Ft`;
 }
 
 function jelvenyek(sz) {
@@ -677,7 +697,7 @@ function kalkSorokRender() {
   S.kalkSorok.forEach((sor, i) => {
     const d = el('div', 'seg edit',
       `<button class="limit-gomb k-limit" aria-label="Sebességhatár"><strong>${sor.limit}</strong><span>km/h</span></button>
-       <div class="seg-info"><label>Hossz <input class="k-hossz" type="number" min="0.1" step="0.1" value="${String(sor.hossz).replace('.', ',')}" inputmode="decimal"> km</label></div>
+       <div class="seg-info"><label>Hossz <input class="k-hossz" type="number" min="0.1" step="0.1" value="${sor.hossz}" inputmode="decimal"> km</label></div>
        <button class="seg-torol" aria-label="Sor törlése" ${S.kalkSorok.length === 1 ? 'disabled' : ''}><svg class="ikon" aria-hidden="true"><use href="#i-x"/></svg></button>`);
     d.querySelector('.k-limit').addEventListener('click', () => limitLapNyit({
       cim: 'Szakaszrész sebességhatára',
@@ -816,6 +836,17 @@ function kalkSzamol() {
     ['Szabályos menetidő (végig a korlátozással)', fmtDuration(eredmeny.szabalyosIdo)],
     ['Bírságmentes minimum menetidő', fmtDuration(eredmeny.minIdo)],
   ];
+  /* A bírságok szakaszrészenként külön keletkeznek, és összeadódnak.
+     Kiírva is látszik, hogy az összeg honnan jön ki.                  */
+  if (eredmeny.birsagosak.length) {
+    for (const x of eredmeny.birsagosak) {
+      kv.push([
+        `Bírság: ${x.limit} km/h-s rész (${fmtDistance(x.tav)})`,
+        fmtForint(x.ertekeles.osszeg),
+      ]);
+    }
+    kv.push(['Bírság összesen', fmtForint(eredmeny.osszegHalmozott)]);
+  }
   if (nyereseg > 0) {
     kv.push(['Időnyereség a szabályoshoz képest', fmtDurationWords(nyereseg)]);
     if (eredmeny.osszegHalmozott > 0) {
@@ -849,10 +880,25 @@ function utsavRender(eredmeny) {
     const resz = el('div', `utsav-resz ${allapot}`,
       `<span class="utsav-limit">${sz.limit}</span>` +
       `<span class="utsav-hossz">${fmtDistance(sz.tav)}</span>`);
+    /* A növekedés arányos a hosszal, de a rész nem zsugorodhat a CSS-ben
+       megadott olvasható minimum alá: egy 300 méteres rész így is
+       leolvasható marad egy 30 kilométeres mellett.                    */
     resz.style.flex = `${sz.tav} 1 0`;
-    resz.title = `${sz.limit} km/h, átlag ${fmtSpeed1(e.mert)} km/h`;
+    resz.title =
+      `${sz.limit} km/h, ${fmtDistance(sz.tav)}, átlag ${fmtSpeed1(e.mert)} km/h`;
     sav.append(resz);
   }
+  utsavCimkek(sav);
+}
+
+/** A tényleges szélesség dönti el, mi fér ki a részekre.
+    Rejtett képernyőn minden szélesség nulla: ilyenkor nincs mit mérni. */
+function utsavCimkek(sav = $('k-utsav')) {
+  if (sav.hidden || sav.clientWidth === 0) return;
+  for (const resz of sav.children) {
+    resz.classList.toggle('szuk', resz.getBoundingClientRect().width < 48);
+  }
+  sav.classList.toggle('gorgetheto', sav.scrollWidth > sav.clientWidth + 1);
 }
 
 /* ============================================================ OSM lekérés */
@@ -1165,6 +1211,37 @@ function esemenyek() {
     kalkSzamol();
   });
   ['in-perc', 'in-mp', 'in-tempo'].forEach((id) => $(id).addEventListener('input', kalkSzamol));
+
+  $('btn-tema').addEventListener('click', () => {
+    temaValt();
+    temaGombFrissit();
+  });
+  document.querySelectorAll('.tema-opcio').forEach((gomb) => {
+    gomb.addEventListener('click', () => {
+      temaBeallit(gomb.dataset.tema);
+      temaGombFrissit();
+    });
+  });
+
+  // Elforgatáskor és ablakméretezéskor a szakaszsáv feliratai újraszámolnak.
+  window.addEventListener('resize', () => utsavCimkek());
+}
+
+const TEMA_IKON = { rendszer: '#i-tema-auto', vilagos: '#i-sun', sotet: '#i-moon' };
+const TEMA_CIMKE = {
+  rendszer: 'Téma: a rendszer szerint. Váltás világosra.',
+  vilagos: 'Téma: világos. Váltás sötétre.',
+  sotet: 'Téma: sötét. Váltás rendszerkövetésre.',
+};
+
+function temaGombFrissit() {
+  const mod = temaMod();
+  $('btn-tema').querySelector('use').setAttribute('href', TEMA_IKON[mod]);
+  $('btn-tema').setAttribute('aria-label', TEMA_CIMKE[mod]);
+  $('btn-tema').title = TEMA_CIMKE[mod];
+  document.querySelectorAll('.tema-opcio').forEach((g) => {
+    g.setAttribute('aria-checked', String(g.dataset.tema === mod));
+  });
 }
 
 function indul() {
@@ -1176,6 +1253,7 @@ function indul() {
   kalkOra = new Ora($('k-ora'));
   fulek();
   esemenyek();
+  temaGombFrissit();
   kalkSorokRender();
   kalkSzamol();
   birsagTablaRender();
