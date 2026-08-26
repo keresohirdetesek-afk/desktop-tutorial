@@ -13,6 +13,7 @@ import { Meres, ALLAPOT } from './track.js';
 import { Gong } from './hang.js';
 import { keszitKep, megoszt } from './megosztas.js';
 import { temaMod, temaValt, temaBeallit, temaFigyel } from './tema.js';
+import { profilMinta, profilSorokbol, profilRajz } from './profil.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -548,6 +549,10 @@ function oraEsStatusz(eredmeny) {
 
   $('ki-atlag').textContent = van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '-';
   $('ki-pill').textContent = meres.utolso ? `${fmtSpeed(meres.pillanatnyi)} km/h` : '-';
+  const vanPill = !!meres.utolso && meres.pillanatnyi > 0;
+  $('most-doboz').hidden = !vanPill;
+  // a műszerfalon kerek szám áll, tizedes nélkül
+  if (vanPill) $('most-val').textContent = String(Math.round(meres.pillanatnyi));
   /* A GPS a tényleges sebességet méri, a kilométeróra viszont törvény
      szerint sosem mutathat kevesebbet a valósnál. Ezért a műszerfalon
      rendre nagyobb szám áll, és ilyenkor nem a mérés téved.          */
@@ -663,6 +668,12 @@ function eredmenyKartya(eredmeny) {
   if (eredmeny.birsagosak.length) sorok.push(['Bírság', fmtForint(birsagOsszeg(eredmeny))]);
   $('eredmeny-adatok').innerHTML = sorok.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   verdiktRender($('eredmeny-verdikt'), eredmeny);
+
+  /* A profil a nyomvonalból készül, ezért csak GPS-mérés után van mit
+     rajzolni: pár fixből még nem jön ki értelmes görbe.              */
+  const minta = profilMinta(meres.pontok, eredmeny.szakaszok);
+  $('eredmeny-profil').hidden =
+    !profilRajz($('profil-svg'), minta, { osszTav: eredmeny.osszTav });
 }
 
 /* ============================================================ élő nézet */
@@ -759,6 +770,7 @@ function kalkSzamol() {
     $('k-st-fo').textContent = 'ÁTLAGSEBESSÉG: -';
     $('k-st-cimke').textContent = STATUSZ.semleges.cimke;
     $('k-utsav').hidden = true;
+    $('k-profil').hidden = true;
     $('k-merleg').hidden = true;
     $('k-verdikt').className = 'verdikt semleges';
     $('k-verdikt').textContent = 'Add meg a szakasz hosszát és a menetidőt.';
@@ -783,6 +795,7 @@ function kalkSzamol() {
     $('k-st-fo').textContent = `ÁTLAGSEBESSÉG: ${Math.round(atlag)} km/h`;
     $('k-st-cimke').textContent = '[○ IRREÁLIS]';
     $('k-utsav').hidden = true;
+    $('k-profil').hidden = true;
     $('k-merleg').hidden = true;
     $('k-verdikt').className = 'verdikt hatar';
     $('k-verdikt').innerHTML =
@@ -830,6 +843,9 @@ function kalkSzamol() {
   $('k-st-cimke').textContent = STATUSZ[allapot].cimke;
 
   utsavRender(eredmeny);
+  $('k-profil').hidden = !profilRajz(
+    $('k-profil-svg'), profilSorokbol(sorok, atlag), { osszTav }
+  );
 
   verdiktRender($('k-verdikt'), eredmeny);
   szakaszLista($('k-reszletek'), eredmeny, { szerkesztheto: false });
