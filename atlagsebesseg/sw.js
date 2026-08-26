@@ -1,7 +1,7 @@
 // Offline működés: az alkalmazás saját fájljai gyorsítótárba kerülnek.
 // Mérési adat nincs — nincs is mit menteni vagy szinkronizálni.
 
-const CACHE = 'atlagsebesseg-v7';
+const CACHE = 'atlagsebesseg-v8';
 const ASSETS = [
   './',
   'index.html',
@@ -14,6 +14,7 @@ const ASSETS = [
   'js/geo.js',
   'js/limits.js',
   'js/map.js',
+  'js/profil.js',
   'js/tema.js',
   'js/track.js',
   'vendor/fonts/jetbrains-mono-400.woff2',

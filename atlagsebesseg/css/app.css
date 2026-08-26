@@ -390,99 +390,120 @@ button, input, select { font: inherit; color: inherit; }
 .ora-kartya { align-items: stretch; gap: 12px; }
 
 .ora-doboz { position: relative; }
-.ora { display: block; width: 100%; height: auto; }
 
-/* A műszer színei külön változókban: a digitális műszerfal halvány
-   alapon dolgozik, és csak az élő érték világít. Világos témában
-   ugyanezek a színek sötétebbek, hogy fehéren is olvassanak.        */
+/* A műszer színei külön változókban. A minta egy gyári műszeregység:
+   sötét csatornában világító gyűrű, középen nagy fehér szám. Világos
+   témában ugyanezek sötétebbek, hogy fehéren is olvassanak.         */
 .ora {
-  --m-ok: #2fd07a;
-  --m-hatar: #ffb020;
-  --m-birsag: #ff4d43;
-  --m-szamlap: color-mix(in srgb, var(--text) 12%, transparent);
-  --m-osztas: color-mix(in srgb, var(--text) 26%, transparent);
+  --m-ok: #21c26a;
+  --m-hatar: #ffab1f;
+  --m-birsag: #f0342b;
+  --m-semleges: #6b6b76;
+  --m-csatorna: color-mix(in srgb, var(--text) 9%, transparent);
+  --m-veszely: color-mix(in srgb, var(--m-birsag) 22%, transparent);
+  --m-vagas: var(--surface);
+  display: block;
+  width: 100%;
+  height: auto;
 }
 :root[data-theme="light"] .ora {
-  --m-ok: #12924b;
-  --m-hatar: #b06f00;
-  --m-birsag: #d02a20;
-  --m-szamlap: color-mix(in srgb, var(--text) 14%, transparent);
-  --m-osztas: color-mix(in srgb, var(--text) 34%, transparent);
+  --m-ok: #0f9a4d;
+  --m-hatar: #c47b00;
+  --m-birsag: #d92b1f;
+  --m-semleges: #9aa0ac;
+  --m-csatorna: color-mix(in srgb, var(--text) 11%, transparent);
+  --m-veszely: color-mix(in srgb, var(--m-birsag) 18%, transparent);
 }
 
-/* a számlap: hajszálvékony, épp csak sejlik */
-.ora-hatter { stroke: var(--m-szamlap); stroke-width: 2; }
+/* a gyűrű sötét csatornája: a ki nem világított rész */
+.ora-csatorna { stroke: var(--m-csatorna); stroke-width: 19; }
+/* a bírságos tartomány, mint a fordulatszámmérő vörös mezője */
+.ora-veszely { stroke: var(--m-veszely); stroke-width: 19; }
 
-/* skálaosztás: a tartományt a szín mondja meg, nem külön sáv */
-.ora-tick { stroke: var(--m-osztas); stroke-width: 1.5; opacity: 0.55; }
-.ora-tick.fo { stroke-width: 2; opacity: 0.85; }
-.ora-tick.hatar { stroke: var(--m-hatar); }
-.ora-tick.birsag { stroke: var(--m-birsag); }
+/* a világító ív és a fényudvara */
+.ora-iv {
+  stroke: var(--m-semleges);
+  stroke-width: 19;
+  transition: stroke-dashoffset 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ora-iv.udvar { stroke-width: 34; opacity: 0.18; }
+.ora-iv.ok { stroke: var(--m-ok); }
+.ora-iv.hatar { stroke: var(--m-hatar); }
+.ora-iv.birsag { stroke: var(--m-birsag); }
+
+/* a gyűrűbe vágott osztásrovátkák: a kártya színével vágunk */
+.ora-rovatka { stroke: var(--m-vagas); stroke-width: 1.5; opacity: 0.6; }
 
 .ora-cimke {
   fill: var(--muted);
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.02em;
-  opacity: 0.75;
+  opacity: 0.7;
 }
-.ora-cimke.birsag { fill: var(--m-birsag); opacity: 0.8; }
+.ora-cimke.birsag { fill: var(--m-birsag); opacity: 0.85; }
 
-/* a korlátozás helye: rövid, világos vonás az íven át */
-.ora-limitjel { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; opacity: 0.9; }
+/* a korlátozás helye: világos vonás a gyűrűn át */
+.ora-limitjel { stroke: var(--text); stroke-width: 3; stroke-linecap: round; }
 
-/* a mért érték íve: éles vonal és alatta a derengés */
-.ora-iv {
-  stroke: var(--muted);
-  stroke-width: 5;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.ora-iv.dereng { stroke-width: 14; opacity: 0.16; }
-.ora-iv.ok { stroke: var(--m-ok); }
-.ora-iv.hatar { stroke: var(--m-hatar); }
-.ora-iv.birsag { stroke: var(--m-birsag); }
-
-/* az ív végén ülő pont, körülötte halvány udvar */
+/* a világító ív elülső éle, mint a gyári műszeren a fényes perem */
 .ora-forgo { transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-.ora-veg { fill: var(--text); }
-.ora-veg.ok { fill: var(--m-ok); }
-.ora-veg.hatar { fill: var(--m-hatar); }
-.ora-veg.birsag { fill: var(--m-birsag); }
-.ora-veg-halo { fill: var(--text); opacity: 0.18; }
-.ora-veg-halo.ok { fill: var(--m-ok); }
-.ora-veg-halo.hatar { fill: var(--m-hatar); }
-.ora-veg-halo.birsag { fill: var(--m-birsag); }
+.ora-el { stroke: #ffffff; stroke-width: 3; opacity: 0.85; }
+:root[data-theme="light"] .ora-el { stroke: #ffffff; opacity: 0.95; }
 
-/* a pillanatnyi sebesség jele az íven belül */
-.ora-pill-jel { stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; }
+/* a pillanatnyi sebesség jele a gyűrű belső élén */
+.ora-pill-jel { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
 
 .ora-cim {
   fill: var(--muted);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.2em;
-  opacity: 0.55;
+  opacity: 0.6;
 }
 
-/* a nagy szám: könnyű vonalvezetés, nagy méret, szűk betűköz */
+/* a nagy szám: fehér és testes, ahogy a műszerfalon */
 .ora-ertek {
   fill: var(--text);
-  font-size: 62px;
-  font-weight: 400;
-  letter-spacing: -0.04em;
+  font-size: 66px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
 }
-.ora-ertek.ok { fill: var(--text); }
-.ora-ertek.hatar { fill: var(--m-hatar); }
-.ora-ertek.birsag { fill: var(--m-birsag); }
-.ora-ertek.halvany { fill: var(--muted); opacity: 0.5; }
+.ora-ertek.halvany { fill: var(--muted); opacity: 0.45; }
 
 .ora-egyseg {
   fill: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
+  font-size: 13px;
+  font-weight: 500;
 }
+
+/* ------------------------------------------------ sebességprofil */
+
+/* A nulla vonal a helyben érvényes korlátozás: ami fölé megy, azzal
+   többel haladtál. Így a korlátozás váltása nem billenti meg a képet. */
+.profil { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.profil figcaption { font-size: 13px; font-weight: 650; }
+.profil svg { display: block; width: 100%; height: auto; }
+
+.pr-racs { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 4; }
+.pr-nulla { stroke: var(--text); stroke-width: 1.5; opacity: 0.55; }
+.pr-valtas { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+
+.pr-felett { fill: var(--danger); opacity: 0.7; }
+.pr-alatt { fill: var(--ok); opacity: 0.5; }
+.pr-vonal { stroke: var(--text); stroke-width: 1.6; opacity: 0.8; stroke-linejoin: round; }
+
+.pr-cimke, .pr-limit {
+  fill: var(--muted);
+  font-family: 'Muszer', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 9px;
+}
+.pr-limit { opacity: 0.75; }
+
+.profil-jel { margin: 0; font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.profil-kulcs { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.profil-kulcs.felett { background: var(--danger); opacity: 0.7; }
+.profil-kulcs.alatt { background: var(--ok); opacity: 0.5; margin-left: 8px; }
 
 /* Sebességkorlátozó tábla a számlap alsó nyílásában, a felirattal egy
    sorban. Korábban a jobb felső sarokban ült, de a szélesebb skálán
@@ -495,7 +516,26 @@ button, input, select { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: 66%;
+  max-width: 92%;
+}
+
+/* A pillanatnyi sebesség a műszer lábsorában, a nagy szám mellett:
+   a középső nagy szám a szakaszátlagé marad, de a most mért érték is
+   ott van, ahová a szem amúgy is néz.                               */
+.most-doboz {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.1;
+  margin-left: 10px;
+}
+.most-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.18em; color: var(--muted); }
+.most-val {
+  font-family: 'Muszer', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 .tabla {

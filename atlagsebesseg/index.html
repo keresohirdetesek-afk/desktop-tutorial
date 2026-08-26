@@ -108,6 +108,22 @@
           <p class="eredmeny-alcim" id="eredmeny-alcim"></p>
           <dl class="eredmeny-adatok" id="eredmeny-adatok"></dl>
           <div id="eredmeny-verdikt" class="verdikt semleges"></div>
+
+          <figure class="profil" id="eredmeny-profil" hidden>
+            <figcaption>Hol mennyivel haladtál a korlátozáshoz képest</figcaption>
+            <svg id="profil-svg" role="img"
+                 aria-label="Sebességprofil a megtett út mentén"></svg>
+            <p class="profil-jel">
+              <span class="profil-kulcs felett"></span>a korlátozás felett
+              <span class="profil-kulcs alatt"></span>alatta
+            </p>
+            <p class="muted small">
+              A pillanatnyi sebesség a korlátozáshoz mérve, km/h-ban. A bírság
+              nem ebből lesz, hanem a szakaszátlagból; ez azt mutatja meg, hol
+              keletkezett az az átlag.
+            </p>
+          </figure>
+
           <button id="btn-megoszt" class="btn primary block"><svg class="ikon" aria-hidden="true"><use href="#i-share-network"/></svg>Eredmény megosztása</button>
           <p id="megoszt-allapot" class="muted small center" hidden></p>
           <button id="btn-ujra-szakasz" class="btn block"><svg class="ikon" aria-hidden="true"><use href="#i-arrow-clockwise"/></svg>Újra ezen a szakaszon</button>
@@ -142,6 +158,10 @@
             <div class="tabla-sav">
               <button class="tabla" id="ora-tabla" aria-label="Sebességhatár módosítása">-</button>
               <span class="tabla-sugo" id="tabla-sugo">koppints</span>
+              <span class="most-doboz" id="most-doboz" hidden>
+                <span class="most-lbl">MOST</span>
+                <span class="most-val" id="most-val">-</span>
+              </span>
             </div>
           </div>
 
@@ -336,6 +356,16 @@
 
         <!-- a szakasz arányos képe: a szélesség a hossz, a szín az ítélet -->
         <div class="utsav" id="k-utsav" hidden></div>
+
+        <figure class="profil" id="k-profil" hidden>
+          <figcaption>Hol mennyivel mennél a korlátozáshoz képest</figcaption>
+          <svg id="k-profil-svg" role="img"
+               aria-label="Sebességprofil a megadott szakaszrészek mentén"></svg>
+          <p class="profil-jel">
+            <span class="profil-kulcs felett"></span>a korlátozás felett
+            <span class="profil-kulcs alatt"></span>alatta
+          </p>
+        </figure>
 
         <div class="merleg" id="k-merleg" hidden>
           <div class="merleg-tetel nyereseg">

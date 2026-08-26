@@ -39,13 +39,22 @@ szöveg írásakor ezt tartsuk.
   pedig a sebességtábla. Utána a státuszsáv, végül hat adat: mért átlag,
   pillanatnyi sebesség, megengedett átlag, a helyben érvényes korlátozás,
   eltelt idő és a bírságveszély forintban.
-- **Digitális műszer, nem számlap.** A műszer a mai autók műszeregységeinek
-  modorában épül fel: a számlap hajszálvékony, a tartományokat nem vastag
-  sávok, hanem a skálaosztások színe jelzi, és csak az él, ami éppen
-  történik. A szakaszátlagot egy világító ív rajzolja ki, a végén egy
-  ponttal; mutató nincs. A pillanatnyi sebesség egy vékony narancs jel az
-  íven belül, így a kettő távolsága maga az információ. Középen nagy,
-  könnyű vonalvezetésű szám, alatta a sebességkorlátozó tábla.
+- **Digitális műszer, nem számlap.** A minta egy gyári műszeregység: sötét
+  csatornában világító, vastag gyűrű, középen nagy fehér számmal. A
+  világítást széles, halvány ívmásolat és a szám mögötti sugaras derengés
+  adja, szűrő nélkül, hogy mobilon se akadjon. Az osztások a gyűrűbe vágott
+  rovátkák, a bírságos tartomány pedig a csatornán is látszik, mint a
+  fordulatszámmérő vörös mezője. Mutató nincs: a világító ív elülső élét
+  világos vonás zárja. A pillanatnyi sebesség jele a gyűrű belső élén fut,
+  a száma a műszer lábsorában áll, a sebességkorlátozó tábla mellett.
+- **Sebességprofil a végén.** Az eredménykártyán és a kalkulátorban
+  grafikon mutatja, hol mennyivel haladtál a korlátozáshoz képest. A nulla
+  vonal a helyben érvényes korlátozás, ezért a korlátozás váltása nem
+  billenti meg a képet: egy lakott területi 50-es és egy autópályás 130-as
+  ugyanazon a nullán ül. A vonal fölötti piros terület a túllépés, alatta a
+  zöld a ráhagyás. A felirat kimondja, hogy ez a pillanatnyi sebesség, nem
+  a szakaszátlag: a bírság az átlagból lesz, a grafikon azt mutatja meg,
+  hol keletkezett az az átlag. Kód: `js/profil.js`.
 - **A műszerfalad többet mutat, mint a GPS.** A kilométeróra jogszabály
   szerint sosem mutathat kevesebbet a tényleges sebességnél, felfelé
   viszont eltérhet: legfeljebb a valós érték 110%-a plusz 4 km/h
@@ -202,6 +211,7 @@ atlagsebesseg/
 ├── css/app.css
 ├── js/
 │   ├── app.js          összefogó réteg, megjelenítés
+│   ├── profil.js       sebességprofil a korlátozáshoz mérve
 │   ├── tema.js         világos/sötét téma, a fejléc gombja
 │   ├── birsag.js       410/2007. bírságtáblázat és értékelés
 │   ├── geo.js          távolság, pont–szakasz vetítés, formázás
