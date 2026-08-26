@@ -60,7 +60,7 @@ export class Meres {
     this.allapot = szakasz.start ? ALLAPOT.VAR : ALLAPOT.MER;
     this.uzenet = szakasz.start
       ? 'Várakozás a szakasz elejére…'
-      : 'Mérés fut — a leállítás gombbal zárhatod le.';
+      : 'Mérés fut. A leállítás gombbal zárhatod le.';
     this.watchId = navigator.geolocation.watchPosition(
       (pos) => this.#fix(pos),
       (err) => this.#hiba(err),
@@ -123,7 +123,7 @@ export class Meres {
     this.utolso = p;
 
     if (c.accuracy > MAX_PONTATLANSAG) {
-      this.uzenet = `Gyenge GPS-jel (±${Math.round(c.accuracy)} m) — várunk a pontosabb helyzetre.`;
+      this.uzenet = `Gyenge GPS-jel (±${Math.round(c.accuracy)} m). Várunk a pontosabb helyzetre.`;
       this.figyelmeztet = true;
       this.onChange(this);
       return;
@@ -162,7 +162,7 @@ export class Meres {
     if (talalat) {
       this.allapot = ALLAPOT.MER;
       this.pontok = [talalat];
-      this.uzenet = 'Áthaladtál a szakasz elején — a mérés elindult.';
+      this.uzenet = 'Áthaladtál a szakasz elején, a mérés elindult.';
       if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
     } else {
       this.uzenet = `Szakasz eleje ${Math.round(this.kezdoTav)} m-re.`;

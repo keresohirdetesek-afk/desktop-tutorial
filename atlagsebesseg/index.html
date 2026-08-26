@@ -139,8 +139,10 @@
         <section class="card ora-kartya" id="ora-kartya">
           <div class="ora-doboz">
             <svg id="ora" class="ora" role="img" aria-label="Szakaszátlag mérője"></svg>
-            <button class="tabla" id="ora-tabla" aria-label="Sebességhatár módosítása">-</button>
-            <span class="tabla-sugo" id="tabla-sugo">koppints</span>
+            <div class="tabla-sav">
+              <button class="tabla" id="ora-tabla" aria-label="Sebességhatár módosítása">-</button>
+              <span class="tabla-sugo" id="tabla-sugo">koppints</span>
+            </div>
           </div>
 
           <button id="btn-hang" class="chip hang-kapcsolo" aria-pressed="true">
@@ -156,7 +158,7 @@
 
           <div class="adatracs">
             <div><span class="adat-lbl">Mért átlag</span><span class="adat-val" id="ki-atlag">-</span></div>
-            <div><span class="adat-lbl">Pillanatnyi</span><span class="adat-val" id="ki-pill">-</span></div>
+            <div><span class="adat-lbl">Pillanatnyi</span><span class="adat-val" id="ki-pill">-</span><span class="adat-alsor" id="ki-muszerfal"></span></div>
             <div><span class="adat-lbl">Megengedett átlag</span><span class="adat-val" id="ki-limit">-</span></div>
             <div><span class="adat-lbl">Itt érvényes</span><span class="adat-val" id="ki-hely-limit">-</span></div>
             <div><span class="adat-lbl">Eltelt idő</span><span class="adat-val" id="ki-ido">0:00</span></div>
@@ -321,8 +323,10 @@
       <section class="card result">
         <div class="ora-doboz">
           <svg id="k-ora" class="ora" role="img" aria-label="A szakasz átlagsebessége"></svg>
-          <span class="tabla" id="k-tabla">-</span>
-          <span class="tabla-sugo">megengedett</span>
+          <div class="tabla-sav">
+            <span class="tabla" id="k-tabla">-</span>
+            <span class="tabla-sugo">megengedett</span>
+          </div>
         </div>
 
         <div class="statuszsav semleges" id="k-statuszsav">
@@ -471,6 +475,28 @@
           tanácsadásnak nem minősülnek. Az összegek a hatályos gyorshajtási
           bírságtételek. Arról, hogy egy jövőbeli átlagsebesség-mérés
           pontosan milyen szankcióval járna, még nincs döntés.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Miért mutat kevesebbet, mint a műszerfalam?</h2>
+        <p>
+          Mert a műszerfal mutat többet. A kilométeróra <strong>törvény
+          szerint sosem mutathat kevesebbet</strong> a tényleges sebességnél,
+          felfelé viszont eltérhet: legfeljebb a valós érték 110 százaléka
+          plusz 4 km/h (ENSZ-EGB 39. előírás). A gyártók ezt ki is használják,
+          a gyakorlatban 3-7 százalék a jellemző eltérés.
+        </p>
+        <p>
+          Ha tehát a műszerfalad 100-at mutat, valójában nagyjából 93-97
+          km/h-val haladsz. A GPS a tényleges elmozdulást méri, ezért itt a
+          kisebb szám a valós. Egy hatósági szakaszmérés is a valós
+          sebességgel számolna, nem a te kilométeróráddal.
+        </p>
+        <p class="muted small">
+          Ezért írjuk ki a Pillanatnyi érték alá, hogy nagyjából mennyit
+          mutat ilyenkor a műszerfalad. Ha a kettő ennél jobban eltér,
+          annak jellemzően a gyári mérettől eltérő gumiméret az oka.
         </p>
       </section>
 

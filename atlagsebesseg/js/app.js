@@ -269,6 +269,17 @@ function allapotJel(eredmeny) {
    egy áthaladás egy szabálysértés: akkor sem jár több csekk, ha a szakaszon
    belül több, eltérő korlátozású részen is a határ fölött voltál. A tételt
    a legsúlyosabb rész szabja meg, mert az ottani túllépés a legnagyobb. */
+/* A kilométeróra törvény szerint sosem mutathat kevesebbet a tényleges
+   sebességnél, felfelé viszont eltérhet: legfeljebb a valós érték
+   110%-a plusz 4 km/h (ENSZ-EGB 39. előírás). A gyártók ezt ki is
+   használják, a gyakorlatban 3-7% a jellemző. Ezért a műszerfalon
+   nagyobb szám áll, mint amit a GPS mér, és nem a mérés téved.      */
+function muszerfalKb(gps) {
+  const also = Math.round(gps * 1.03);
+  const felso = Math.round(gps * 1.1 + 4);
+  return `${also}-${felso}`;
+}
+
 function birsagOsszeg(eredmeny) {
   if (!eredmeny.birsagosak.length) return 0;
   return eredmeny.legsulyosabb.ertekeles.osszeg;
@@ -537,6 +548,13 @@ function oraEsStatusz(eredmeny) {
 
   $('ki-atlag').textContent = van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '-';
   $('ki-pill').textContent = meres.utolso ? `${fmtSpeed(meres.pillanatnyi)} km/h` : '-';
+  /* A GPS a tényleges sebességet méri, a kilométeróra viszont törvény
+     szerint sosem mutathat kevesebbet a valósnál. Ezért a műszerfalon
+     rendre nagyobb szám áll, és ilyenkor nem a mérés téved.          */
+  $('ki-muszerfal').textContent =
+    meres.utolso && meres.pillanatnyi > 10
+      ? `műszerfalon kb. ${muszerfalKb(meres.pillanatnyi)}`
+      : '';
   $('ki-limit').textContent = `${fmtLimit(megengedett)} km/h`;
   $('ki-ido').textContent = fmtDuration(meres.ido);
   $('ki-birsag').textContent = fmtForint(birsagOsszeg(eredmeny));
