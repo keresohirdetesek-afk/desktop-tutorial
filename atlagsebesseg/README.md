@@ -39,8 +39,19 @@ szöveg írásakor ezt tartsuk.
   pedig a sebességtábla. Utána a státuszsáv, végül hat adat: mért átlag,
   pillanatnyi sebesség, megengedett átlag, a helyben érvényes korlátozás,
   eltelt idő és a bírságveszély forintban.
-- **Két mutató egy órán:** a vastag a szakaszátlagot, a vékony narancs az
-  éppen mért sebességet mutatja — a kettő távolsága maga az információ.
+- **Digitális műszer, nem számlap.** A műszer a mai autók műszeregységeinek
+  modorában épül fel: a számlap hajszálvékony, a tartományokat nem vastag
+  sávok, hanem a skálaosztások színe jelzi, és csak az él, ami éppen
+  történik. A szakaszátlagot egy világító ív rajzolja ki, a végén egy
+  ponttal; mutató nincs. A pillanatnyi sebesség egy vékony narancs jel az
+  íven belül, így a kettő távolsága maga az információ. Középen nagy,
+  könnyű vonalvezetésű szám, alatta a sebességkorlátozó tábla.
+- **A műszerfalad többet mutat, mint a GPS.** A kilométeróra jogszabály
+  szerint sosem mutathat kevesebbet a tényleges sebességnél, felfelé
+  viszont eltérhet: legfeljebb a valós érték 110%-a plusz 4 km/h
+  (ENSZ-EGB 39.). Ezért a Pillanatnyi érték alatt kiírjuk, nagyjából
+  mennyit mutat ilyenkor a műszerfal, és a Tudnivalók elmagyarázza,
+  miért a kisebb szám a valós.
 - **A tábla a helyben érvényes korlátozást mutatja**, ha egyszer lekérted a
   határokat: ahogy az útépítési szakaszra érsz, 130-ról 80-ra vált. Ez
   független a „megengedett átlag" mezőtől, ami az egész szakaszra vonatkozó,

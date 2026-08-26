@@ -18,7 +18,8 @@
   --danger: #ff5f56;
   --ok: #3ddc84;
   --warn: #ffbe4d;
-  --radius: 14px;
+  --radius: 16px;
+  --kartya-arnyek: none;
 
   /* A státuszsáv a műszerfal jelzőfénye: sötétben mély alapon világít,
      nem fehér táblaként vakít; nappal fordítva olvas jobban.          */
@@ -36,6 +37,9 @@
 /* Világos téma. A kontrasztarányok a WCAG AA szintjét tartják a
    szövegszínekre, a narancs pedig sötétebb, hogy fehéren is olvasson. */
 :root[data-theme="light"] {
+  /* Világos alapon a kártyát a lágy vetett árnyék emeli ki, nem a keret:
+     sok vonal helyett rétegek, ettől hat mainak a felület.           */
+  --kartya-arnyek: 0 1px 2px rgba(16, 20, 30, 0.05), 0 6px 16px rgba(16, 20, 30, 0.05);
   color-scheme: light;
   --bg: #eef0f5;
   --surface: #ffffff;
@@ -78,7 +82,7 @@
 }
 
 /* Ahol szám áll, ott azonos szélességű számjegy kell. */
-.ora-ertek, .ora-cimke, .ora-egyseg, .ora-most,
+.ora-ertek, .ora-cimke, .ora-egyseg, .ora-cim,
 .adat-val, .merleg-val, .statusz-fo, .tabla, .limit-jel,
 .seg-limit strong, .seg-verd, .limit-gomb strong,
 .eredmeny-adatok dd, .kv dd, .utsav-limit, .utsav-hossz,
@@ -388,48 +392,126 @@ button, input, select { font: inherit; color: inherit; }
 .ora-doboz { position: relative; }
 .ora { display: block; width: 100%; height: auto; }
 
-.ora-hatter { stroke: var(--border); stroke-width: 18; }
-.ora-zona { stroke-width: 18; }
-.ora-zona.ok { stroke: #35c46a; }
-.ora-zona.hatar { stroke: #ffb020; }
-.ora-zona.birsag { stroke: #ff4d43; }
+/* A műszer színei külön változókban: a digitális műszerfal halvány
+   alapon dolgozik, és csak az élő érték világít. Világos témában
+   ugyanezek a színek sötétebbek, hogy fehéren is olvassanak.        */
+.ora {
+  --m-ok: #2fd07a;
+  --m-hatar: #ffb020;
+  --m-birsag: #ff4d43;
+  --m-szamlap: color-mix(in srgb, var(--text) 12%, transparent);
+  --m-osztas: color-mix(in srgb, var(--text) 26%, transparent);
+}
+:root[data-theme="light"] .ora {
+  --m-ok: #12924b;
+  --m-hatar: #b06f00;
+  --m-birsag: #d02a20;
+  --m-szamlap: color-mix(in srgb, var(--text) 14%, transparent);
+  --m-osztas: color-mix(in srgb, var(--text) 34%, transparent);
+}
 
-.ora-belso { stroke-width: 7; stroke-linecap: round; opacity: 0.75; stroke: var(--muted); }
-.ora-belso.ok { stroke: #35c46a; }
-.ora-belso.hatar { stroke: #ffb020; }
-.ora-belso.birsag { stroke: #ff4d43; }
+/* a számlap: hajszálvékony, épp csak sejlik */
+.ora-hatter { stroke: var(--m-szamlap); stroke-width: 2; }
 
-.ora-tick { stroke: var(--muted); stroke-width: 2; opacity: 0.6; }
-.ora-cimke { fill: var(--muted); font-size: 12px; font-weight: 600; }
-.ora-limitjel { stroke: var(--text); stroke-width: 4; }
-.ora-mutato { stroke: var(--text); stroke-width: 5; stroke-linecap: round; }
-/* A mutatók forgatott csoportban ülnek, így az elmozdulás átúszik. */
-.ora-mutato-g { transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
-/* a pillanatnyi sebesség vékony, narancs mutatója */
-.ora-mutato-pill { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; opacity: 0.95; }
-.ora-most { fill: var(--accent); font-size: 12px; font-weight: 700; }
-.ora-tengely { fill: var(--accent); }
-.ora-tengely.halvany { fill: var(--border); }
-.ora-ertek.halvany { fill: var(--muted); }
+/* skálaosztás: a tartományt a szín mondja meg, nem külön sáv */
+.ora-tick { stroke: var(--m-osztas); stroke-width: 1.5; opacity: 0.55; }
+.ora-tick.fo { stroke-width: 2; opacity: 0.85; }
+.ora-tick.hatar { stroke: var(--m-hatar); }
+.ora-tick.birsag { stroke: var(--m-birsag); }
 
-.ora-ertek { fill: var(--text); font-size: 40px; font-weight: 700; letter-spacing: -1.5px; }
-.ora-egyseg { fill: var(--muted); font-size: 14px; font-weight: 600; }
+.ora-cimke {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+.ora-cimke.birsag { fill: var(--m-birsag); opacity: 0.8; }
 
-/* sebességkorlátozó tábla az óra sarkában */
-.tabla {
+/* a korlátozás helye: rövid, világos vonás az íven át */
+.ora-limitjel { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; opacity: 0.9; }
+
+/* a mért érték íve: éles vonal és alatta a derengés */
+.ora-iv {
+  stroke: var(--muted);
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ora-iv.dereng { stroke-width: 14; opacity: 0.16; }
+.ora-iv.ok { stroke: var(--m-ok); }
+.ora-iv.hatar { stroke: var(--m-hatar); }
+.ora-iv.birsag { stroke: var(--m-birsag); }
+
+/* az ív végén ülő pont, körülötte halvány udvar */
+.ora-forgo { transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+.ora-veg { fill: var(--text); }
+.ora-veg.ok { fill: var(--m-ok); }
+.ora-veg.hatar { fill: var(--m-hatar); }
+.ora-veg.birsag { fill: var(--m-birsag); }
+.ora-veg-halo { fill: var(--text); opacity: 0.18; }
+.ora-veg-halo.ok { fill: var(--m-ok); }
+.ora-veg-halo.hatar { fill: var(--m-hatar); }
+.ora-veg-halo.birsag { fill: var(--m-birsag); }
+
+/* a pillanatnyi sebesség jele az íven belül */
+.ora-pill-jel { stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; }
+
+.ora-cim {
+  fill: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  opacity: 0.55;
+}
+
+/* a nagy szám: könnyű vonalvezetés, nagy méret, szűk betűköz */
+.ora-ertek {
+  fill: var(--text);
+  font-size: 62px;
+  font-weight: 400;
+  letter-spacing: -0.04em;
+}
+.ora-ertek.ok { fill: var(--text); }
+.ora-ertek.hatar { fill: var(--m-hatar); }
+.ora-ertek.birsag { fill: var(--m-birsag); }
+.ora-ertek.halvany { fill: var(--muted); opacity: 0.5; }
+
+.ora-egyseg {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+}
+
+/* Sebességkorlátozó tábla a számlap alsó nyílásában, a felirattal egy
+   sorban. Korábban a jobb felső sarokban ült, de a szélesebb skálán
+   ott már a számok futnak.                                          */
+.tabla-sav {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: clamp(42px, 13vw, 54px);
-  height: clamp(42px, 13vw, 54px);
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 66%;
+}
+
+.tabla {
+  flex: none;
+  width: clamp(40px, 12vw, 50px);
+  height: clamp(40px, 12vw, 50px);
   display: grid;
   place-items: center;
   border-radius: 999px;
   background: #ffffff;
   border: 5px solid #d92b1f;
   color: #17171a;
-  font-size: clamp(15px, 4.6vw, 19px);
+  font-size: clamp(14px, 4.2vw, 18px);
   font-weight: 800;
+  padding: 0;
+  cursor: pointer;
 }
 
 /* ------------------------------------------------------- státuszsáv */
@@ -472,6 +554,9 @@ button, input, select { font: inherit; color: inherit; }
 }
 .adat-lbl { font-size: 11px; color: var(--muted); line-height: 1.2; }
 .adat-val { font-size: 16px; font-weight: 700; }
+/* A műszerfalad többet mutat, mint a GPS: ez a sor teszi egyértelművé,
+   hogy nem a mérés téved.                                            */
+.adat-alsor { font-size: 10px; color: var(--muted); line-height: 1.2; }
 
 .projekcio {
   margin: 0;
@@ -491,6 +576,7 @@ button, input, select { font: inherit; color: inherit; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--kartya-arnyek);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -697,20 +783,16 @@ input[type="number"], select {
    sorait és a szakaszlistát is, hogy a határ mindenhol egyformán
    állítható legyen.                                                   */
 
-.tabla { cursor: pointer; padding: 0; font-family: inherit; }
+.tabla { font-family: inherit; }
 .tabla:active { transform: scale(0.96); }
 
-/* A felirat szélesebb, mint a tábla: „megengedett átlag” egy 44 px-es
-   dobozban szótöredékekre esne. Jobbra igazítva marad a tábla alatt. */
+/* A tábla melletti felirat: balra igazítva, két sorban is elfér. */
 .tabla-sugo {
-  position: absolute;
-  top: calc(clamp(42px, 13vw, 54px) + 4px);
-  right: 2px;
-  width: clamp(64px, 22vw, 86px);
-  text-align: center;
   font-size: 10px;
-  line-height: 1.2;
+  line-height: 1.25;
   color: var(--muted);
+  text-align: left;
+  min-width: 0;
 }
 
 .lap {

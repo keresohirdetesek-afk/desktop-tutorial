@@ -124,7 +124,7 @@ export class Terkep {
       const szin = !e ? SZIN.semleges : e.birsagos ? SZIN.birsag : e.tartalek <= 5 ? SZIN.hatar : SZIN.ok;
       L.polyline(resz, { color: szin, weight: 6, opacity: 0.9 })
         .bindTooltip(
-          `${sz.limit} km/h — ${sz.cimke}${e ? `<br>átlag: ${e.mert.toFixed(1).replace('.', ',')} km/h` : ''}`,
+          `${sz.limit} km/h, ${sz.cimke}${e ? `<br>átlag: ${e.mert.toFixed(1).replace('.', ',')} km/h` : ''}`,
           { sticky: true }
         )
         .addTo(this.nyomvonal);
