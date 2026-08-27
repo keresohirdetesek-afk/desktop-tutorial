@@ -111,8 +111,19 @@
 
           <figure class="profil" id="eredmeny-profil" hidden>
             <figcaption>Hol mennyivel haladtál a korlátozáshoz képest</figcaption>
-            <svg id="profil-svg" role="img"
-                 aria-label="Sebességprofil a megtett út mentén"></svg>
+            <div class="profil-vaszon" data-cel="eredmeny">
+              <svg id="profil-svg" role="img"
+                   aria-label="Sebességprofil a megtett út mentén"></svg>
+            </div>
+            <div class="profil-eszkozok" data-cel="eredmeny">
+              <span class="profil-nagyitas" role="group" aria-label="Nagyítás">
+                <button class="zoom-gomb" data-zoom="1" aria-pressed="true">1x</button>
+                <button class="zoom-gomb" data-zoom="2" aria-pressed="false">2x</button>
+                <button class="zoom-gomb" data-zoom="4" aria-pressed="false">4x</button>
+                <button class="zoom-gomb" data-zoom="8" aria-pressed="false">8x</button>
+              </span>
+              <button class="btn ghost small profil-teljes">Teljes képernyőn</button>
+            </div>
             <p class="profil-jel">
               <span class="profil-kulcs felett"></span>a korlátozás felett
               <span class="profil-kulcs alatt"></span>alatta
@@ -359,8 +370,19 @@
 
         <figure class="profil" id="k-profil" hidden>
           <figcaption>Hol mennyivel mennél a korlátozáshoz képest</figcaption>
-          <svg id="k-profil-svg" role="img"
-               aria-label="Sebességprofil a megadott szakaszrészek mentén"></svg>
+          <div class="profil-vaszon" data-cel="kalk">
+            <svg id="k-profil-svg" role="img"
+                 aria-label="Sebességprofil a megadott szakaszrészek mentén"></svg>
+          </div>
+          <div class="profil-eszkozok" data-cel="kalk">
+            <span class="profil-nagyitas" role="group" aria-label="Nagyítás">
+              <button class="zoom-gomb" data-zoom="1" aria-pressed="true">1x</button>
+              <button class="zoom-gomb" data-zoom="2" aria-pressed="false">2x</button>
+              <button class="zoom-gomb" data-zoom="4" aria-pressed="false">4x</button>
+              <button class="zoom-gomb" data-zoom="8" aria-pressed="false">8x</button>
+            </span>
+            <button class="btn ghost small profil-teljes">Teljes képernyőn</button>
+          </div>
           <p class="profil-jel">
             <span class="profil-kulcs felett"></span>a korlátozás felett
             <span class="profil-kulcs alatt"></span>alatta
@@ -558,6 +580,28 @@
 </nav>
 
 <!-- sebességhatár-választó: bárhonnan hívható, egy helyen van definiálva -->
+<div id="profil-lap" class="profil-lap" hidden>
+  <div class="profil-lap-fejlec">
+    <strong id="profil-lap-cim">Sebességprofil</strong>
+    <button id="profil-lap-zar" class="ikon-gomb" aria-label="Bezárás">
+      <svg class="ikon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="profil-vaszon nagy" data-cel="lap">
+    <svg id="profil-lap-svg" role="img" aria-label="Sebességprofil nagyítva"></svg>
+  </div>
+  <div class="profil-eszkozok" data-cel="lap">
+    <span class="profil-nagyitas" role="group" aria-label="Nagyítás">
+      <button class="zoom-gomb" data-zoom="1" aria-pressed="true">1x</button>
+      <button class="zoom-gomb" data-zoom="2" aria-pressed="false">2x</button>
+      <button class="zoom-gomb" data-zoom="4" aria-pressed="false">4x</button>
+      <button class="zoom-gomb" data-zoom="8" aria-pressed="false">8x</button>
+      <button class="zoom-gomb" data-zoom="16" aria-pressed="false">16x</button>
+    </span>
+    <span class="muted small">Fordítsd el a telefont a szélesebb képhez.</span>
+  </div>
+</div>
+
 <div id="limit-lap" class="lap" hidden>
   <div class="lap-hatter" data-zar></div>
   <div class="lap-doboz" role="dialog" aria-modal="true" aria-labelledby="lap-cim">

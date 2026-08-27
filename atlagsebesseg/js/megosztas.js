@@ -5,11 +5,15 @@
    egyetlen módja annak, hogy az eredmény kikerüljön a telefonról, és azt
    is a felhasználó indítja.
 
-   Álló, 1080×1180 képarány: ez fér el a legtöbb közösségi felületen
-   levágás nélkül.                                                       */
+   Álló képarány: ez fér el a legtöbb közösségi felületen levágás nélkül.
+   A sebességprofil is rákerül, mert a képen az a legbeszédesebb rész:
+   egyetlen számnál sokkal többet mond, hogy hol keletkezett az átlag.  */
+
+import { profilVaszonra } from './profil.js';
 
 const SZ = 1080;
-const MA = 1180;
+const PROFIL_MA = 300;      // a grafikon sávjának magassága
+const MA_ALAP = 1180;
 
 const SZIN = {
   hatter: '#0e0e10',
@@ -38,12 +42,16 @@ function kerekDoboz(c, x, y, sz, ma, r) {
 /**
  * @param {{atlag:string, megengedett:string, tav:string, ido:string,
  *          allapot:string, verdikt:string, szakaszok:Array<{limit:number,
- *          tav:number, allapot:string}>}} adat
+ *          tav:number, allapot:string}>, profil?:Array, osszTav?:number}} adat
  * @returns {Promise<Blob>}
  */
 export async function keszitKep(adat) {
   // a saját betűtípus csak akkor kerül a vászonra, ha már betöltött
   try { await document.fonts.ready; } catch { /* nem kritikus */ }
+
+  const vanProfil = !!(adat.profil && adat.profil.length > 1);
+  const ELTOLAS = vanProfil ? PROFIL_MA + 120 : 0;
+  const MA = MA_ALAP + ELTOLAS;
 
   const v = document.createElement('canvas');
   v.width = SZ;
@@ -124,8 +132,27 @@ export async function keszitKep(adat) {
     }
   }
 
+  /* Sebességprofil: a nulla vonal a helyben érvényes korlátozás, ami fölé
+     megy, azzal többel haladt. A felirata is rákerül, hogy a kép magában
+     is érthető legyen.                                                 */
+  const profilY = ky + 750;
+  if (vanProfil) {
+    c.fillStyle = SZIN.szoveg;
+    c.font = `600 30px ${sans}`;
+    c.textAlign = 'left';
+    c.fillText('Hol mennyivel a korlátozáshoz képest', kx, profilY);
+    profilVaszonra(c, adat.profil, {
+      x0: kx, y0: profilY + 20, sz: ksz, ma: PROFIL_MA, osszTav: adat.osszTav,
+      szinek: SZIN, betu: mono,
+    });
+    c.fillStyle = SZIN.halvany;
+    c.font = `400 22px ${sans}`;
+    c.textAlign = 'left';
+    c.fillText('pillanatnyi sebesség a korlátozáshoz mérve, km/h', kx, profilY + PROFIL_MA + 54);
+  }
+
   // verdikt
-  const vy = ky + 730;
+  const vy = ky + 730 + ELTOLAS;
   const szin = ALLAPOT_SZIN[adat.allapot] || SZIN.halvany;
   c.fillStyle = `${szin}22`;
   c.strokeStyle = szin;

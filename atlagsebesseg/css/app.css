@@ -482,7 +482,67 @@ button, input, select { font: inherit; color: inherit; }
    többel haladtál. Így a korlátozás váltása nem billenti meg a képet. */
 .profil { margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .profil figcaption { font-size: 13px; font-weight: 650; }
-.profil svg { display: block; width: 100%; height: auto; }
+
+/* Nagyításkor a rajz szélesebb vászonra kerül, és ez a doboz görgeti.
+   Valódi úton negyven fölötti korlátozásváltás is lehet: telefon
+   szélességében azok menthetetlenül egymásra csúsznának.            */
+.profil-vaszon {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.profil-vaszon svg { display: block; width: 100%; height: auto; }
+
+.profil-eszkozok {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profil-nagyitas {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.zoom-gomb {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.zoom-gomb + .zoom-gomb { border-left: 1px solid var(--border); }
+.zoom-gomb[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* Teljes képernyős nézet: itt fér ki igazán a hosszú szakasz. */
+.profil-lap {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 12px
+           calc(12px + env(safe-area-inset-bottom, 0px));
+}
+.profil-lap-fejlec { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* A nagy nézetben a rajz nem nyúlik: a saját arányát tartja, és a
+   maradék helyen függőlegesen középre kerül. Flex elemként zsugorodna,
+   ezért kap `flex: none`-t és automata margót.                       */
+.profil-vaszon.nagy {
+  flex: none;
+  display: block;
+  margin: auto 0;
+  width: 100%;
+}
 
 .pr-racs { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 4; }
 .pr-nulla { stroke: var(--text); stroke-width: 1.5; opacity: 0.55; }
