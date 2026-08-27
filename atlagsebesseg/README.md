@@ -55,6 +55,14 @@ szöveg írásakor ezt tartsuk.
   zöld a ráhagyás. A felirat kimondja, hogy ez a pillanatnyi sebesség, nem
   a szakaszátlag: a bírság az átlagból lesz, a grafikon azt mutatja meg,
   hol keletkezett az az átlag. Kód: `js/profil.js`.
+- **A grafikon nagyítható.** Valódi úton negyven fölötti korlátozásváltás
+  is előfordul, telefon szélességében ezek egymásra csúsznak. A `1x 2x 4x
+  8x` gombokkal a rajz szélesebb vászonra kerül (a betűk maradnak
+  ugyanakkorák), és oldalt görgethető; ami így sem fér ki, annak a
+  felirata elmarad, a vonása marad. A „Teljes képernyőn" gomb egy külön
+  nézetet nyit 16x-ig, ahol a képernyő magasságához igazodik a rajz.
+- **A grafikon rákerül a megosztható képre is.** A letöltött PNG-n
+  ugyanaz a profil szerepel, mert a képen az a legbeszédesebb rész.
 - **A műszerfalad többet mutat, mint a GPS.** A kilométeróra jogszabály
   szerint sosem mutathat kevesebbet a tényleges sebességnél, felfelé
   viszont eltérhet: legfeljebb a valós érték 110%-a plusz 4 km/h

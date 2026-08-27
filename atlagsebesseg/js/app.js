@@ -42,6 +42,13 @@ const S = {
   lekeresFut: false,
   lekeresAllapot: 'nincs',   // nincs | fut | kesz | hiba
   kalkSorok: [{ hossz: 10, limit: 90 }],
+  /* A sebességprofilok mintája és nagyítása. A minta azért él itt, hogy a
+     nagyítás és a teljes képernyős nézet újra tudja rajzolni.         */
+  profil: {
+    eredmeny: { minta: null, osszTav: 0, nagyitas: 1 },
+    kalk: { minta: null, osszTav: 0, nagyitas: 1 },
+    lap: { forras: null, nagyitas: 1 },
+  },
 };
 
 // A magyar közutakon előforduló korlátozások — ezek jönnek fel koppintásra.
@@ -672,8 +679,7 @@ function eredmenyKartya(eredmeny) {
   /* A profil a nyomvonalból készül, ezért csak GPS-mérés után van mit
      rajzolni: pár fixből még nem jön ki értelmes görbe.              */
   const minta = profilMinta(meres.pontok, eredmeny.szakaszok);
-  $('eredmeny-profil').hidden =
-    !profilRajz($('profil-svg'), minta, { osszTav: eredmeny.osszTav });
+  $('eredmeny-profil').hidden = !profilAllit('eredmeny', minta, eredmeny.osszTav);
 }
 
 /* ============================================================ élő nézet */
@@ -843,9 +849,7 @@ function kalkSzamol() {
   $('k-st-cimke').textContent = STATUSZ[allapot].cimke;
 
   utsavRender(eredmeny);
-  $('k-profil').hidden = !profilRajz(
-    $('k-profil-svg'), profilSorokbol(sorok, atlag), { osszTav }
-  );
+  $('k-profil').hidden = !profilAllit('kalk', profilSorokbol(sorok, atlag), osszTav);
 
   verdiktRender($('k-verdikt'), eredmeny);
   szakaszLista($('k-reszletek'), eredmeny, { szerkesztheto: false });
@@ -938,6 +942,69 @@ function utsavCimkek(sav = $('k-utsav')) {
     resz.classList.toggle('szuk', resz.getBoundingClientRect().width < 48);
   }
   sav.classList.toggle('gorgetheto', sav.scrollWidth > sav.clientWidth + 1);
+}
+
+/* ------------------------------------------------------ sebességprofil */
+
+const PROFIL_SVG = {
+  eredmeny: 'profil-svg',
+  kalk: 'k-profil-svg',
+  lap: 'profil-lap-svg',
+};
+
+/** Elteszi a mintát, és kirajzolja a hozzá tartozó grafikont. */
+function profilAllit(cel, minta, osszTav) {
+  const p = S.profil[cel];
+  p.minta = minta;
+  p.osszTav = osszTav;
+  return profilUjra(cel);
+}
+
+function profilUjra(cel) {
+  const p = S.profil[cel];
+  if (!p.minta) return false;
+  const van = profilRajz($(PROFIL_SVG[cel]), p.minta, {
+    osszTav: p.osszTav,
+    nagyitas: p.nagyitas,
+  });
+  zoomGombok(cel, p.nagyitas);
+  return van;
+}
+
+function zoomGombok(cel, nagyitas) {
+  document
+    .querySelectorAll(`.profil-eszkozok[data-cel="${cel}"] .zoom-gomb`)
+    .forEach((g) => g.setAttribute('aria-pressed', String(Number(g.dataset.zoom) === nagyitas)));
+}
+
+/** Teljes képernyős nézet: itt fér ki a hosszú szakasz. */
+function profilLapNyit(forras) {
+  const f = S.profil[forras];
+  if (!f.minta) return;
+  S.profil.lap = { forras, nagyitas: Math.max(2, f.nagyitas), minta: f.minta, osszTav: f.osszTav };
+  $('profil-lap').hidden = false;
+  // a teljes képernyőn magasabb rajz fér el
+  profilLapRajz();
+}
+
+function profilLapRajz() {
+  const p = S.profil.lap;
+  /* A rajz arányát a rendelkezésre álló dobozhoz szabjuk, hogy állított
+     telefonon is kitöltse a képernyőt, fektetve pedig szélesebb legyen. */
+  const doboz = $('profil-lap').querySelector('.profil-vaszon.nagy');
+  const sz = doboz.clientWidth || 320;
+  const ma = doboz.parentElement.clientHeight - 96;
+  const magassag = Math.round(Math.min(340, Math.max(180, (320 * ma) / sz)));
+  profilRajz($('profil-lap-svg'), p.minta, {
+    osszTav: p.osszTav,
+    nagyitas: p.nagyitas,
+    magassag,
+  });
+  zoomGombok('lap', p.nagyitas);
+}
+
+function profilLapZar() {
+  $('profil-lap').hidden = true;
 }
 
 /* ============================================================ OSM lekérés */
@@ -1127,6 +1194,9 @@ function esemenyek() {
             ? 'birsag'
             : sz.ertekeles.tartalek <= 5 ? 'hatar' : 'ok',
         })),
+        // ugyanaz a minta, amit a képernyőn is látsz
+        profil: S.profil.eredmeny.minta,
+        osszTav: S.profil.eredmeny.osszTav,
       });
       const eredmeny = await megoszt(blob);
       allapot.textContent = eredmeny === 'letoltve'
@@ -1262,8 +1332,27 @@ function esemenyek() {
     });
   });
 
+  document.querySelectorAll('.zoom-gomb').forEach((gomb) => {
+    gomb.addEventListener('click', () => {
+      const cel = gomb.closest('.profil-eszkozok').dataset.cel;
+      S.profil[cel].nagyitas = Number(gomb.dataset.zoom);
+      if (cel === 'lap') profilLapRajz(); else profilUjra(cel);
+    });
+  });
+  document.querySelectorAll('.profil-teljes').forEach((gomb) => {
+    gomb.addEventListener('click', () =>
+      profilLapNyit(gomb.closest('.profil-eszkozok').dataset.cel));
+  });
+  $('profil-lap-zar').addEventListener('click', profilLapZar);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('profil-lap').hidden) profilLapZar();
+  });
+
   // Elforgatáskor és ablakméretezéskor a szakaszsáv feliratai újraszámolnak.
-  window.addEventListener('resize', () => utsavCimkek());
+  window.addEventListener('resize', () => {
+    utsavCimkek();
+    if (!$('profil-lap').hidden) profilLapRajz();
+  });
 }
 
 const TEMA_IKON = { rendszer: '#i-tema-auto', vilagos: '#i-sun', sotet: '#i-moon' };
