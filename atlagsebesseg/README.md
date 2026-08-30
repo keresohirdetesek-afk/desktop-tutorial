@@ -63,6 +63,16 @@ szöveg írásakor ezt tartsuk.
   nézetet nyit 16x-ig, ahol a képernyő magasságához igazodik a rajz.
 - **A grafikon rákerül a megosztható képre is.** A letöltött PNG-n
   ugyanaz a profil szerepel, mert a képen az a legbeszédesebb rész.
+- **Egyetlen műszer mondja meg, lassíts-e.** Menet közben egy kérdés van:
+  gyorsabban vagy lassabban? A gyűrű a *pillanatnyi* sebességet rajzolja,
+  a színe pedig a **tartható tempóhoz** méri: az az a sebesség, amivel a
+  szakasz hátralévő részét megtéve az átlagod épp a megengedetten marad
+  (`celTempo()`). A tartható tempót világos jel mutatja a gyűrűn, a
+  szakaszátlagot karikás Ø jel ugyanott, a bírság szerinti színnel.
+  A nagy szám a pillanatnyi sebesség, fölötte kicsiben a szakaszátlag,
+  a lábsorban pedig egyetlen utasítás: LASSÍTS / TARTSD / MEHETSZ, a
+  célsebességgel. A cél sosem lehet több a helyi korlátozásnál, akkor sem,
+  ha az átlagba még beleférne.
 - **A műszerfalad többet mutat, mint a GPS.** A kilométeróra jogszabály
   szerint sosem mutathat kevesebbet a tényleges sebességnél, felfelé
   viszont eltérhet: legfeljebb a valós érték 110%-a plusz 4 km/h

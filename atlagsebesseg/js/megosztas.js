@@ -22,12 +22,67 @@ const SZIN = {
   szoveg: '#f2f3f5',
   halvany: '#9a9aa4',
   narancs: '#ff6a1f',
+  marka: '#e8332a',
   ok: '#35c46a',
   hatar: '#ffb020',
   birsag: '#ff4d43',
 };
 
 const ALLAPOT_SZIN = { ok: SZIN.ok, hatar: SZIN.hatar, birsag: SZIN.birsag, semleges: SZIN.halvany };
+
+/* A jelkép vászonra: ugyanaz a rajz, mint a fejlécben, csak kézzel
+   megrajzolva. A képet a böngésző készíti, ide nem tölthetünk be SVG-t
+   anélkül, hogy a vászon idegen tartalommal szennyeződne.            */
+function jelkepVaszonra(c, x, y, meret) {
+  const k = meret / 512;
+  const p = (vx, vy) => [x + vx * k, y + vy * k];
+
+  c.save();
+  // út
+  c.beginPath();
+  c.moveTo(...p(228, 316));
+  c.lineTo(...p(284, 316));
+  c.lineTo(...p(474, 472));
+  c.lineTo(...p(38, 472));
+  c.closePath();
+  c.fillStyle = SZIN.szoveg;
+  c.fill();
+
+  // mérőív: sötét fő szakasz és piros vég
+  const iv = (tol, ig, szin) => {
+    c.beginPath();
+    c.arc(...p(256, 300), 160 * k, tol, ig);
+    c.strokeStyle = szin;
+    c.lineWidth = 44 * k;
+    c.lineCap = 'round';
+    c.stroke();
+  };
+  iv(Math.PI, -Math.PI * 0.31, SZIN.szoveg);
+  iv(-Math.PI * 0.28, -Math.PI * 0.04, SZIN.marka);
+
+  // mutató
+  c.beginPath();
+  c.moveTo(...p(256, 300));
+  c.lineTo(...p(366, 190));
+  c.strokeStyle = SZIN.marka;
+  c.lineWidth = 26 * k;
+  c.stroke();
+  c.beginPath();
+  c.arc(...p(256, 300), 26 * k, 0, Math.PI * 2);
+  c.fillStyle = SZIN.marka;
+  c.fill();
+
+  // kapuk: bal a szakasz eleje, jobb a vége
+  const kapu = (bx, szeles, szin) => {
+    c.fillStyle = szin;
+    c.fillRect(...p(bx, 292), szeles * k, 46 * k);
+    c.fillRect(...p(bx + 6, 338), 28 * k, 118 * k);
+    c.fillRect(...p(bx + szeles - 34, 338), 28 * k, 118 * k);
+  };
+  kapu(70, 140, SZIN.marka);
+  kapu(316, 126, SZIN.szoveg);
+  c.restore();
+}
 
 function kerekDoboz(c, x, y, sz, ma, r) {
   c.beginPath();
@@ -63,16 +118,14 @@ export async function keszitKep(adat) {
   c.fillStyle = SZIN.hatter;
   c.fillRect(0, 0, SZ, MA);
 
-  // fejléc
-  c.fillStyle = SZIN.narancs;
-  c.font = `700 42px ${mono}`;
+  // fejléc: jelkép és szóvédjegy
+  jelkepVaszonra(c, 76, 40, 88);
+  c.fillStyle = SZIN.marka;
+  c.font = `italic 800 44px ${sans}`;
   c.textAlign = 'left';
-  c.fillText('[á]', 80, 110);
+  c.fillText('átlag', 182, 112);
   c.fillStyle = SZIN.szoveg;
-  c.font = `600 42px ${sans}`;
-  c.fillText('átlagsebesség', 168, 110);
-  c.fillStyle = SZIN.narancs;
-  c.fillText('.hu', 168 + c.measureText('átlagsebesség').width, 110);
+  c.fillText('sebesség.hu', 182 + c.measureText('átlag').width, 112);
 
   if (adat.szakaszNev) {
     c.fillStyle = SZIN.halvany;
