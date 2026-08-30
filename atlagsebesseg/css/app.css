@@ -20,6 +20,8 @@
   --warn: #ffbe4d;
   --radius: 16px;
   --kartya-arnyek: none;
+  /* a logó pirosa: márkaszín, témától független */
+  --marka: #e8332a;
 
   /* A státuszsáv a műszerfal jelzőfénye: sötétben mély alapon világít,
      nem fehér táblaként vakít; nappal fordítva olvas jobban.          */
@@ -53,6 +55,7 @@
   --ok: #1a7f45;
   --warn: #a86400;
 
+  --marka: #d5211a;
   --band-ok-bg: #c9f0d4;
   --band-ok-ink: #0d2a17;
   --band-ok-keret: #7ed39a;
@@ -122,23 +125,28 @@ button, input, select { font: inherit; color: inherit; }
   border-bottom: 1px solid var(--border);
 }
 
+/* A jelkép sötét részei a szövegszínt veszik fel, így mindkét témában
+   megmarad a kontraszt; a piros a márkaszín, az marad. */
 #topbar .logo {
-  font: 700 17px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--accent);
-  letter-spacing: -0.5px;
+  width: 38px;
+  height: 31px;
+  flex: none;
+  color: var(--text);
 }
 
+/* A szóvédjegy a logó szerint: dőlt, az „átlag” piros, a többi sötét. */
 #topbar h1 {
   flex: 1;
   margin: 0;
-  font-size: 17px;
-  font-weight: 650;
-  letter-spacing: -0.2px;
+  font-size: 18px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: -0.4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-#topbar .tld { color: var(--accent); }
+#topbar .wm-elso { color: var(--marka); }
 
 .gps-pill {
   display: inline-flex;
@@ -442,16 +450,22 @@ button, input, select { font: inherit; color: inherit; }
 }
 .ora-cimke.birsag { fill: var(--m-birsag); opacity: 0.85; }
 
-/* a korlátozás helye: világos vonás a gyűrűn át */
-.ora-limitjel { stroke: var(--text); stroke-width: 3; stroke-linecap: round; }
+/* A tartható tempó jele: eddig mehetsz. Ez a műszer legfontosabb
+   pontja, ezért világos és van külső csücske is. */
+.ora-cel { stroke: var(--text); stroke-width: 3.5; stroke-linecap: round; }
+.ora-cel-csucs { fill: var(--text); }
+
+/* A szakaszátlag ugyanazon a gyűrűn, karikás jellel: a bírság ebből
+   lesz, ezért a bírság szerinti színt viseli. */
+.ora-atlagjel { fill: var(--bg); stroke: var(--m-semleges); stroke-width: 3.5; }
+.ora-atlagjel.ok { stroke: var(--m-ok); }
+.ora-atlagjel.hatar { stroke: var(--m-hatar); }
+.ora-atlagjel.birsag { stroke: var(--m-birsag); }
 
 /* a világító ív elülső éle, mint a gyári műszeren a fényes perem */
 .ora-forgo { transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
 .ora-el { stroke: #ffffff; stroke-width: 3; opacity: 0.85; }
 :root[data-theme="light"] .ora-el { stroke: #ffffff; opacity: 0.95; }
-
-/* a pillanatnyi sebesség jele a gyűrű belső élén */
-.ora-pill-jel { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
 
 .ora-cim {
   fill: var(--muted);
@@ -475,6 +489,16 @@ button, input, select { font: inherit; color: inherit; }
   font-size: 13px;
   font-weight: 500;
 }
+
+/* a szakaszátlag a nagy szám alatt, a bírság szerinti színben */
+.ora-masod {
+  fill: var(--muted);
+  font-size: 20px;
+  font-weight: 700;
+}
+.ora-masod.ok { fill: var(--m-ok); }
+.ora-masod.hatar { fill: var(--m-hatar); }
+.ora-masod.birsag { fill: var(--m-birsag); }
 
 /* ------------------------------------------------ sebességprofil */
 
@@ -579,24 +603,34 @@ button, input, select { font: inherit; color: inherit; }
   max-width: 92%;
 }
 
-/* A pillanatnyi sebesség a műszer lábsorában, a nagy szám mellett:
-   a középső nagy szám a szakaszátlagé marad, de a most mért érték is
-   ott van, ahová a szem amúgy is néz.                               */
-.most-doboz {
+/* Az utasítás: menet közben ez az egyetlen dolog, amit el kell olvasni.
+   Egy szó és egy szám, színnel megerősítve.                          */
+.utasitas {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.1;
-  margin-left: 10px;
+  align-items: center;
+  line-height: 1.05;
+  margin-left: auto;
+  padding: 5px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
 }
-.most-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.18em; color: var(--muted); }
-.most-val {
+.utasitas-szo { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; }
+.utasitas-val {
   font-family: 'Muszer', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text);
 }
+.utasitas.lassits { border-color: var(--danger); background: var(--band-birsag-bg); color: var(--band-birsag-ink); }
+.utasitas.lassits .utasitas-val { color: var(--band-birsag-ink); }
+.utasitas.tartsd { border-color: var(--warn); background: var(--band-hatar-bg); color: var(--band-hatar-ink); }
+.utasitas.tartsd .utasitas-val { color: var(--band-hatar-ink); }
+.utasitas.mehetsz { border-color: var(--ok); background: var(--band-ok-bg); color: var(--band-ok-ink); }
+.utasitas.mehetsz .utasitas-val { color: var(--band-ok-ink); }
 
 .tabla {
   flex: none;

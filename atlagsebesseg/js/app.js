@@ -293,6 +293,46 @@ function birsagOsszeg(eredmeny) {
   return eredmeny.legsulyosabb.ertekeles.osszeg;
 }
 
+/* ---------------------------------------------------- tartható tempó
+
+   Menet közben egyetlen kérdés számít: lassítsak, vagy mehetek gyorsabban?
+   A válasz az a tempó, amivel a szakasz hátralévő részét megtéve az
+   átlagod épp a megengedetten marad.
+
+   Ha nincs kijelölt végpont, nem tudjuk, mennyi van hátra. Ilyenkor a cél
+   a helyben érvényes korlátozás: ennél gyorsabban menni sosem jó tanács.
+   A célt egyébként is a korlátozásra vágjuk, mert az app nem küldhet
+   senkit a tábla fölé, akkor sem, ha az átlagba még beleférne.        */
+function celTempo(eredmeny) {
+  const helyLimit = aktualisHatar().limit;
+  const vege = S.kapuk.end;
+  if (meres.allapot !== ALLAPOT.MER || !vege || !meres.utolso ||
+      eredmeny.szakaszok.length === 0) {
+    return { seb: helyLimit, tipus: 'limit' };
+  }
+  const hatra = haversine(meres.utolso, vege);
+  if (hatra < 100) return { seb: helyLimit, tipus: 'limit' };
+
+  const megengedett = megengedettAtlag(eredmeny);
+  const teljes = meres.tav + hatra;
+  const megengedettIdo = (teljes / (megengedett / 3.6)) * 1000;
+  const maradek = megengedettIdo - meres.ido;
+  if (maradek <= 0) return { seb: 0, tipus: 'lehetetlen' };
+
+  const seb = (hatra / (maradek / 1000)) * 3.6;
+  return seb >= helyLimit
+    ? { seb: helyLimit, tipus: 'limit' }
+    : { seb, tipus: 'szakasz' };
+}
+
+/** A gyűrű színe: a pillanatnyi sebesség a tartható tempóhoz mérve. */
+function celAllapot(most, cel) {
+  if (!(cel > 0) || !(most > 0)) return 'semleges';
+  if (most > cel + 5) return 'birsag';
+  if (most > cel + 1) return 'hatar';
+  return 'ok';
+}
+
 /* ------------------------------------------- sebességhatár-választó */
 
 function limitLapNyit({ cim, alcim, ertek, osmGomb, onValaszt, onOsm }) {
@@ -524,13 +564,22 @@ function oraEsStatusz(eredmeny) {
   const hatar = birsagHatarAtlag(eredmeny);
 
   const fut = meres.allapot === ALLAPOT.MER;
+  const most = fut && meres.utolso ? meres.pillanatnyi : null;
+  const cel = celTempo(eredmeny);
+  /* A gyűrű a pillanatnyi sebességet rajzolja, és a színe a tartható
+     tempóhoz méri. Ha nem megy a mérés, marad a szakaszátlag képe. */
+  const gyuruAllapot = most ? celAllapot(most, cel.seb) : allapot;
+
   ora.frissit({
-    ertek: van ? eredmeny.osszAtlag : 0,
-    pillanat: fut && meres.utolso ? meres.pillanatnyi : null,
+    most,
+    atlag: van ? eredmeny.osszAtlag : 0,
+    cel: cel.seb,
     limit: Math.round(megengedett),
     birsagHatar: Math.round(hatar),
-    allapot,
+    allapot: gyuruAllapot,
+    atlagAllapot: allapot,
   });
+  utasitasFrissit(most, cel);
 
   const hely = aktualisHatar();
   $('ora-tabla').textContent = fmtLimit(hely.limit);
@@ -556,10 +605,6 @@ function oraEsStatusz(eredmeny) {
 
   $('ki-atlag').textContent = van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '-';
   $('ki-pill').textContent = meres.utolso ? `${fmtSpeed(meres.pillanatnyi)} km/h` : '-';
-  const vanPill = !!meres.utolso && meres.pillanatnyi > 0;
-  $('most-doboz').hidden = !vanPill;
-  // a műszerfalon kerek szám áll, tizedes nélkül
-  if (vanPill) $('most-val').textContent = String(Math.round(meres.pillanatnyi));
   /* A GPS a tényleges sebességet méri, a kilométeróra viszont törvény
      szerint sosem mutathat kevesebbet a valósnál. Ezért a műszerfalon
      rendre nagyobb szám áll, és ilyenkor nem a mérés téved.          */
@@ -575,6 +620,31 @@ function oraEsStatusz(eredmeny) {
   $('ki-melleklet').textContent =
     `Táv: ${fmtDistance(meres.tav)} · GPS: ` +
     (meres.utolso ? `±${Math.round(meres.utolso.acc)} m` : '-');
+}
+
+/* Az utasítás: egyetlen szó és egy szám. Vezetés közben ennyi fér bele.
+   A „tartsd” sáv szándékosan széles (a cél alatt 4 km/h-ig), különben a
+   GPS ingadozásától folyton váltana a szöveg.                        */
+function utasitasFrissit(most, cel) {
+  const doboz = $('utasitas');
+  if (!(most > 0)) {
+    doboz.hidden = true;
+    return;
+  }
+  doboz.hidden = false;
+
+  if (cel.tipus === 'lehetetlen') {
+    doboz.className = 'utasitas lassits';
+    $('utasitas-szo').textContent = 'MÁR NEM FÉR BE';
+    $('utasitas-val').textContent = '-';
+    return;
+  }
+  const kul = most - cel.seb;
+  const mod = kul > 1 ? 'lassits' : kul < -4 ? 'mehetsz' : 'tartsd';
+  doboz.className = `utasitas ${mod}`;
+  $('utasitas-szo').textContent =
+    mod === 'lassits' ? 'LASSÍTS' : mod === 'mehetsz' ? 'MEHETSZ' : 'TARTSD';
+  $('utasitas-val').textContent = String(Math.round(cel.seb));
 }
 
 /* Vezetés közben a képernyőt nem nézi senki, ezért az állapotváltást
@@ -770,7 +840,7 @@ function kalkSzamol() {
   }
 
   if (osszTav <= 0 || osszIdo <= 0) {
-    kalkOra.frissit({ ertek: 0, pillanat: null, limit: 90, birsagHatar: 105, allapot: 'semleges' });
+    kalkOra.frissit({ most: null, atlag: 0, cel: 0, limit: 90, birsagHatar: 105, allapot: 'semleges' });
     $('k-tabla').textContent = '-';
     $('k-statuszsav').className = 'statuszsav semleges';
     $('k-st-fo').textContent = 'ÁTLAGSEBESSÉG: -';
@@ -792,7 +862,7 @@ function kalkSzamol() {
      idő vagy hossz hibás, és bírságot számolni rá félrevezető lenne.   */
   if (atlag > MAX_SEBESSEG) {
     kalkOra.frissit({
-      ertek: MAX_SEBESSEG, pillanat: null,
+      most: null, atlag: MAX_SEBESSEG, cel: 0,
       limit: Math.round(sorok[0].limit), birsagHatar: Math.round(sorok[0].limit) + 20,
       allapot: 'semleges',
     });
@@ -829,8 +899,9 @@ function kalkSzamol() {
   const allapot = allapotJel(eredmeny);
 
   kalkOra.frissit({
-    ertek: atlag,
-    pillanat: null,
+    most: null,
+    atlag,
+    cel: megengedett,
     limit: Math.round(megengedett),
     birsagHatar: Math.round(birsagHatarAtlag(eredmeny)),
     allapot,
