@@ -43,10 +43,40 @@ export function pointToSegment(p, a, b) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/**
+ * A célhoz legközelebbi pont az a-b szakaszon, időben is arányosan.
+ * A kapudetektáláshoz kell: a fixek közé eső elhaladás pillanatát így
+ * fix-pontosság helyett a szakaszon belül tudjuk megadni.
+ */
+export function vetitSzakaszra(cel, a, b) {
+  const P = planar(cel, cel.lat);
+  const A = planar(a, cel.lat);
+  const B = planar(b, cel.lat);
+  const vx = B.x - A.x;
+  const vy = B.y - A.y;
+  const len2 = vx * vx + vy * vy;
+  let t = 0;
+  if (len2 > 0) t = ((P.x - A.x) * vx + (P.y - A.y) * vy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return {
+    lat: a.lat + (b.lat - a.lat) * t,
+    lon: a.lon + (b.lon - a.lon) * t,
+    t: Math.round(a.t + (b.t - a.t) * t),
+    acc: Math.max(a.acc || 0, b.acc || 0),
+    spd: b.spd,
+  };
+}
+
 /** Halmozott távolságok a nyomvonal mentén (az első elem mindig 0). */
 export function cumulative(points) {
   const out = [0];
-  for (let i = 1; i < points.length; i++) out.push(out[i - 1] + haversine(points[i - 1], points[i]));
+  for (let i = 1; i < points.length; i++) {
+    /* A `hezag` jelű pontnál a vevő ugrott, nem a jármű ment: az oda
+       vezető szakasz nem megtett út. Máshonnan érkező pontokon ilyen
+       mező nincs, ott ez nem változtat semmin.                       */
+    const d = points[i].hezag ? 0 : haversine(points[i - 1], points[i]);
+    out.push(out[i - 1] + d);
+  }
   return out;
 }
 

@@ -175,10 +175,13 @@ export class Ora {
     this.animacio = null;
   }
 
-  /** A nagy szám átszámlál az új értékre, hogy a műszer élőnek hasson. */
-  #szamlal(cel) {
+  /** A nagy szám átszámlál az új értékre, hogy a műszer élőnek hasson.
+      Az élő sebességnél viszont nincs átszámlálás: ott a késleltetés
+      hamis képet adna arról, hogy éppen milyen gyorsan mész.        */
+  #szamlal(cel, azonnal = false) {
     const kerek = Math.round(cel);
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (azonnal || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      cancelAnimationFrame(this.animacio);
       this.mutatottErtek = kerek;
       this.ertekSzoveg.textContent = String(kerek);
       return;
@@ -283,7 +286,7 @@ export class Ora {
     this.elG.style.visibility = vanFo ? 'visible' : 'hidden';
 
     if (vanFo) {
-      this.#szamlal(fo);
+      this.#szamlal(fo, vanMost);
     } else {
       this.mutatottErtek = 0;
       this.ertekSzoveg.textContent = '-';

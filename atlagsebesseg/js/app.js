@@ -745,6 +745,9 @@ function eredmenyKartya(eredmeny) {
   if (eredmeny.birsagosak.length) sorok.push(['Bírság', fmtForint(birsagOsszeg(eredmeny))]);
   $('eredmeny-adatok').innerHTML = sorok.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   verdiktRender($('eredmeny-verdikt'), eredmeny);
+  /* Ha a GPS kiesett és a kimaradt szakaszt nem számoltuk bele, azt ki
+     kell mondani: az eredmény ilyenkor a valósnál kevesebb utat mutat. */
+  $('eredmeny-hianyos').hidden = !meres.hianyos;
 
   /* A profil a nyomvonalból készül, ezért csak GPS-mérés után van mit
      rajzolni: pár fixből még nem jön ki értelmes görbe.              */
@@ -1177,6 +1180,14 @@ function jelolMod(mod) {
   }
 }
 
+/** Mérés indítása a jelenlegi kapukkal. */
+function meresIndit() {
+  S.felulir.clear();
+  elozoAllapot = 'semleges';
+  gong.ebreszt();          // hangot csak felhasználói mozdulat után enged a böngésző
+  meres.indit({ ...S.kapuk });
+}
+
 function ujSzimulacio() {
   meres.leallit();
   meres.reset();
@@ -1212,12 +1223,19 @@ function esemenyek() {
 
   document.querySelectorAll('#limit-lap [data-zar]').forEach((n) =>
     n.addEventListener('click', limitLapZar));
-  $('limit-egyeni-ok').addEventListener('click', () => {
+  /* Az egyéni érték a gombbal és Enterrel is beállítható: a telefon
+     billentyűzetén a „kész” gomb ezt küldi, és bosszantó, ha nem történik
+     tőle semmi. Az értéket észszerű sávba vágjuk: elgépelt 900-ra nem
+     számolunk bírságot.                                                */
+  const egyeniBeallit = () => {
     const v = parseInt($('limit-egyeni').value, 10);
-    if (v > 0 && lapValaszt) {
-      lapValaszt(v);
-      limitLapZar();
-    }
+    if (!(v > 0) || !lapValaszt) return;
+    lapValaszt(Math.min(150, Math.max(5, v)));
+    limitLapZar();
+  };
+  $('limit-egyeni-ok').addEventListener('click', egyeniBeallit);
+  $('limit-egyeni').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); egyeniBeallit(); }
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('limit-lap').hidden) limitLapZar();
@@ -1232,12 +1250,7 @@ function esemenyek() {
 
   $('btn-meres').addEventListener('click', () => {
     if (meres.allapot === ALLAPOT.VAR || meres.allapot === ALLAPOT.MER) meres.leallit();
-    else {
-      S.felulir.clear();
-      elozoAllapot = 'semleges';
-      gong.ebreszt();          // hangot csak felhasználói mozdulat után enged a böngésző
-      meres.indit({ ...S.kapuk });
-    }
+    else meresIndit();
   });
 
   $('btn-megoszt').addEventListener('click', async () => {
@@ -1281,7 +1294,13 @@ function esemenyek() {
   });
 
   $('btn-ujra').addEventListener('click', ujSzimulacio);
-  $('btn-ujra-szakasz').addEventListener('click', ujSzimulacio);
+  /* „Újra ezen a szakaszon”: a gomb neve azt ígéri, hogy indul is. Ha
+     csak nullázna, a felhasználó a kész képernyőn állna, és keresné,
+     hol lehet újrakezdeni.                                            */
+  $('btn-ujra-szakasz').addEventListener('click', () => {
+    ujSzimulacio();
+    meresIndit();
+  });
   $('btn-uj-szimulacio').addEventListener('click', () => {
     ujSzimulacio();
     eloNezet(false);
