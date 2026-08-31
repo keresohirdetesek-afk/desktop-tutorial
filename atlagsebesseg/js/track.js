@@ -8,7 +8,7 @@
 
    A pontokat csak a memóriában tartjuk — semmi nem kerül lemezre.        */
 
-import { haversine, MAX_SEBESSEG } from './geo.js';
+import { haversine, pointToSegment, vetitSzakaszra, MAX_SEBESSEG } from './geo.js';
 
 const MAX_PONTATLANSAG = 60;  // m — ennél rosszabb GPS-fixet eldobunk
 const MIN_LEPES = 4;          // m — ennél kisebb elmozdulás nem új pont
@@ -41,8 +41,10 @@ export class Meres {
     this.vegTav = null;      // távolság a szakasz végétől
     this.kozelites = null;   // legkisebb eddigi távolság a figyelt ponttól
     this.kozelitoPont = null;
+    this.kapuElozo = null;   // az előző nyers fix a kapuvizsgálathoz
     this.allasKezdet = null;   // mióta állunk a végponti kapun belül
     this.eldobott = 0;        // egymás utáni, ugrásnak tűnő fixek
+    this.hianyos = false;     // volt-e olyan GPS-kiesés, ami kihagyott utat
     this.uzenet = '';
     // csak a valódi gond kerül a felületre; a szokásos állapotot a
     // szakaszpanel mondja el, azt nem kell megismételni
@@ -80,9 +82,15 @@ export class Meres {
     this.onChange(this);
   }
 
+  /* A megtett út. A `hezag` jelű pontokat nem kötjük az előzőhöz: oda a
+     vevő ugrott, nem a jármű ment. Az ilyen szakasz hossza kimarad, az
+     eredmény pedig megjelöltté válik.                                 */
   get tav() {
     let d = 0;
-    for (let i = 1; i < this.pontok.length; i++) d += haversine(this.pontok[i - 1], this.pontok[i]);
+    for (let i = 1; i < this.pontok.length; i++) {
+      if (this.pontok[i].hezag) continue;
+      d += haversine(this.pontok[i - 1], this.pontok[i]);
+    }
     return d;
   }
 
@@ -138,20 +146,33 @@ export class Meres {
   /* A kezdő- és végpontnál nem az számít, mikor lépünk be a körbe, hanem
      a legközelebbi elhaladás pillanata: addig figyeljük a távolságot, amíg
      újra növekedni nem kezd. Így a mérés kezdete és vége néhány méteren
-     belül pontos, nem a kör szélén billen.                              */
+     belül pontos, nem a kör szélén billen.
+
+     A vizsgálat nem a fixekre, hanem a két fix közötti szakaszra megy.
+     130-cal haladva két fix között 70 méter is lehet, a kapu köre pedig
+     60 méteres: pusztán a fixek távolságát nézve a kapu kimaradhatna, és
+     a mérés sosem zárulna le. A találat pontja a szakaszra vetített
+     legközelebbi pont, arányosan interpolált idővel.                  */
   #kapu(p, cel) {
-    const d = haversine(p, cel);
     const sugar = this.szakasz.sugar;
-    if (d <= sugar) {
-      if (this.kozelites === null || d < this.kozelites) {
-        this.kozelites = d;
-        this.kozelitoPont = p;
-      } else if (d > this.kozelites + 5) {
-        const talalat = this.kozelitoPont;
-        this.kozelites = null;
-        this.kozelitoPont = null;
-        return talalat;
-      }
+    const d = haversine(p, cel);
+    const elozo = this.kapuElozo;
+    this.kapuElozo = p;
+
+    const szakaszTav = elozo ? pointToSegment(cel, elozo, p) : d;
+    if (szakaszTav <= sugar && (this.kozelites === null || szakaszTav < this.kozelites)) {
+      this.kozelites = szakaszTav;
+      this.kozelitoPont = elozo ? vetitSzakaszra(cel, elozo, p) : p;
+    }
+
+    /* Ha egyszer megközelítettük és már távolodunk, a kapu megvan. Ez
+       akkor is teljesül, ha a következő fix már jóval a körön kívül van. */
+    if (this.kozelites !== null && d > this.kozelites + 5) {
+      const talalat = this.kozelitoPont;
+      this.kozelites = null;
+      this.kozelitoPont = null;
+      this.kapuElozo = null;
+      return talalat;
     }
     return null;
   }
@@ -161,6 +182,10 @@ export class Meres {
     const talalat = this.#kapu(p, this.szakasz.start);
     if (talalat) {
       this.allapot = ALLAPOT.MER;
+      // a végkapu figyelése tiszta lappal indul
+      this.kozelites = null;
+      this.kozelitoPont = null;
+      this.kapuElozo = null;
       this.pontok = [talalat];
       this.uzenet = 'Áthaladtál a szakasz elején, a mérés elindult.';
       if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
@@ -172,7 +197,10 @@ export class Meres {
   #meres(p) {
     const utolsoPont = this.pontok[this.pontok.length - 1];
 
-    // GPS-ugrás kiszűrése: autóval 250 km/h fölött nem közlekedünk
+    /* GPS-ugrás kiszűrése: autóval 250 km/h fölött nem közlekedünk. Néhány
+       eldobás után mégis elfogadunk egy fixet, különben egy hosszabb
+       kiesés után végleg elakadnánk.                                   */
+    let hezag = false;
     if (utolsoPont && this.#ugras(utolsoPont, p)) {
       this.eldobott++;
       if (this.eldobott <= MAX_ELDOBAS) {
@@ -180,6 +208,15 @@ export class Meres {
         this.figyelmeztet = true;
         return;
       }
+      /* Ennyi eldobás után folytatnunk kell, de a közbeeső szakaszt csak
+         akkor számítjuk megtett útnak, ha az eltelt idő alatt egyáltalán
+         megtehető lett volna. Ha nem, a vevő ugrott: a táv kimarad, és a
+         mérést megjelöljük, mert onnantól nem teljes.                  */
+      hezag = true;
+      this.hianyos = true;
+      this.uzenet =
+        'GPS-kiesés volt: a kimaradt szakasz nem számít bele a távba.';
+      this.figyelmeztet = true;
     }
     this.eldobott = 0;
 
@@ -188,7 +225,7 @@ export class Meres {
       haversine(utolsoPont, p) >= MIN_LEPES ||
       p.t - utolsoPont.t >= MIN_IDO
     ) {
-      this.pontok.push(p);
+      this.pontok.push(hezag ? { ...p, hezag: true } : p);
     }
 
     if (this.szakasz.end) {

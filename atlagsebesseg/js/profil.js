@@ -45,6 +45,8 @@ export function profilMinta(pontok, szakaszok, rekeszek = 240) {
   const nyers = [];
   let halmozott = 0;
   for (let i = 1; i < pontok.length; i++) {
+    // a GPS-kiesés áthidalt szakasza nem megtett út, itt sem
+    if (pontok[i].hezag) continue;
     const d = haversine(pontok[i - 1], pontok[i]);
     const dt = (pontok[i].t - pontok[i - 1].t) / 1000;
     if (!(dt > 0) || !(d >= 0)) continue;

@@ -221,6 +221,29 @@ Offline vagy lassú kapcsolatnál a türelmi idő után a gyorsítótár válasz
 tehát a repülős/alagutas működés megmarad. A `CACHE` nevét (`atlagsebesseg-vN`)
 minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
+## Tesztek
+
+A `teszt/tesztek.mjs` 140 ellenőrzést futtat végig 22 témában: bírságtáblázat
+sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
+kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
+és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
+két témán, hozzáférhetőség, offline működés, valamint hat valósághű
+menetszimuláció (autópálya, lakott terület, dugó utáni gyorsítás).
+
+A GPS-t egy menetprofil-lejátszó helyettesíti: szakaszok listája
+`[sebesség km/h, hossz méter]` alakban, két másodperces fixekkel. Így egy
+tízperces út két másodperc alatt lejátszható.
+
+```
+python3 -m http.server 8768 --directory atlagsebesseg
+node atlagsebesseg/teszt/tesztek.mjs
+```
+
+A Playwright nem függősége a projektnek (az app maga függőségmentes marad),
+ezért vagy legyen telepítve a `playwright-core`, vagy add meg a helyét:
+`ATLAG_PW=/út/playwright-core/index.js`. A kiszolgáló címe az `ATLAG_URL`,
+a böngészőé az `ATLAG_CHROME` változóval állítható.
+
 ## Fájlok
 
 ```
@@ -236,6 +259,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (140 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── icons/  manifest.webmanifest  sw.js
 ```
