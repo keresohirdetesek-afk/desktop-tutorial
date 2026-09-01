@@ -63,6 +63,14 @@ szöveg írásakor ezt tartsuk.
   nézetet nyit 16x-ig, ahol a képernyő magasságához igazodik a rajz.
 - **A grafikon rákerül a megosztható képre is.** A letöltött PNG-n
   ugyanaz a profil szerepel, mert a képen az a legbeszédesebb rész.
+- **A három szám a műszeren.** A számlap közepén önálló tárcsa ül vékony
+  világos kerettel, benne a nagy szám: mérés közben a pillanatnyi
+  sebesség. A skála számai kívül futnak. A tárcsa alatt egy sorban a
+  három érték, felirattal: **megengedett átlag**, **szakaszátlag**,
+  **pillanatnyi**. A szakaszátlag a bírság szerinti színt viseli, a
+  pillanatnyi pedig azt, hogy a tartható tempóhoz képest hol tartasz.
+  Az adatrácsba csak a maradék került (itt érvényes korlátozás, megtett
+  táv, eltelt idő, bírságveszély), így semmi nem szerepel kétszer.
 - **Egyetlen műszer mondja meg, lassíts-e.** Menet közben egy kérdés van:
   gyorsabban vagy lassabban? A gyűrű a *pillanatnyi* sebességet rajzolja,
   a színe pedig a **tartható tempóhoz** méri: az az a sebesség, amivel a
@@ -223,7 +231,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 140 ellenőrzést futtat végig 22 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 142 ellenőrzést futtat végig 22 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -259,7 +267,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (140 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (142 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── icons/  manifest.webmanifest  sw.js
 ```

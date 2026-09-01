@@ -603,23 +603,30 @@ function oraEsStatusz(eredmeny) {
         ? `(Kapu #1 még ${fmtDistance(meres.kezdoTav)})`
         : st.megj;
 
-  $('ki-atlag').textContent = van ? `${fmtSpeed(eredmeny.osszAtlag)} km/h` : '-';
-  $('ki-pill').textContent = meres.utolso ? `${fmtSpeed(meres.pillanatnyi)} km/h` : '-';
+  /* A három szám a műszer alatt: mihez mérünk, hol tartunk, mennyivel
+     megyünk. A szakaszátlag a bírság szerinti színt viseli, a
+     pillanatnyi pedig azt, hogy a tartható tempóhoz képest hol tartasz. */
+  $('ki-limit').textContent = van ? `${fmtLimit(megengedett)}` : '-';
+  // a műszeren kerek szám áll; a tizedes a részletes eredményben van
+  $('ki-atlag').textContent = van ? String(Math.round(eredmeny.osszAtlag)) : '-';
+  $('ki-atlag').className = `oa-val ${van ? allapot : ''}`;
+  $('ki-pill').textContent = meres.utolso ? String(Math.round(meres.pillanatnyi)) : '-';
+  $('ki-pill').className = `oa-val ${most ? gyuruAllapot : ''}`;
   /* A GPS a tényleges sebességet méri, a kilométeróra viszont törvény
      szerint sosem mutathat kevesebbet a valósnál. Ezért a műszerfalon
      rendre nagyobb szám áll, és ilyenkor nem a mérés téved.          */
   $('ki-muszerfal').textContent =
     meres.utolso && meres.pillanatnyi > 10
-      ? `műszerfalon kb. ${muszerfalKb(meres.pillanatnyi)}`
+      ? `műszerfalon ~${muszerfalKb(meres.pillanatnyi)}`
       : '';
-  $('ki-limit').textContent = `${fmtLimit(megengedett)} km/h`;
+
+  $('ki-tav').textContent = fmtDistance(meres.tav);
   $('ki-ido').textContent = fmtDuration(meres.ido);
   $('ki-birsag').textContent = fmtForint(birsagOsszeg(eredmeny));
   $('ki-birsag').style.color = eredmeny.birsagosak.length ? 'var(--danger)' : '';
 
   $('ki-melleklet').textContent =
-    `Táv: ${fmtDistance(meres.tav)} · GPS: ` +
-    (meres.utolso ? `±${Math.round(meres.utolso.acc)} m` : '-');
+    `GPS-pontosság: ` + (meres.utolso ? `±${Math.round(meres.utolso.acc)} m` : '-');
 }
 
 /* Az utasítás: egyetlen szó és egy szám. Vezetés közben ennyi fér bele.

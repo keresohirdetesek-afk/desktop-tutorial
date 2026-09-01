@@ -423,18 +423,27 @@ button, input, select { font: inherit; color: inherit; }
   --m-veszely: color-mix(in srgb, var(--m-birsag) 18%, transparent);
 }
 
-/* a gyűrű sötét csatornája: a ki nem világított rész */
-.ora-csatorna { stroke: var(--m-csatorna); stroke-width: 19; }
+/* a skálagyűrű sötét csatornája: a ki nem világított rész */
+.ora-csatorna { stroke: var(--m-csatorna); stroke-width: 12; }
 /* a bírságos tartomány, mint a fordulatszámmérő vörös mezője */
-.ora-veszely { stroke: var(--m-veszely); stroke-width: 19; }
+.ora-veszely { stroke: var(--m-veszely); stroke-width: 12; }
 
 /* a világító ív és a fényudvara */
 .ora-iv {
   stroke: var(--m-semleges);
-  stroke-width: 19;
+  stroke-width: 12;
   transition: stroke-dashoffset 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.ora-iv.udvar { stroke-width: 34; opacity: 0.18; }
+.ora-iv.udvar { stroke-width: 24; opacity: 0.2; }
+
+/* A belső tárcsa: a nagy szám saját mezője, vékony világos kerettel.
+   Ez választja el a számot a skálától, ahogy a gyári műszereken. */
+.ora-tarcsa { fill: var(--surface-2); }
+:root[data-theme="light"] .ora-tarcsa { fill: #ffffff; }
+.ora-tarcsa-keret {
+  stroke: color-mix(in srgb, var(--text) 30%, transparent);
+  stroke-width: 2;
+}
 .ora-iv.ok { stroke: var(--m-ok); }
 .ora-iv.hatar { stroke: var(--m-hatar); }
 .ora-iv.birsag { stroke: var(--m-birsag); }
@@ -444,9 +453,9 @@ button, input, select { font: inherit; color: inherit; }
 
 .ora-cimke {
   fill: var(--muted);
-  font-size: 11px;
-  font-weight: 500;
-  opacity: 0.7;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.85;
 }
 .ora-cimke.birsag { fill: var(--m-birsag); opacity: 0.85; }
 
@@ -457,7 +466,7 @@ button, input, select { font: inherit; color: inherit; }
 
 /* A szakaszátlag ugyanazon a gyűrűn, karikás jellel: a bírság ebből
    lesz, ezért a bírság szerinti színt viseli. */
-.ora-atlagjel { fill: var(--bg); stroke: var(--m-semleges); stroke-width: 3.5; }
+.ora-atlagjel { fill: var(--surface); stroke: var(--m-semleges); stroke-width: 3.5; }
 .ora-atlagjel.ok { stroke: var(--m-ok); }
 .ora-atlagjel.hatar { stroke: var(--m-hatar); }
 .ora-atlagjel.birsag { stroke: var(--m-birsag); }
@@ -478,7 +487,7 @@ button, input, select { font: inherit; color: inherit; }
 /* a nagy szám: fehér és testes, ahogy a műszerfalon */
 .ora-ertek {
   fill: var(--text);
-  font-size: 66px;
+  font-size: 58px;
   font-weight: 700;
   letter-spacing: -0.05em;
 }
@@ -489,16 +498,6 @@ button, input, select { font: inherit; color: inherit; }
   font-size: 13px;
   font-weight: 500;
 }
-
-/* a szakaszátlag a nagy szám alatt, a bírság szerinti színben */
-.ora-masod {
-  fill: var(--muted);
-  font-size: 20px;
-  font-weight: 700;
-}
-.ora-masod.ok { fill: var(--m-ok); }
-.ora-masod.hatar { fill: var(--m-hatar); }
-.ora-masod.birsag { fill: var(--m-birsag); }
 
 /* ------------------------------------------------ sebességprofil */
 
@@ -592,16 +591,15 @@ button, input, select { font: inherit; color: inherit; }
 /* Sebességkorlátozó tábla a számlap alsó nyílásában, a felirattal egy
    sorban. Korábban a jobb felső sarokban ült, de a szélesebb skálán
    ott már a számok futnak.                                          */
+/* A tábla és az utasítás a műszer alatt, egy sorban: a tárcsás
+   számlapon belül már nem férnének el.                              */
 .tabla-sav {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: 92%;
 }
+/* a kalkulátorban csak a tábla van, az középre kerül */
+.result .tabla-sav { justify-content: center; }
 
 /* Az utasítás: menet közben ez az egyetlen dolog, amit el kell olvasni.
    Egy szó és egy szám, színnel megerősítve.                          */
@@ -672,6 +670,75 @@ button, input, select { font: inherit; color: inherit; }
 
 /* --------------------------------------------------------- adatrács */
 
+/* A három szám, ami menet közben számít, egy sorban a műszer alatt.
+   A műszer maga a pillanatnyi sebességet mutatja nagyban; ez a sor
+   mondja meg, mihez mérjük, és hol tart a szakaszátlag.             */
+.ora-adatsor {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.oa-cella {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
+/* A feliratok két sorig érhetnek; a rögzített magasságtól a három szám
+   akkor is egy vonalba esik, ha az egyik felirat tördelődik. */
+.oa-lbl {
+  display: flex;
+  align-items: center;
+  min-height: 2.4em;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--muted);
+}
+.oa-szam { display: flex; align-items: baseline; gap: 3px; }
+.oa-val {
+  font-family: 'Muszer', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.oa-egyseg { font-size: 10px; color: var(--muted); }
+
+/* A kilométeróra becslése egy sorban a három cella alatt: a cellába
+   nem férne el, és úgyis csak a pillanatnyi értékre vonatkozik. */
+.oa-alsor {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted);
+  text-align: center;
+}
+.oa-alsor:empty { display: none; }
+
+/* A szakaszátlag a bírság szerinti színt viseli, a pillanatnyi pedig
+   azt, hogy a tartható tempóhoz képest hol tartasz. */
+.oa-val.ok { color: var(--ok); }
+.oa-val.hatar { color: var(--warn); }
+.oa-val.birsag { color: var(--danger); }
+
+@media (max-width: 360px) {
+  .oa-val { font-size: 18px; }
+  .oa-lbl { font-size: 9px; }
+  .oa-egyseg { font-size: 9px; }
+  .oa-cella { padding: 7px 2px; }
+}
+
 .adatracs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 /* Címke fölé, érték alá: egy sorban a hosszabb címke és a mértékegységes
@@ -688,9 +755,8 @@ button, input, select { font: inherit; color: inherit; }
 }
 .adat-lbl { font-size: 11px; color: var(--muted); line-height: 1.2; }
 .adat-val { font-size: 16px; font-weight: 700; }
-/* A műszerfalad többet mutat, mint a GPS: ez a sor teszi egyértelművé,
-   hogy nem a mérés téved.                                            */
-.adat-alsor { font-size: 10px; color: var(--muted); line-height: 1.2; }
+/* A műszerfalad többet mutat, mint a GPS: az .oa-alsor teszi
+   egyértelművé, hogy nem a mérés téved.                             */
 
 .projekcio {
   margin: 0;

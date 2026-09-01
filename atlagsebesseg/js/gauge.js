@@ -12,7 +12,9 @@
    - az osztások a gyűrűbe vágott sötét rovátkák, nem külön vonalkák;
    - a bírságos tartomány a csatornán is látszik, mint a fordulatszámmérő
      vörös mezője;
-   - középen nagy, fehér szám, alatta kicsiben a mértékegység.
+   - a számlap közepén önálló tárcsa ül, vékony világos kerettel, benne a
+     nagy szám és a mértékegység: a gyári műszereken ez a kettéosztás
+     teszi olvashatóvá a számot a skála mellett.
 
    Menet közben egyetlen kérdés van: lassítsak vagy mehetek gyorsabban?
    Ezért a gyűrű a *pillanatnyi* sebességet rajzolja, és a színe azt
@@ -31,8 +33,9 @@ const NS = 'http://www.w3.org/2000/svg';
 
 const CX = 150;
 const CY = 144;
-const R = 100;          // a gyűrű középvonala
-const VASTAG = 19;      // a gyűrű vastagsága
+const R = 104;          // a skálagyűrű középvonala
+const VASTAG = 12;      // a skálagyűrű vastagsága
+const TARCSA = 80;      // a belső tárcsa sugara
 const A0 = 214;         // bal alsó vég, fokban
 const IV = 248;         // teljes elfordulás
 
@@ -74,7 +77,7 @@ export function skala(limit, birsagHatar, ertek = 0) {
 export class Ora {
   constructor(svg) {
     this.svg = svg;
-    svg.setAttribute('viewBox', '0 0 300 246');
+    svg.setAttribute('viewBox', '0 0 300 230');
     svg.innerHTML = '';
 
     const ivPalya = iv(A0, A0 - IV, R);
@@ -89,7 +92,14 @@ export class Ora {
     this.derengesSzin.append(this.derengesBelso, this.derengesKulso);
     defs.append(this.derengesSzin);
     this.derenges = mk('circle', {
-      cx: CX, cy: CY, r: R - 4, fill: `url(#${id}-dereng)`,
+      cx: CX, cy: CY, r: TARCSA - 2, fill: `url(#${id}-dereng)`,
+    });
+
+    /* A belső tárcsa és vékony kerete. A nagy szám így nem a skála
+       közepén lebeg, hanem saját mezőben ül, ahogy a műszeregységeken. */
+    this.tarcsa = mk('circle', { class: 'ora-tarcsa', cx: CX, cy: CY, r: TARCSA });
+    this.tarcsaKeret = mk('circle', {
+      class: 'ora-tarcsa-keret', cx: CX, cy: CY, r: TARCSA, fill: 'none',
     });
 
     // a gyűrű sötét csatornája: a ki nem világított rész
@@ -130,7 +140,7 @@ export class Ora {
     // a szakaszátlag jele ugyanezen a gyűrűn
     this.atlagG = mk('g', { class: 'ora-forgo' });
     this.atlagJel = mk('circle', {
-      class: 'ora-atlagjel', cx: CX + R, cy: CY, r: 7,
+      class: 'ora-atlagjel', cx: CX + R - VASTAG / 2 - 9, cy: CY, r: 6,
     });
     this.atlagG.append(this.atlagJel);
 
@@ -146,28 +156,29 @@ export class Ora {
     /* A fejsor a nagy szám fölött: mérés közben itt áll a szakaszátlag,
        felirattal együtt, hogy ne kelljen kitalálni, melyik szám melyik.
        A lenti nyílás a táblának és az utasításnak marad.             */
+    /* A tárcsán csak a nagy szám és a mértékegység áll. Mérés közben ez a
+       pillanatnyi sebesség; a többi érték a műszer alatti adatsorban van,
+       felirattal. A kalkulátorban nincs pillanatnyi érték, ott a tárcsa
+       fölé kerül a felirat, hogy a nagy szám ne legyen félreérthető.  */
     this.cimSzoveg = mk('text', {
-      class: 'ora-cim', x: CX, y: CY - 62, 'text-anchor': 'middle',
+      class: 'ora-cim', x: CX, y: CY - 40, 'text-anchor': 'middle',
     });
     this.cimSzoveg.textContent = 'SZAKASZÁTLAG';
 
-    this.masodSzoveg = mk('text', {
-      class: 'ora-masod', x: CX, y: CY - 38, 'text-anchor': 'middle',
-    });
-
     this.ertekSzoveg = mk('text', {
-      class: 'ora-ertek', x: CX, y: CY + 26, 'text-anchor': 'middle',
+      class: 'ora-ertek', x: CX, y: CY + 16, 'text-anchor': 'middle',
     });
     this.egysegSzoveg = mk('text', {
-      class: 'ora-egyseg', x: CX, y: CY + 48, 'text-anchor': 'middle',
+      class: 'ora-egyseg', x: CX, y: CY + 42, 'text-anchor': 'middle',
     });
     this.egysegSzoveg.textContent = 'km/h';
 
     svg.append(
-      defs, this.derenges, this.csatorna, this.veszelySav,
+      defs, this.tarcsa, this.derenges, this.tarcsaKeret,
+      this.csatorna, this.veszelySav,
       this.udvarIv, this.ertekIv, this.rovatkak, this.cimkek,
       this.celG, this.atlagG, this.elG,
-      this.cimSzoveg, this.ertekSzoveg, this.egysegSzoveg, this.masodSzoveg
+      this.cimSzoveg, this.ertekSzoveg, this.egysegSzoveg
     );
 
     this.jelenlegi = { min: null, max: null, limit: null, hatar: null };
@@ -221,8 +232,8 @@ export class Ora {
       const [x2, y2] = pont(a, R + VASTAG / 2);
       this.rovatkak.append(mk('line', { x1, y1, x2, y2, class: 'ora-rovatka' }));
       if ((v - s.min) % cimkeLepes === 0) {
-        // a számok kijjebb ülnek, hogy a célt jelző csücsök elférjen
-        const [tx, ty] = pont(a, R + VASTAG / 2 + 20);
+        // a számok kívül, a célt jelző csücsök mögött
+        const [tx, ty] = pont(a, R + VASTAG / 2 + 21);
         const t = mk('text', {
           x: tx, y: ty + 4, 'text-anchor': 'middle',
           class: `ora-cimke${v > birsagHatar ? ' birsag' : ''}`,
@@ -312,12 +323,7 @@ export class Ora {
       this.atlagJel.setAttribute('class', `ora-atlagjel ${atlagAllapot || 'semleges'}`);
     }
 
-    /* Mérés közben a fejsorban a szakaszátlag áll, a nagy szám pedig a
-       pillanatnyi sebesség. A kalkulátorban nincs pillanatnyi érték, ott
-       a nagy szám maga a szakaszátlag, fejsor nélkül.                */
-    this.cimSzoveg.style.visibility = vanMost ? 'visible' : 'hidden';
-    this.masodSzoveg.textContent = vanAtlagJel ? `Ø ${Math.round(atlag)}` : '';
-    this.masodSzoveg.setAttribute('class', `ora-masod ${atlagAllapot || 'semleges'}`);
-    if (!vanMost) this.cimSzoveg.style.visibility = 'visible';
+    // a felirat csak ott kell, ahol nincs pillanatnyi érték
+    this.cimSzoveg.style.visibility = vanMost ? 'hidden' : 'visible';
   }
 }

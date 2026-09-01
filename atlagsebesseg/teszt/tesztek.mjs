@@ -258,7 +258,9 @@ async function keziMeres(b) {
     szo: document.getElementById('utasitas-szo').textContent,
     cel: document.getElementById('utasitas-val').textContent,
     nagySzam: document.querySelector('#ora .ora-ertek').textContent,
-    atlagSor: document.querySelector('#ora .ora-masod').textContent,
+    atlagSor: document.getElementById('ki-atlag').textContent,
+    limitSor: document.getElementById('ki-limit').textContent,
+    pillSor: document.getElementById('ki-pill').textContent,
     pill: window.atlagsebesseg.meres.pillanatnyi,
   }));
   all('mérés közben látszik az utasítás', !kozben.utasitasRejtve);
@@ -266,7 +268,13 @@ async function keziMeres(b) {
   all('a célsebesség a helyi korlátozás (90)', kozben.cel === '90', kozben.cel);
   all('a nagy szám a pillanatnyi sebesség', kozel(Number(kozben.nagySzam), kozben.pill, 6),
       `${kozben.nagySzam} vs ${kozben.pill.toFixed(1)}`);
-  all('a fejsorban a szakaszátlag áll', /^Ø \d+$/.test(kozben.atlagSor), kozben.atlagSor);
+  all('a szakaszátlag számként látszik az adatsorban',
+      /^\d+$/.test(kozben.atlagSor), kozben.atlagSor);
+  all('a megengedett átlag is látszik az adatsorban',
+      /^\d+/.test(kozben.limitSor), kozben.limitSor);
+  all('a pillanatnyi sebesség is látszik az adatsorban',
+      Math.abs(Number(kozben.pillSor) - kozben.pill) <= 1,
+      `${kozben.pillSor} vs ${kozben.pill.toFixed(1)}`);
 
   await p.click('#btn-meres');
   await p.waitForTimeout(500);
