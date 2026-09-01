@@ -201,6 +201,9 @@ async function kapusMeres(b) {
       adatok: document.getElementById('eredmeny-adatok').innerText,
       verdikt: document.getElementById('eredmeny-verdikt').innerText,
       profil: !document.getElementById('eredmeny-profil').hidden,
+      merlegRejtve: document.getElementById('eredmeny-merleg').hidden,
+      nyereseg: document.getElementById('e-nyereseg').textContent,
+      ar: document.getElementById('e-ar').textContent,
     };
   });
   all('a mérés magától lezárult a végkapunál', r.allapot === 'kesz', r.allapot);
@@ -211,6 +214,9 @@ async function kapusMeres(b) {
   all('a verdikt bírságot jelez 100/90-nél is nulla bírsággal',
       /nem lépted túl|bírság nem járna/i.test(r.verdikt), r.verdikt.split('\n')[0]);
   all('a sebességprofil megjelent', r.profil);
+  all('a mérleg megjelent az eredménykártyán', !r.merlegRejtve);
+  all('a nyert idő ki van írva', /perc|mp/.test(r.nyereseg), r.nyereseg);
+  all('a nyert idő ára ki van írva', /Ft|semmibe/.test(r.ar), r.ar);
   p.__hibak.length && all('nincs JS hiba (kapus mérés)', false, p.__hibak.join(' | '));
   await p.close();
 }
@@ -758,6 +764,8 @@ async function menetEredmeny(b, { menet, limit, cimke }) {
       verdikt: document.getElementById('eredmeny-verdikt').innerText,
       adatok: document.getElementById('eredmeny-adatok').innerText,
       birsagos: /Bírság: /.test(document.getElementById('eredmeny-verdikt').innerText),
+      merlegRejtve: document.getElementById('eredmeny-merleg').hidden,
+      merlegAr: document.getElementById('e-ar').textContent,
       osszeg: (document.getElementById('eredmeny-verdikt').innerText
         .match(/Bírság: ([\d\s\u00a0\u202f]+) Ft/) || [])[1],
     };
@@ -794,6 +802,9 @@ async function menetSzimulaciok(b) {
       const kapott = Number((r.osszeg || '').replace(/[^\d]/g, ''));
       all(`${e.cimke}: az összeg ${e.osszeg} Ft`, kapott === e.osszeg,
           `${kapott} (átlag ${r.atlag.toFixed(1)} km/h)`);
+      all(`${e.cimke}: a mérleg ára megegyezik a bírsággal`,
+          !r.merlegRejtve && Number(r.merlegAr.replace(/[^\d]/g, '')) === e.osszeg,
+          `${r.merlegAr} (mérleg rejtve: ${r.merlegRejtve})`);
     }
     r.hiba.length && all(`${e.cimke}: nincs JS hiba`, false, r.hiba.join(' | '));
   }
