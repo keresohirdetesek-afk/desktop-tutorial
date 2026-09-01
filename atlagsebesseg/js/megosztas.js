@@ -13,7 +13,7 @@ import { profilVaszonra } from './profil.js';
 
 const SZ = 1080;
 const PROFIL_MA = 300;      // a grafikon sávjának magassága
-const MA_ALAP = 1180;
+const MA_ALAP = 1230;
 
 const SZIN = {
   hatter: '#0e0e10',
@@ -217,6 +217,30 @@ export async function keszitKep(adat) {
   c.font = `700 40px ${sans}`;
   c.textAlign = 'center';
   sortor(c, adat.verdikt, SZ / 2, vy + 62, ksz - 80, 50);
+
+  /* A mérleg egy sorban a verdikt alatt: ez a projekt legbeszédesebb
+     két száma, és megosztva is ez az, amit megértenek.               */
+  if (adat.nyereseg) {
+    const my = vy + 196;
+    c.textAlign = 'center';
+    c.font = `700 32px ${sans}`;
+    const bal = `${adat.nyereseg} nyereség`;
+    const jobb = adat.ar;
+    const kozep = '  ·  ';
+    const wBal = c.measureText(bal).width;
+    const wKoz = c.measureText(kozep).width;
+    const wJobb = c.measureText(jobb).width;
+    let x = SZ / 2 - (wBal + wKoz + wJobb) / 2;
+    c.textAlign = 'left';
+    c.fillStyle = SZIN.ok;
+    c.fillText(bal, x, my);
+    x += wBal;
+    c.fillStyle = SZIN.halvany;
+    c.fillText(kozep, x, my);
+    x += wKoz;
+    c.fillStyle = adat.arIngyen ? SZIN.ok : SZIN.birsag;
+    c.fillText(jobb, x, my);
+  }
 
   // lábléc
   c.fillStyle = SZIN.narancs;

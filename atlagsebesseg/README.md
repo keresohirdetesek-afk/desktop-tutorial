@@ -63,6 +63,11 @@ szöveg írásakor ezt tartsuk.
   nézetet nyit 16x-ig, ahol a képernyő magasságához igazodik a rajz.
 - **A grafikon rákerül a megosztható képre is.** A letöltött PNG-n
   ugyanaz a profil szerepel, mert a képen az a legbeszédesebb rész.
+- **Mennyit nyertél, és mennyibe kerül.** A projekt legbeszédesebb két
+  száma: mennyi időt nyertél a végig szabályos menethez képest, és
+  mennyibe kerülne. Eddig csak a kalkulátorban volt, most az élő mérés
+  eredménykártyáján és a megosztható képen is szerepel. Ha nem nyertél
+  időt, a mérleg elmarad: nincs mit mérlegelni.
 - **A három szám a műszeren.** A számlap közepén önálló tárcsa ül vékony
   világos kerettel, benne a nagy szám: mérés közben a pillanatnyi
   sebesség. A skála számai kívül futnak. A tárcsa alatt egy sorban a
@@ -231,7 +236,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 142 ellenőrzést futtat végig 22 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 148 ellenőrzést futtat végig 22 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -267,7 +272,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (142 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (148 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── icons/  manifest.webmanifest  sw.js
 ```

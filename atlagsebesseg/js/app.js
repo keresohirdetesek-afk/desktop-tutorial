@@ -751,6 +751,19 @@ function eredmenyKartya(eredmeny) {
   ];
   if (eredmeny.birsagosak.length) sorok.push(['Bírság', fmtForint(birsagOsszeg(eredmeny))]);
   $('eredmeny-adatok').innerHTML = sorok.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+
+  /* Mérleg: mennyi időt nyertél a végig szabályos menethez képest, és
+     mennyibe kerülne. Ha nem nyertél időt, nincs mit mérlegelni.     */
+  const nyereseg = eredmeny.szabalyosIdo - eredmeny.osszIdo;
+  const merleg = $('eredmeny-merleg');
+  merleg.hidden = !(nyereseg > 0);
+  if (nyereseg > 0) {
+    const ar = birsagOsszeg(eredmeny);
+    $('e-nyereseg').textContent = fmtDurationWords(nyereseg);
+    $('e-ar').textContent = ar > 0 ? fmtForint(ar) : 'semmibe';
+    merleg.querySelector('.ar').classList.toggle('ingyen', ar === 0);
+  }
+
   verdiktRender($('eredmeny-verdikt'), eredmeny);
   /* Ha a GPS kiesett és a kimaradt szakaszt nem számoltuk bele, azt ki
      kell mondani: az eredmény ilyenkor a valósnál kevesebb utat mutat. */
@@ -1288,6 +1301,14 @@ function esemenyek() {
         // ugyanaz a minta, amit a képernyőn is látsz
         profil: S.profil.eredmeny.minta,
         osszTav: S.profil.eredmeny.osszTav,
+        // a mérleg: mennyi időt nyertél, és mennyibe kerül
+        ...(e.szabalyosIdo - e.osszIdo > 0
+          ? {
+            nyereseg: fmtDurationWords(e.szabalyosIdo - e.osszIdo),
+            ar: birsagOsszeg(e) > 0 ? fmtForint(birsagOsszeg(e)) : 'ingyen',
+            arIngyen: birsagOsszeg(e) === 0,
+          }
+          : {}),
       });
       const eredmeny = await megoszt(blob);
       allapot.textContent = eredmeny === 'letoltve'

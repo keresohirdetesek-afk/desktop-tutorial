@@ -117,6 +117,19 @@
           <h2 class="eredmeny-cim">Szimuláció eredménye</h2>
           <p class="eredmeny-alcim" id="eredmeny-alcim"></p>
           <dl class="eredmeny-adatok" id="eredmeny-adatok"></dl>
+          <!-- A projekt legbeszédesebb két száma: mennyi időt nyertél, és
+               mennyibe kerülne. Az eredménykártyán a helye.            -->
+          <div class="merleg" id="eredmeny-merleg" hidden>
+            <div class="merleg-tetel nyereseg">
+              <span class="merleg-lbl">Ennyit nyertél</span>
+              <span class="merleg-val" id="e-nyereseg">-</span>
+            </div>
+            <div class="merleg-tetel ar">
+              <span class="merleg-lbl">Ennyibe kerül</span>
+              <span class="merleg-val" id="e-ar">-</span>
+            </div>
+          </div>
+
           <div id="eredmeny-verdikt" class="verdikt semleges"></div>
           <p id="eredmeny-hianyos" class="figyelem small" hidden>
             A mérés közben a GPS-jel kiesett. A kimaradt szakasz nem
