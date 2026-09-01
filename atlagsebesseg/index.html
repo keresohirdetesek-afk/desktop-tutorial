@@ -179,16 +179,35 @@
         <!-- óra + státusz + adatok -->
         <section class="card ora-kartya" id="ora-kartya">
           <div class="ora-doboz">
-            <svg id="ora" class="ora" role="img" aria-label="Szakaszátlag mérője"></svg>
-            <div class="tabla-sav">
-              <button class="tabla" id="ora-tabla" aria-label="Sebességhatár módosítása">-</button>
-              <span class="tabla-sugo" id="tabla-sugo">koppints</span>
-              <span class="utasitas" id="utasitas" hidden>
-                <span class="utasitas-szo" id="utasitas-szo">TARTSD</span>
-                <span class="utasitas-val" id="utasitas-val">-</span>
-              </span>
+            <svg id="ora" class="ora" role="img" aria-label="Sebességmérő"></svg>
+          </div>
+
+          <div class="tabla-sav">
+            <button class="tabla" id="ora-tabla" aria-label="Sebességhatár módosítása">-</button>
+            <span class="tabla-sugo" id="tabla-sugo">koppints</span>
+            <span class="utasitas" id="utasitas" hidden>
+              <span class="utasitas-szo" id="utasitas-szo">TARTSD</span>
+              <span class="utasitas-val" id="utasitas-val">-</span>
+            </span>
+          </div>
+
+          <!-- A három szám, ami menet közben számít, egy sorban a műszer
+               alatt: mihez mérünk, hol tartunk, és mennyivel megyünk. -->
+          <div class="ora-adatsor">
+            <div class="oa-cella">
+              <span class="oa-lbl">Megengedett átlag</span>
+              <span class="oa-szam"><span class="oa-val" id="ki-limit">-</span><span class="oa-egyseg">km/h</span></span>
+            </div>
+            <div class="oa-cella">
+              <span class="oa-lbl">Szakaszátlag</span>
+              <span class="oa-szam"><span class="oa-val" id="ki-atlag">-</span><span class="oa-egyseg">km/h</span></span>
+            </div>
+            <div class="oa-cella">
+              <span class="oa-lbl">Pillanatnyi</span>
+              <span class="oa-szam"><span class="oa-val" id="ki-pill">-</span><span class="oa-egyseg">km/h</span></span>
             </div>
           </div>
+          <p class="oa-alsor" id="ki-muszerfal"></p>
 
           <button id="btn-hang" class="chip hang-kapcsolo" aria-pressed="true">
             <svg class="ikon" aria-hidden="true"><use href="#i-speaker-high"/></svg>
@@ -202,10 +221,8 @@
           </div>
 
           <div class="adatracs">
-            <div><span class="adat-lbl">Mért átlag</span><span class="adat-val" id="ki-atlag">-</span></div>
-            <div><span class="adat-lbl">Pillanatnyi</span><span class="adat-val" id="ki-pill">-</span><span class="adat-alsor" id="ki-muszerfal"></span></div>
-            <div><span class="adat-lbl">Megengedett átlag</span><span class="adat-val" id="ki-limit">-</span></div>
             <div><span class="adat-lbl">Itt érvényes</span><span class="adat-val" id="ki-hely-limit">-</span></div>
+            <div><span class="adat-lbl">Megtett táv</span><span class="adat-val" id="ki-tav">0 m</span></div>
             <div><span class="adat-lbl">Eltelt idő</span><span class="adat-val" id="ki-ido">0:00</span></div>
             <div><span class="adat-lbl">Bírságveszély</span><span class="adat-val" id="ki-birsag">0 Ft</span></div>
           </div>
