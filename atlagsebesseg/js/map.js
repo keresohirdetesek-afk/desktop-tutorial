@@ -103,8 +103,9 @@ export class Terkep {
     rajz(end, 'Szakasz vége', SZIN.birsag);
   }
 
-  /** A megtett nyomvonal, szakaszonként a bírság szerinti színnel. */
-  nyomvonalRajz(pontok, szakaszok) {
+  /** A megtett nyomvonal, szakaszonként a bírság szerinti színnel.
+      @param {?function(number)} onSzakasz koppintás egy szakaszrészre */
+  nyomvonalRajz(pontok, szakaszok, onSzakasz) {
     this.nyomvonal.clearLayers();
     if (pontok.length < 2) return;
 
@@ -117,18 +118,40 @@ export class Terkep {
       return;
     }
 
-    for (const sz of szakaszok) {
+    szakaszok.forEach((sz, i) => {
       const resz = pontok.slice(sz.i0, sz.i1 + 1).map((p) => [p.lat, p.lon]);
-      if (resz.length < 2) continue;
+      if (resz.length < 2) return;
       const e = sz.ertekeles;
       const szin = !e ? SZIN.semleges : e.birsagos ? SZIN.birsag : e.tartalek <= 5 ? SZIN.hatar : SZIN.ok;
-      L.polyline(resz, { color: szin, weight: 6, opacity: 0.9 })
+      const vonal = L.polyline(resz, {
+        color: szin, weight: 6, opacity: 0.9,
+        // vezetés közben, ujjal a vékony vonalat nehéz eltalálni
+        interactive: !!onSzakasz,
+        bubblingMouseEvents: false,
+      })
         .bindTooltip(
-          `${sz.limit} km/h, ${sz.cimke}${e ? `<br>átlag: ${e.mert.toFixed(1).replace('.', ',')} km/h` : ''}`,
+          `${sz.limit} km/h, ${sz.cimke}` +
+          `${e ? `<br>átlag: ${e.mert.toFixed(1).replace('.', ',')} km/h` : ''}` +
+          `${onSzakasz ? '<br>koppints a határ javításához' : ''}`,
           { sticky: true }
         )
         .addTo(this.nyomvonal);
-    }
+
+      if (!onSzakasz) return;
+      /* Széles, átlátszó kattintósáv a színes vonal alatt: a hat képpont
+         széles nyomvonalat ujjal alig lehet eltalálni.                */
+      L.polyline(resz, { color: szin, weight: 26, opacity: 0, interactive: true,
+                         bubblingMouseEvents: false })
+        .addTo(this.nyomvonal)
+        .on('click', (ev) => {
+          L.DomEvent.stopPropagation(ev);
+          onSzakasz(i);
+        });
+      vonal.on('click', (ev) => {
+        L.DomEvent.stopPropagation(ev);
+        onSzakasz(i);
+      });
+    });
   }
 
   /** Aktuális helyzet + pontossági kör. */
