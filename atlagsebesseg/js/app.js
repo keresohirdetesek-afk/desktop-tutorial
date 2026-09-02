@@ -73,6 +73,7 @@ let lapValaszt = null;       // a nyitott választó visszahívása
 const meres = new Meres({
   onChange: () => elonezetFrissit(),
   onError: (m) => ($('gps-uzenet').textContent = m),
+  onAllas: () => allasLapNyit(),
 });
 
 /* ============================================================ képernyők */
@@ -291,6 +292,40 @@ function muszerfalKb(gps) {
 function birsagOsszeg(eredmeny) {
   if (!eredmeny.birsagosak.length) return 0;
   return eredmeny.legsulyosabb.ertekeles.osszeg;
+}
+
+/* ------------------------------------------------- megállás a mérésben
+
+   Kapu nélküli mérésnél egy hosszabb állás (pihenő, tankolás, hosszú
+   piros) elrontja a szakaszátlagot: a szám utána már nem a vezetésről
+   szól. Ilyenkor felajánljuk a felfüggesztést.
+
+   A visszaszámláló csak tájékoztat: válasz nélkül a mérés megy tovább.
+   Vezetés közben a nem-válasz nem jelenthet beavatkozást, ezért a
+   „nem történik semmi” a biztonságos alapértelmezés.                */
+
+const ALLAS_VALASZ_MP = 5;
+let allasOra = null;
+
+function allasLapNyit() {
+  if (!$('allas-lap').hidden) return;
+  $('allas-lap').hidden = false;
+  if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
+
+  let hatra = ALLAS_VALASZ_MP;
+  $('allas-szamlalo').textContent = String(hatra);
+  clearInterval(allasOra);
+  allasOra = setInterval(() => {
+    hatra -= 1;
+    $('allas-szamlalo').textContent = String(Math.max(0, hatra));
+    if (hatra <= 0) allasLapZar();
+  }, 1000);
+}
+
+function allasLapZar() {
+  clearInterval(allasOra);
+  allasOra = null;
+  $('allas-lap').hidden = true;
 }
 
 /* ---------------------------------------------------- tartható tempó
@@ -791,6 +826,11 @@ function elonezetFrissit() {
   eredmenyKartya(eredmeny);
   gpsPill();
 
+  /* Felfüggesztve a kérdés már nem aktuális: ha közben elindultál, a
+     mérés magától folytatódik, és a lap becsukódik.                 */
+  $('szunet-sav').hidden = !meres.szunet;
+  if (!meres.szunet && !$('allas-lap').hidden && !meres.allasKerdezve) allasLapZar();
+
   $('gps-uzenet').textContent = meres.figyelmeztet ? meres.uzenet : '';
   const hatarSor = $('hatar-allapot');
   hatarSor.textContent = S.autoHatar
@@ -1209,6 +1249,7 @@ function meresIndit() {
 }
 
 function ujSzimulacio() {
+  allasLapZar();
   meres.leallit();
   meres.reset();
   S.felulir.clear();
@@ -1462,8 +1503,17 @@ function esemenyek() {
       profilLapNyit(gomb.closest('.profil-eszkozok').dataset.cel));
   });
   $('profil-lap-zar').addEventListener('click', profilLapZar);
+
+  $('btn-allas-igen').addEventListener('click', () => {
+    allasLapZar();
+    meres.felfuggeszt();
+  });
+  document.querySelectorAll('[data-allas-nem]').forEach((n) =>
+    n.addEventListener('click', allasLapZar));
+  $('btn-folytat').addEventListener('click', () => meres.folytat());
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('profil-lap').hidden) profilLapZar();
+    if (e.key === 'Escape' && !$('allas-lap').hidden) allasLapZar();
   });
 
   // Elforgatáskor és ablakméretezéskor a szakaszsáv feliratai újraszámolnak.

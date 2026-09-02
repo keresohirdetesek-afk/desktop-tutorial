@@ -63,6 +63,15 @@ szöveg írásakor ezt tartsuk.
   nézetet nyit 16x-ig, ahol a képernyő magasságához igazodik a rajz.
 - **A grafikon rákerül a megosztható képre is.** A letöltött PNG-n
   ugyanaz a profil szerepel, mert a képen az a legbeszédesebb rész.
+- **Hosszú megállásnál felfüggeszthető a mérés.** Kapu nélküli mérésnél
+  egy pihenő vagy tankolás elrontaná a szakaszátlagot: a szám utána már
+  nem a vezetésről szólna. Ha egy percnél tovább állsz, az app rákérdez,
+  hogy felfüggesszük-e. **Válasz nélkül a mérés megy tovább**: vezetés
+  közben a nem-válasz nem jelenthet beavatkozást, ezért öt másodperc után
+  a kérdés magától becsukódik. Felfüggesztve nem rögzítünk pontot és az
+  idő sem telik; elinduláskor (10 km/h fölött) magától folytatódik.
+  Kijelölt szakasznál nincs kérdés: ott a végkapu úgyis lezár, és az
+  ottani állás a szakasz része.
 - **Mennyit nyertél, és mennyibe kerül.** A projekt legbeszédesebb két
   száma: mennyi időt nyertél a végig szabályos menethez képest, és
   mennyibe kerülne. Eddig csak a kalkulátorban volt, most az élő mérés
@@ -236,7 +245,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 148 ellenőrzést futtat végig 22 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 163 ellenőrzést futtat végig 23 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -272,7 +281,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (148 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (163 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── icons/  manifest.webmanifest  sw.js
 ```

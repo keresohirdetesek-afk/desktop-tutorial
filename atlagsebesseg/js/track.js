@@ -17,6 +17,13 @@ const MIN_IDO = 900;          // ms — de legalább ennyi időnként rögzítü
 // hosszabb kiesés után jogosan „ugrik” nagyot, és nem akadhatunk el.
 const MAX_ELDOBAS = 5;
 
+/* Kapu nélküli mérésnél a hosszú állás elrontja a szakaszátlagot: egy
+   ebédszünet után a szám már semmit nem mond a vezetésről. Ennyi állás
+   után rákérdezünk, hogy felfüggesszük-e.                             */
+const ALLO_SEBESSEG = 3;      // km/h — ez alatt állónak tekintjük
+const ALLAS_KERDES = 70000;   // ms — ennyi állás után kérdezünk
+const FOLYTAT_SEBESSEG = 10;  // km/h — ennél gyorsabban magától folytatja
+
 export const ALLAPOT = {
   ALLO: 'allo',           // nem fut a GPS
   VAR: 'var',             // fut, de a kezdőpontra vár
@@ -25,9 +32,10 @@ export const ALLAPOT = {
 };
 
 export class Meres {
-  constructor({ onChange, onError } = {}) {
+  constructor({ onChange, onError, onAllas } = {}) {
     this.onChange = onChange || (() => {});
     this.onError = onError || (() => {});
+    this.onAllas = onAllas || (() => {});
     this.reset();
     this.watchId = null;
     this.wakeLock = null;
@@ -45,6 +53,11 @@ export class Meres {
     this.allasKezdet = null;   // mióta állunk a végponti kapun belül
     this.eldobott = 0;        // egymás utáni, ugrásnak tűnő fixek
     this.hianyos = false;     // volt-e olyan GPS-kiesés, ami kihagyott utat
+    this.szunet = false;      // fel van-e függesztve a mérés
+    this.szunetKezdet = null; // mikor függesztettük fel
+    this.szunetOsszes = 0;    // ms, összesen ennyit álltunk felfüggesztve
+    this.allasKezdete = null; // mióta állunk egyhelyben
+    this.allasKerdezve = false;
     this.uzenet = '';
     // csak a valódi gond kerül a felületre; a szokásos állapotot a
     // szakaszpanel mondja el, azt nem kell megismételni
@@ -94,9 +107,13 @@ export class Meres {
     return d;
   }
 
+  /* A menetidőből kimarad, amit felfüggesztve álltunk. Szünet alatt nem
+     rögzítünk pontot, tehát az utolsó pont ideje áll; a folytatás utáni
+     ugrást viszont le kell vonni, különben a szünet is menetidő lenne. */
   get ido() {
     if (this.pontok.length < 2) return 0;
-    return this.pontok[this.pontok.length - 1].t - this.pontok[0].t;
+    const nyers = this.pontok[this.pontok.length - 1].t - this.pontok[0].t;
+    return Math.max(0, nyers - this.szunetOsszes);
   }
 
   get atlag() {
@@ -194,7 +211,38 @@ export class Meres {
     }
   }
 
+  /** A mérés felfüggesztése: az állás ideje nem számít bele. */
+  felfuggeszt() {
+    if (this.allapot !== ALLAPOT.MER || this.szunet) return;
+    this.szunet = true;
+    this.szunetKezdet = this.utolso ? this.utolso.t : Date.now();
+    this.uzenet = 'A mérés felfüggesztve. Elindulásra magától folytatódik.';
+    this.onChange(this);
+  }
+
+  /** Folytatás: a felfüggesztés ideje kimarad a menetidőből. */
+  folytat() {
+    if (!this.szunet) return;
+    const most = this.utolso ? this.utolso.t : Date.now();
+    this.szunetOsszes += Math.max(0, most - (this.szunetKezdet ?? most));
+    this.szunet = false;
+    this.szunetKezdet = null;
+    this.allasKezdete = null;
+    this.allasKerdezve = false;
+    this.uzenet = 'A mérés folytatódik.';
+    this.onChange(this);
+  }
+
   #meres(p) {
+    /* Szünetben csak figyelünk: sem időt, sem utat nem számolunk, és
+       amint elindulsz, magától folytatja.                            */
+    if (this.szunet) {
+      if (this.pillanatnyi > FOLYTAT_SEBESSEG) this.folytat();
+      return;
+    }
+
+    this.#allasFigyeles(p);
+
     const utolsoPont = this.pontok[this.pontok.length - 1];
 
     /* GPS-ugrás kiszűrése: autóval 250 km/h fölött nem közlekedünk. Néhány
@@ -253,6 +301,26 @@ export class Meres {
       this.uzenet = `Szakasz vége ${Math.round(this.vegTav)} m-re.`;
     } else {
       this.uzenet = 'Mérés fut.';
+    }
+  }
+
+  /* Kapu nélküli mérésnél hosszú állás után rákérdezünk, hogy
+     felfüggesszük-e. Kijelölt szakasznál nincs értelme: ott a végkapu
+     amúgy is lezárja a mérést, és az ottani állás a szakasz része.   */
+  #allasFigyeles(p) {
+    if (this.szakasz.start || this.szakasz.end) return;
+    if (this.pillanatnyi >= ALLO_SEBESSEG) {
+      this.allasKezdete = null;
+      this.allasKerdezve = false;
+      return;
+    }
+    if (this.allasKezdete === null) {
+      this.allasKezdete = p.t;
+      return;
+    }
+    if (!this.allasKerdezve && p.t - this.allasKezdete >= ALLAS_KERDES) {
+      this.allasKerdezve = true;
+      this.onAllas(this);
     }
   }
 

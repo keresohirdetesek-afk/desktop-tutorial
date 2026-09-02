@@ -1133,6 +1133,109 @@ async function mozgasTeszt(b) {
   await ctx.close();
 }
 
+
+/* ============================== 23. megállás és a mérés felfüggesztése */
+
+async function allasTeszt(b) {
+  console.log('\n23. Megállás, felfüggesztés');
+
+  // a) kapu nélkül, hosszú állás után kérdez
+  const p = await ujLap(b, { gps: { menet: [[90, 3000], [0.5, 400], [90, 3000]] } });
+  await p.goto(CIM);
+  await p.click('#btn-cta');
+  await p.click('#mod-vezetek');
+  await p.waitForSelector('#meres-elo:not([hidden])');
+  await p.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
+  await p.click('#btn-meres');
+
+  const kerdez = await p.waitForSelector('#allas-lap:not([hidden])', { timeout: 25000 })
+    .then(() => true).catch(() => false);
+  all('hosszú állásnál rákérdez a felfüggesztésre', kerdez);
+  if (!kerdez) { await p.close(); return; }
+
+  const sz0 = await p.evaluate(() => document.getElementById('allas-szamlalo').textContent);
+  all('a visszaszámláló ötről indul', sz0 === '5', sz0);
+  await p.waitForTimeout(1150);
+  const sz1 = await p.evaluate(() => document.getElementById('allas-szamlalo').textContent);
+  all('a visszaszámláló ketyeg', Number(sz1) < Number(sz0), `${sz0} -> ${sz1}`);
+
+  // válasz nélkül becsukódik, és a mérés megy tovább
+  await p.waitForTimeout(4600);
+  const utana = await p.evaluate(() => ({
+    rejtve: document.getElementById('allas-lap').hidden,
+    szunet: window.atlagsebesseg.meres.szunet,
+    allapot: window.atlagsebesseg.meres.allapot,
+  }));
+  all('válasz nélkül becsukódik', utana.rejtve);
+  all('válasz nélkül nem függeszt fel', utana.szunet === false, String(utana.szunet));
+  all('válasz nélkül a mérés megy tovább', utana.allapot === 'mer', utana.allapot);
+  await p.close();
+
+  // b) IGEN: felfüggeszt, az idő nem nő, elindulásra magától folytat
+  const p2 = await ujLap(b, { gps: { menet: [[90, 3000], [0.5, 400], [90, 3000]] } });
+  await p2.goto(CIM);
+  await p2.click('#btn-cta');
+  await p2.click('#mod-vezetek');
+  await p2.waitForSelector('#meres-elo:not([hidden])');
+  await p2.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
+  await p2.click('#btn-meres');
+  await p2.waitForSelector('#allas-lap:not([hidden])', { timeout: 25000 });
+  await p2.click('#btn-allas-igen');
+  await p2.waitForTimeout(250);
+
+  const be = await p2.evaluate(() => ({
+    szunet: window.atlagsebesseg.meres.szunet,
+    sav: !document.getElementById('szunet-sav').hidden,
+    lap: document.getElementById('allas-lap').hidden,
+    ido: window.atlagsebesseg.meres.ido,
+    pontok: window.atlagsebesseg.meres.pontok.length,
+  }));
+  all('IGEN-re felfüggeszt', be.szunet === true);
+  all('a felfüggesztést sáv jelzi', be.sav);
+  all('a kérdés becsukódik', be.lap);
+
+  await p2.waitForTimeout(900);
+  const kozben = await p2.evaluate(() => ({
+    ido: window.atlagsebesseg.meres.ido,
+    pontok: window.atlagsebesseg.meres.pontok.length,
+  }));
+  all('felfüggesztve a menetidő nem nő', kozben.ido === be.ido, `${be.ido} -> ${kozben.ido}`);
+  all('felfüggesztve nem rögzítünk pontot', kozben.pontok === be.pontok,
+      `${be.pontok} -> ${kozben.pontok}`);
+
+  const folytat = await p2.waitForFunction(
+    () => window.atlagsebesseg.meres.szunet === false, null, { timeout: 30000 }
+  ).then(() => true).catch(() => false);
+  all('elindulásra magától folytatódik', folytat);
+  const veg = await p2.evaluate(() => ({
+    szunetOsszes: window.atlagsebesseg.meres.szunetOsszes,
+    sav: document.getElementById('szunet-sav').hidden,
+  }));
+  all('az állás ideje kimarad a menetidőből', veg.szunetOsszes > 0, String(veg.szunetOsszes));
+  all('a felfüggesztés-sáv eltűnik', veg.sav);
+  p2.__hibak.length && all('nincs JS hiba (állás)', false, p2.__hibak.join(' | '));
+  await p2.close();
+
+  // c) kijelölt szakasznál nem kérdez: ott a végkapu zár
+  const p3 = await ujLap(b, { gps: { menet: [[90, 2000], [0.5, 400]] } });
+  await p3.goto(CIM);
+  await p3.click('#btn-cta');
+  await p3.click('#mod-vezetek');
+  await p3.waitForSelector('#meres-elo:not([hidden])');
+  await p3.evaluate(() => {
+    const S = window.atlagsebesseg.S;
+    S.autoHatar = false;
+    S.kapuk.start = { lat: 47.5, lon: 19.0 };
+    S.kapuk.end = { lat: 47.5 + 20000 / 111320, lon: 19.0 };
+  });
+  await p3.click('#btn-meres');
+  await p3.waitForTimeout(6000);
+  all('kijelölt szakasznál nem kérdez',
+      await p3.evaluate(() => document.getElementById('allas-lap').hidden));
+  p3.__hibak.length && all('nincs JS hiba (kapus állás)', false, p3.__hibak.join(' | '));
+  await p3.close();
+}
+
 /* ================================================================ futás */
 
 const b = await chromium.launch({ executablePath: BONGESZO });
@@ -1159,6 +1262,7 @@ try {
   await kalkModok(b);
   await hosszuSzakasz(b);
   await mozgasTeszt(b);
+  await allasTeszt(b);
 } finally {
   await b.close();
 }
