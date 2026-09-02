@@ -101,6 +101,14 @@ szöveg írásakor ezt tartsuk.
   (ENSZ-EGB 39.). Ezért a Pillanatnyi érték alatt kiírjuk, nagyjából
   mennyit mutat ilyenkor a műszerfal, és a Tudnivalók elmagyarázza,
   miért a kisebb szám a valós.
+- **Rossz határ kézzel javítható, a listából és a térképről is.** Az
+  OpenStreetMapben sok magyar úton nincs kitáblázott `maxspeed`, ilyenkor
+  az út típusából becsülünk, és tévedhetünk. Koppints a szakaszra a
+  listában vagy a nyomvonalra a térképen, és írd át. A javítás **a
+  nyomvonal pontjaihoz tapad**, nem a szakasz sorszámához: egy újabb
+  határlekérés átrendezheti a bontást, a javítás akkor is a helyén marad,
+  és a lekérés sem törli. Visszaállni az OpenStreetMap értékére egy
+  gombbal lehet.
 - **A tábla a helyben érvényes korlátozást mutatja**, ha egyszer lekérted a
   határokat: ahogy az útépítési szakaszra érsz, 130-ról 80-ra vált. Ez
   független a „megengedett átlag" mezőtől, ami az egész szakaszra vonatkozó,
@@ -245,7 +253,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 163 ellenőrzést futtat végig 23 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 176 ellenőrzést futtat végig 24 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -281,7 +289,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (163 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (176 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── icons/  manifest.webmanifest  sw.js
 ```

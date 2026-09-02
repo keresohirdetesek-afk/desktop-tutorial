@@ -1,7 +1,7 @@
 // Offline működés: az alkalmazás saját fájljai gyorsítótárba kerülnek.
 // Mérési adat nincs — nincs is mit menteni vagy szinkronizálni.
 
-const CACHE = 'atlagsebesseg-v14';
+const CACHE = 'atlagsebesseg-v15';
 const ASSETS = [
   './',
   'index.html',

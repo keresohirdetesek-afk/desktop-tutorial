@@ -33,7 +33,11 @@ const S = {
   kapuk: { start: null, end: null, sugar: 60 },
   jelolMod: null,      // 'start' | 'end' | null
   utak: null,          // OSM utak (lekérés után)
-  felulir: new Map(),  // szakaszindex -> kézzel megadott határ
+  /* Kézi felülírások. Nem szakaszsorszámra kötjük, hanem a nyomvonal
+     pontindex-tartományára: egy új határlekérés átrendezi a szakaszokat,
+     és a sorszámra kötött javítás ilyenkor rossz helyre csúszna. A
+     pontok viszont csak bővülnek, az indexük marad.                  */
+  felulir: [],         // [{ i0, i1, limit }]
   alap: 90,
   kezi: null,          // kézzel megadott határ az egész szakaszra
   autoHatar: true,     // menet közbeni, automatikus határlekérés
@@ -219,13 +223,18 @@ function bontas(pontok) {
       sz.becsult = false;
     }
   }
-  S.felulir.forEach((limit, i) => {
-    if (szakaszok[i]) {
-      szakaszok[i].limit = limit;
-      szakaszok[i].cimke = 'kézzel megadva';
-      szakaszok[i].becsult = false;
-    }
-  });
+  /* A javítás minden olyan szakaszra érvényes, amely átfed a felülírt
+     tartománnyal. Átfedést nézünk, nem középpontot: a nyomvonal utolsó
+     szakasza menet közben folyamatosan nyúlik, és a közepe kicsúszna a
+     javított tartományból. Egy útszakaszra adott javítás így akkor is a
+     helyén marad, ha egy újabb lekérés átrendezi a bontást.        */
+  for (const sz of szakaszok) {
+    const talalat = S.felulir.find((f) => f.i0 <= sz.i1 && f.i1 >= sz.i0);
+    if (!talalat) continue;
+    sz.limit = talalat.limit;
+    sz.cimke = 'kézzel megadva';
+    sz.becsult = false;
+  }
   return szakaszok;
 }
 
@@ -475,9 +484,52 @@ function jelvenyek(sz) {
   return j.join(' ');
 }
 
+/* A szakaszok szövege másodpercenként változik (nő a táv és az idő), a
+   szerkezete viszont ritkán. Ha minden fixnél újraépítenénk a listát, a
+   koppintás alatt cserélődne ki a sor, és a fókusz is elveszne. Ezért
+   szerkezetváltáskor építünk, egyébként csak a szöveget frissítjük.  */
+function listaAlairas(eredmeny, szerkesztheto) {
+  /* A pontindexek minden fixnél nőnek, ezért nem lehetnek az aláírás
+     része: attól minden másodpercben újraépülne a lista.            */
+  return `${szerkesztheto}|` +
+    eredmeny.szakaszok.map((sz) => `${sz.limit}:${sz.cimke}`).join(';');
+}
+
+function szakaszSorSzoveg(sor, sz, eredmeny) {
+  // a sor mindig a friss szakaszt tartja, hogy a javítás jó tartományra menjen
+  sor.__szakasz = sz;
+  const e = sz.ertekeles;
+  const allapot = e.birsagos ? 'birsag' : e.tartalek <= 5 ? 'hatar' : 'ok';
+  sor.className = `seg ${allapot}${sor.classList.contains('kattinthato') ? ' kattinthato' : ''}`;
+  sor.querySelector('.seg-info').innerHTML =
+    `<strong>${fmtDistance(sz.tav)}</strong> · ${fmtDuration(sz.ido)}<br>` +
+    `<span class="muted">átlag ${fmtSpeed1(e.mert)} km/h</span><br>` +
+    `<span class="muted small">${sz.nev ? `${sz.nev}, ` : ''}${sz.cimke}</span> ${jelvenyek(sz)}`;
+  const donto = eredmeny.legsulyosabb === sz;
+  const verd = sor.querySelector('.seg-verd');
+  verd.className = `seg-verd ${allapot}`;
+  verd.innerHTML = e.birsagos
+    ? (donto
+      ? `${fmtForint(e.osszeg)}<small>ez szabja meg a bírságot</small>`
+      : `+${fmtSpeed1(e.tullepes)}<span class="small"> km/h</span>` +
+        `<small>a határ felett</small>`)
+    : `+${fmtSpeed1(Math.max(0, e.tartalek))}<span class="small"> km/h</span>` +
+      `<small>a bírsághatárig</small>`;
+}
+
 function szakaszLista(node, eredmeny, { szerkesztheto }) {
+  if (!eredmeny || eredmeny.szakaszok.length === 0) {
+    node.innerHTML = '';
+    node.dataset.alairas = '';
+    return;
+  }
+  const alairas = listaAlairas(eredmeny, szerkesztheto);
+  if (node.dataset.alairas === alairas && node.children.length === eredmeny.szakaszok.length) {
+    eredmeny.szakaszok.forEach((sz, i) => szakaszSorSzoveg(node.children[i], sz, eredmeny));
+    return;
+  }
+  node.dataset.alairas = alairas;
   node.innerHTML = '';
-  if (!eredmeny || eredmeny.szakaszok.length === 0) return;
   eredmeny.szakaszok.forEach((sz, i) => {
     const e = sz.ertekeles;
     const allapot = e.birsagos ? 'birsag' : e.tartalek <= 5 ? 'hatar' : 'ok';
@@ -505,20 +557,45 @@ function szakaszLista(node, eredmeny, { szerkesztheto }) {
         : `+${fmtSpeed1(Math.max(0, e.tartalek))}<span class="small"> km/h</span>` +
           `<small>a bírsághatárig</small>`);
 
+    sor.__szakasz = sz;
     sor.append(limitDoboz, info, verd);
     node.append(sor);
 
     if (szerkesztheto) {
-      limitDoboz.addEventListener('click', () => limitLapNyit({
-        cim: 'Szakaszrész sebességhatára',
-        alcim: `${fmtDistance(sz.tav)}, ${sz.nev || sz.cimke}`,
-        ertek: sz.limit,
-        onValaszt: (v) => {
-          S.felulir.set(i, v);
-          elonezetFrissit();
-        },
-      }));
+      /* Az egész sor koppintható, nem csak a tábla: menet közben, kézben
+         tartott telefonon a nagyobb célfelület sokat számít.          */
+      sor.classList.add('kattinthato');
+      sor.tabIndex = 0;
+      sor.setAttribute('role', 'button');
+      sor.setAttribute('aria-label',
+        `${sz.limit} km/h-s szakaszrész, ${fmtDistance(sz.tav)}. Koppints a javításhoz.`);
+      const nyit = () => szakaszHatarJavitas(sor.__szakasz || sz);
+      sor.addEventListener('click', nyit);
+      sor.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); nyit(); }
+      });
     }
+  });
+}
+
+/* Egy szakaszrész határának kézi javítása. A listából és a térképről is
+   ide fut be, hogy a viselkedés mindenhol ugyanaz legyen.            */
+function szakaszHatarJavitas(sz) {
+  limitLapNyit({
+    cim: 'Szakaszrész sebességhatára',
+    alcim: `${fmtDistance(sz.tav)}${sz.nev ? `, ${sz.nev}` : ''} · most ${sz.cimke}`,
+    ertek: sz.limit,
+    osmGomb: S.felulir.some((f) => f.i0 <= sz.i1 && f.i1 >= sz.i0),
+    onValaszt: (v) => {
+      // az átfedő korábbi javítások helyére lép az új
+      S.felulir = S.felulir.filter((f) => f.i1 < sz.i0 || f.i0 > sz.i1);
+      S.felulir.push({ i0: sz.i0, i1: sz.i1, limit: v });
+      elonezetFrissit();
+    },
+    onOsm: () => {
+      S.felulir = S.felulir.filter((f) => f.i1 < sz.i0 || f.i0 > sz.i1);
+      elonezetFrissit();
+    },
   });
 }
 
@@ -838,13 +915,17 @@ function elonezetFrissit() {
     : 'Sebességhatárok: az automatikus lekérés ki van kapcsolva.';
   hatarSor.className = `muted small center${S.lekeresAllapot === 'hiba' ? ' figyelem' : ''}`;
 
-  const mutat = eredmeny.szakaszok.length > 1 || meres.allapot === ALLAPOT.KESZ;
+  /* A lista mérés közben is látszik és szerkeszthető: ha az app rossz
+     határt talált, azt ott és akkor kell tudni javítani, amikor látod a
+     táblát, nem csak utólag.                                         */
+  const mutat = eredmeny.szakaszok.length > 0;
   $('szakasz-kartya').hidden = !mutat;
-  if (mutat) {
-    szakaszLista($('szakasz-lista'), eredmeny, { szerkesztheto: meres.allapot !== ALLAPOT.MER });
-  }
+  if (mutat) szakaszLista($('szakasz-lista'), eredmeny, { szerkesztheto: true });
 
-  terkep?.nyomvonalRajz(p, eredmeny.szakaszok);
+  terkep?.nyomvonalRajz(p, eredmeny.szakaszok, (i) => {
+    const sz = eredmeny.szakaszok[i];
+    if (sz) szakaszHatarJavitas(sz);
+  });
   terkep?.pozicioRajz(meres.utolso);
 
   const fut = meres.allapot === ALLAPOT.VAR || meres.allapot === ALLAPOT.MER;
@@ -1143,6 +1224,31 @@ function profilLapZar() {
 
 /* ============================================================ OSM lekérés */
 
+/* Egy lekérés akkor is „sikeres”, ha semmit nem javított: sok magyar úton
+   nincs kitáblázott maxspeed az OpenStreetMapben. Ezt ki kell mondani,
+   különben a felhasználó azt hiszi, elromlott valami.               */
+function lekeresOsszegzes(utDb) {
+  const e = utolsoEredmeny;
+  if (!e || e.szakaszok.length === 0) {
+    return `${utDb} útszakasz adata megérkezett. Indítsd el a mérést, ` +
+           'és a szakaszok a nyomvonal mentén kapják meg a határokat.';
+  }
+  const becsult = e.szakaszok.filter((sz) => sz.becsult);
+  const becsultTav = becsult.reduce((a, sz) => a + sz.tav, 0);
+  const kezi = e.szakaszok.filter((sz) => sz.cimke === 'kézzel megadva').length;
+  const keziResz = kezi
+    ? ` A kézzel javított ${kezi} rész érintetlen maradt.`
+    : '';
+  if (becsult.length === 0) {
+    return `${utDb} útszakasz adata megérkezett, és minden szakaszrészen van ` +
+           `érték.${keziResz} Ha mást láttál kint, koppints a szakaszra.`;
+  }
+  return `${utDb} útszakasz adata megérkezett, de ${becsult.length} részen ` +
+         `(${fmtDistance(becsultTav)}) nincs kitáblázott érték az ` +
+         `OpenStreetMapben, ott az út típusából becsülünk.${keziResz} ` +
+         'Koppints a szakaszra a listában vagy a térképen, és írd át.';
+}
+
 async function osmLekeres() {
   // Nyomvonal nélkül is van értelme: a jelenlegi helyzet körül lekérve máris
   // a valódi korlátozás kerül a táblára, még indulás előtt.
@@ -1166,11 +1272,11 @@ async function osmLekeres() {
     S.utak = [...S.utakMap.values()];
     S.lekeresKozep = meres.utolso || S.lekeresKozep;
     S.lekeresAllapot = 'kesz';
-    S.felulir.clear();
-    $('osm-allapot').textContent =
-      `${utak.length} útszakasz adata megérkezett. Ahol mást láttál kint, ` +
-      `írd át a listában, és a számítás azonnal frissül.`;
+    /* A kézi javításokat NEM dobjuk el: a felülírás a nyomvonal
+       pontjaihoz kötődik, tehát az új bontás után is a helyén marad.
+       Ha valaki kijavította a táblát, azt a lekérés nem írhatja felül. */
     elonezetFrissit();
+    $('osm-allapot').textContent = lekeresOsszegzes(utak.length);
   } catch (e) {
     $('osm-allapot').textContent =
       `Nem sikerült a lekérés (${e.message}). Az app az alapértelmezett határral számol tovább.`;
@@ -1242,7 +1348,7 @@ function jelolMod(mod) {
 
 /** Mérés indítása a jelenlegi kapukkal. */
 function meresIndit() {
-  S.felulir.clear();
+  S.felulir = [];
   elozoAllapot = 'semleges';
   gong.ebreszt();          // hangot csak felhasználói mozdulat után enged a böngésző
   meres.indit({ ...S.kapuk });
@@ -1252,7 +1358,7 @@ function ujSzimulacio() {
   allasLapZar();
   meres.leallit();
   meres.reset();
-  S.felulir.clear();
+  S.felulir = [];
   S.kezi = null;
   S.utak = null;
   S.utakMap.clear();
@@ -1543,7 +1649,10 @@ function temaGombFrissit() {
 function indul() {
   // Fogódzó fejlesztéshez és automatikus teszthez. Nincs benne más, mint ami
   // amúgy is a memóriában van; sehová nem kerül el.
-  window.atlagsebesseg = { S, meres, terkep: null, eloNezet, gong };
+  window.atlagsebesseg = {
+    S, meres, terkep: null, eloNezet, gong,
+    get eredmeny() { return utolsoEredmeny; },
+  };
 
   ora = new Ora($('ora'));
   kalkOra = new Ora($('k-ora'));

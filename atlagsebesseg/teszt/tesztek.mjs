@@ -1236,6 +1236,107 @@ async function allasTeszt(b) {
   await p3.close();
 }
 
+
+/* ================================ 24. kézi határjavítás listából, térképről */
+
+async function javitasTeszt(b) {
+  console.log('\n24. Sebességhatár kézi javítása');
+  const p = await ujLap(b, { gps: { menet: [[100, 12000]] } });
+  // egy valós OSM-válasz, hogy legyen mit felülírni
+  await p.route('**/interpreter**', (r) => r.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ elements: [{
+      type: 'way', id: 1,
+      tags: { highway: 'secondary', maxspeed: '90', name: 'Teszt út' },
+      geometry: Array.from({ length: 80 }, (_, i) => ({ lat: 47.5 + i * 0.0009, lon: 19.0 })),
+    }] }),
+  }));
+  await p.goto(CIM);
+  await p.click('#btn-cta');
+  await p.click('#mod-vezetek');
+  await p.waitForSelector('#meres-elo:not([hidden])');
+  await p.click('#btn-meres');
+  await p.waitForFunction(() => window.atlagsebesseg.meres.pontok.length > 25,
+    null, { timeout: 20000 });
+  await p.waitForTimeout(700);
+
+  const alap = await p.evaluate(() => ({
+    kartya: !document.getElementById('szakasz-kartya').hidden,
+    kattinthato: !!document.querySelector('#szakasz-lista .seg.kattinthato'),
+    limitek: window.atlagsebesseg.eredmeny.szakaszok.map((sz) => sz.limit),
+  }));
+  all('a szakaszlista mérés közben is látszik', alap.kartya);
+  all('a szakaszsor koppintható', alap.kattinthato);
+  all('az OSM-adatból lett határ', alap.limitek[0] === 90, JSON.stringify(alap.limitek));
+
+  // javítás a listából
+  await p.click('#szakasz-lista .seg');
+  await p.waitForSelector('#limit-lap:not([hidden])');
+  await p.evaluate(() => {
+    [...document.querySelectorAll('#limit-racs .limit-jel')]
+      .find((g) => g.textContent === '70').click();
+  });
+  await p.waitForTimeout(400);
+  const javitva = await p.evaluate(() => ({
+    felulir: window.atlagsebesseg.S.felulir.length,
+    limit: window.atlagsebesseg.eredmeny.szakaszok[0].limit,
+    cimke: window.atlagsebesseg.eredmeny.szakaszok[0].cimke,
+    lapZarva: document.getElementById('limit-lap').hidden,
+  }));
+  all('a listából javítható a határ', javitva.limit === 70, String(javitva.limit));
+  all('a javítás címkéje kézzel megadva', javitva.cimke === 'kézzel megadva', javitva.cimke);
+  all('a javítás eltárolódik', javitva.felulir === 1, String(javitva.felulir));
+  all('a választó becsukódik', javitva.lapZarva);
+
+  // teljes nyomvonal lekérése: a javítás maradjon meg
+  await p.evaluate(() =>
+    document.querySelector('#scr-meres details.halado').setAttribute('open', ''));
+  await p.click('#btn-osm');
+  await p.waitForTimeout(1600);
+  const lekeresUtan = await p.evaluate(() => ({
+    limit: window.atlagsebesseg.eredmeny.szakaszok[0].limit,
+    allapot: document.getElementById('osm-allapot').textContent,
+  }));
+  all('az újabb lekérés nem törli a kézi javítást',
+      lekeresUtan.limit === 70, String(lekeresUtan.limit));
+  all('a lekérés jelenti, mi lett az eredménye',
+      /megérkezett/.test(lekeresUtan.allapot), lekeresUtan.allapot.slice(0, 80));
+
+  // visszaállítás az OSM adatára
+  await p.click('#szakasz-lista .seg');
+  await p.waitForSelector('#limit-lap:not([hidden])');
+  const vanOsmGomb = await p.evaluate(() => !document.getElementById('limit-osm').hidden);
+  all('javított szakaszon felkínálja a visszaállítást', vanOsmGomb);
+  await p.click('#limit-osm');
+  await p.waitForTimeout(400);
+  all('a visszaállítás visszaadja az OSM értékét',
+      (await p.evaluate(() => window.atlagsebesseg.eredmeny.szakaszok[0].limit)) === 90);
+
+  // térképi koppintás ugyanazt nyitja
+  const terkepi = await p.evaluate(() => {
+    const A = window.atlagsebesseg;
+    let hivva = -1;
+    A.terkep.nyomvonalRajz(A.meres.pontok, A.eredmeny.szakaszok, (i) => { hivva = i; });
+    A.terkep.nyomvonal.eachLayer((l) => {
+      if (hivva < 0 && l.fire) l.fire('click', { originalEvent: new MouseEvent('click') });
+    });
+    return hivva;
+  });
+  all('a térképen a nyomvonalra koppintva is javítható', terkepi === 0, String(terkepi));
+
+  // a lista nem épül újra minden fixnél
+  const stabil = await p.evaluate(async () => {
+    const sor = document.querySelector('#szakasz-lista .seg');
+    await new Promise((r) => setTimeout(r, 600));
+    return sor.isConnected;
+  });
+  all('a lista nem cserélődik ki minden fixnél', stabil);
+
+  p.__hibak.length && all('nincs JS hiba (javítás)', false, p.__hibak.join(' | '));
+  await p.close();
+}
+
 /* ================================================================ futás */
 
 const b = await chromium.launch({ executablePath: BONGESZO });
@@ -1263,6 +1364,7 @@ try {
   await hosszuSzakasz(b);
   await mozgasTeszt(b);
   await allasTeszt(b);
+  await javitasTeszt(b);
 } finally {
   await b.close();
 }
