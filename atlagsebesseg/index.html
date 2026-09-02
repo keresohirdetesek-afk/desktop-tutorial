@@ -191,6 +191,15 @@
 
         <!-- óra + státusz + adatok -->
         <section class="card ora-kartya" id="ora-kartya">
+          <div class="szunet-sav" id="szunet-sav" hidden>
+            <span>
+              <strong>A mérés felfüggesztve.</strong>
+              Az állás ideje nem számít bele a szakaszátlagba.
+              Elindulásra magától folytatódik.
+            </span>
+            <button id="btn-folytat" class="btn small">Folytatás</button>
+          </div>
+
           <div class="ora-doboz">
             <svg id="ora" class="ora" role="img" aria-label="Sebességmérő"></svg>
           </div>
@@ -624,6 +633,26 @@
 </nav>
 
 <!-- sebességhatár-választó: bárhonnan hívható, egy helyen van definiálva -->
+<div id="allas-lap" class="lap" hidden>
+  <div class="lap-hatter" data-allas-nem></div>
+  <div class="lap-doboz" role="alertdialog" aria-modal="true"
+       aria-labelledby="allas-cim" aria-describedby="allas-alcim">
+    <h2 id="allas-cim">Megálltál. Felfüggesszük a mérést?</h2>
+    <p id="allas-alcim" class="muted small">
+      Több mint egy perce állsz. Felfüggesztve az állás ideje nem
+      számít bele a szakaszátlagba, és elinduláskor magától folytatódik.
+    </p>
+    <div class="allas-gombok">
+      <button id="btn-allas-igen" class="btn primary grow">Igen, függeszd fel</button>
+      <button id="btn-allas-nem" class="btn grow" data-allas-nem>Nem, menjen tovább</button>
+    </div>
+    <p class="allas-visszaszamlalo">
+      Válasz nélkül a mérés megy tovább:
+      <strong id="allas-szamlalo">5</strong>
+    </p>
+  </div>
+</div>
+
 <div id="profil-lap" class="profil-lap" hidden>
   <div class="profil-lap-fejlec">
     <strong id="profil-lap-cim">Sebességprofil</strong>
