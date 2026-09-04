@@ -671,6 +671,15 @@ async function elrendezesTeszt(b) {
         all(`${sz}px ${tema} ${scr}: nincs vízszintes túllógás`,
             t.doc <= t.cw && t.rossz.length === 0, `${t.doc}/${t.cw} ${t.rossz.join(',')}`);
       }
+
+      /* A szóvédjegy a márka: ha a fejlécben bármi meghízik (nagyobb
+         ikongomb, hosszabb GPS-felirat), előbb ez vágódik le — és épp
+         ezt nem szabad.                                               */
+      const fejlec = await p.evaluate(() => {
+        const h = document.querySelector('#topbar h1');
+        return h.scrollWidth > h.clientWidth + 1;
+      });
+      all(`${sz}px ${tema}: a szóvédjegy nincs levágva`, !fejlec);
       /* Az élő nézet rejtett elemben ül, a fenti bejárás ezért nem látja.
          A térkép alatti gombsor pont így tudott kilógni a képernyőről. */
       await p.click('#tabs .tab[data-scr="scr-meres"]');
@@ -718,9 +727,31 @@ async function hozzaferesTeszt(b) {
       .map((g) => g.id || g.className);
     const kepek = [...document.querySelectorAll('svg[role="img"]')]
       .filter((s) => !s.getAttribute('aria-label')).length;
+    // minden beviteli mezőhöz tartozzon címke vagy aria-label
+    const cimketlen = [...document.querySelectorAll('input, select')]
+      .filter((e) => !e.labels?.length && !e.getAttribute('aria-label'))
+      .map((e) => e.id || e.type);
+    const rosszFor = [...document.querySelectorAll('label[for]')]
+      .filter((l) => !document.getElementById(l.htmlFor)).map((l) => l.htmlFor);
+    /* Érintőfelület: vezetés közben, rázkódó autóban a pár képpontos
+       gombot nem lehet eltalálni. A jelölőnégyzet kivétel, mert a
+       feliratára koppintva is vált.                                   */
+    document.getElementById('meres-intro').hidden = true;
+    document.getElementById('meres-elo').hidden = false;
+    const kicsi = [...document.querySelectorAll('button, a.btn, a.chip')]
+      .filter((e) => {
+        const b = e.getBoundingClientRect();
+        return b.width > 0 && b.height > 0 && (b.height < 34 || b.width < 30);
+      })
+      .map((e) => `${e.id || e.className}:${Math.round(e.getBoundingClientRect().height)}`);
+    document.getElementById('meres-elo').hidden = true;
+    document.getElementById('meres-intro').hidden = false;
     return {
       nevtelen,
       kepek,
+      cimketlen,
+      rosszFor,
+      kicsi,
       nyelv: document.documentElement.lang,
       cim: document.title,
       leiras: !!document.querySelector('meta[name="description"]'),
@@ -728,6 +759,9 @@ async function hozzaferesTeszt(b) {
   });
   all('minden gombnak van neve', r.nevtelen.length === 0, r.nevtelen.join(', '));
   all('minden képi SVG feliratozott', r.kepek === 0, String(r.kepek));
+  all('minden beviteli mezőnek van címkéje', r.cimketlen.length === 0, r.cimketlen.join(', '));
+  all('nincs félrehivatkozó label[for]', r.rosszFor.length === 0, r.rosszFor.join(', '));
+  all('nincs túl kicsi érintőfelület', r.kicsi.length === 0, r.kicsi.join(' | '));
   all('a lap nyelve magyar', r.nyelv === 'hu', r.nyelv);
   all('van cím és leírás', !!r.cim && r.leiras);
   p.__hibak.length && all('nincs JS hiba (hozzáférés)', false, p.__hibak.join(' | '));
@@ -758,6 +792,48 @@ async function eszkozTeszt(b) {
   all('a service worker regisztrált', r.sw);
   const hibas = [...valaszok.entries()].filter(([u, s]) => s >= 400 && !u.includes('interpreter'));
   all('nincs 404-es helyi erőforrás', hibas.length === 0, JSON.stringify(hibas));
+
+  /* Kiadás előtti alapok: link-előnézet, indexelhetőség, telepíthetőség.
+     Ezek hiánya csak élesben derülne ki, amikor valaki megosztja a
+     linket, és egy csupasz URL jelenik meg.                            */
+  const meta = await p.evaluate(() => {
+    const g = (s) => document.querySelector(s)?.getAttribute('content') || '';
+    return {
+      ogCim: g('meta[property="og:title"]'),
+      ogKep: g('meta[property="og:image"]'),
+      ogLeiras: g('meta[property="og:description"]'),
+      twitter: g('meta[name="twitter:card"]'),
+      canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
+      mobil: g('meta[name="mobile-web-app-capable"]'),
+      appleCim: g('meta[name="apple-mobile-web-app-title"]'),
+    };
+  });
+  all('van og:title', !!meta.ogCim, meta.ogCim);
+  all('van og:description', !!meta.ogLeiras);
+  all('van og:image', /og\.png$/.test(meta.ogKep), meta.ogKep);
+  all('van twitter:card', meta.twitter === 'summary_large_image', meta.twitter);
+  all('van canonical URL', !!meta.canonical, meta.canonical);
+  all('van mobile-web-app-capable', meta.mobil === 'yes', meta.mobil);
+  all('van apple-mobile-web-app-title', !!meta.appleCim, meta.appleCim);
+
+  const kiszolgalt = await p.evaluate(async () => {
+    const ki = {};
+    for (const u of ['robots.txt', 'sitemap.xml', 'icons/og.png', 'icons/icon-maskable.png']) {
+      ki[u] = (await fetch(u)).status;
+    }
+    return ki;
+  });
+  for (const [u, s] of Object.entries(kiszolgalt)) all(`elérhető: ${u}`, s === 200, String(s));
+
+  /* A gyorsítótár-lista teljessége: egy kifelejtett JS modul offline
+     fehér képernyőt jelent, ami csak repülőn derülne ki.              */
+  const swSzoveg = await p.evaluate(() => fetch('sw.js').then((r) => r.text()));
+  const modulok = ['app', 'birsag', 'gauge', 'geo', 'hang', 'limits', 'map',
+                   'megosztas', 'profil', 'tema', 'track'];
+  const hianyzo = modulok.filter((m) => !swSzoveg.includes(`'js/${m}.js'`));
+  all('minden JS modul rajta van a gyorsítótár-listán', hianyzo.length === 0, hianyzo.join(','));
+  all('az adatvédelmi oldal is gyorsítótárazott', swSzoveg.includes("'adatvedelem.html'"));
+
   p.__hibak.length && all('nincs JS hiba (eszközök)', false, p.__hibak.join(' | '));
   await p.close();
 }

@@ -214,6 +214,38 @@ python3 -m http.server 8765
 A GPS-hez **HTTPS kell** (vagy `localhost`) — a böngésző máshol nem adja meg
 a helyzetet.
 
+## Publikálás
+
+Az app abból indul ki, hogy a **tartomány gyökerében** áll: az `og:url`, a
+`canonical`, a `robots.txt` és a `sitemap.xml` mind `https://atlagsebesseg.hu/`
+alá mutat, és a megosztható kép is ezt írja ki.
+
+Ez a repó viszont két alkalmazást tartalmaz, az app pedig az
+`atlagsebesseg/` almappában van. GitHub Pages ilyenkor
+`.../desktop-tutorial/atlagsebesseg/` alatt szolgálja ki. **A kettő nem
+egyezik**, ezért publikálás előtt dönteni kell:
+
+1. **Saját repó a gyökérben** (ajánlott). Az `atlagsebesseg/` tartalma egy új
+   repó gyökerébe kerül, a Pages arra mutat, a `CNAME` fájlba
+   `atlagsebesseg.hu` kerül. Ekkor minden fenti hivatkozás stimmel, és az
+   `utvonalbejaras` sem sérül.
+2. **Marad itt, almappában.** Ekkor át kell írni az `og:url`, `canonical`,
+   `robots.txt`, `sitemap.xml` értékeit a tényleges útvonalra, és a
+   `megosztas.js` láblécében a kiírt címet is.
+
+DNS-oldalon a `atlagsebesseg.hu` A-rekordjai a GitHub Pages négy címére
+(185.199.108–111.153) mennek, a `www` pedig CNAME-ként a
+`<felhasználó>.github.io` névre. A HTTPS-t a Pages állítja ki magától
+(Let's Encrypt), ez a DNS átállása után pár perctől pár óráig tart.
+
+Publikálás után érdemes egyszer végigfuttatni:
+
+```bash
+# a tesztkészlet a helyi kiszolgáló ellen
+python3 -m http.server 8768 --directory atlagsebesseg
+node atlagsebesseg/teszt/tesztek.mjs
+```
+
 ## Honnan jönnek a sebességhatárok?
 
 Ez a projekt legkényesebb pontja, ezért érdemes tudni, mi a helyzet:
@@ -253,7 +285,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 213 ellenőrzést futtat végig 25 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 237 ellenőrzést futtat végig 25 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -290,9 +322,10 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (213 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (237 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
+├── robots.txt  sitemap.xml
 ├── icons/  manifest.webmanifest  sw.js
 ```
 
