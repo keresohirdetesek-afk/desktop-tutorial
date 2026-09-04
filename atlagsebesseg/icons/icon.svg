@@ -1,51 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Átlagsebesség.hu">
   <title>Átlagsebesség.hu</title>
-  <!-- A jelkép: két kapu között futó út, fölötte sebességmérő ív.
-       A bal kapu (START) piros, a jobb (END) sötét: a szakasz eleje és
-       vége. A mérőív jobb harmada piros, a mutató éppen oda ér.       -->
+  <!-- A jelkép: perspektívában távolodó út, a szakasz két végén egy-egy
+       helyjelölő tű, fölöttük a két pontot összekötő ív. Az ív bal fele
+       tömör piros (a megtett rész), a jobb fele szaggatott (ami hátra
+       van). Kevés elem, nagy formák: 16 képpontos favikonként is
+       felismerhető marad.                                             -->
+  <style>
+    .ut    { fill: #1b1f24; }
+    .csik  { fill: #ffffff; }
+    .piros { fill: #e8332a; }
+    .iv-piros { fill: none; stroke: #e8332a; stroke-width: 26; stroke-linecap: round; }
+    .iv-sotet { fill: none; stroke: #1b1f24; stroke-width: 26; stroke-dasharray: 30 20; }
+    /* Sötét böngészősávon a sötét út beleolvadna a háttérbe. */
+    @media (prefers-color-scheme: dark) {
+      .ut { fill: #f2f3f5; }
+      .csik { fill: #1b1f24; }
+      .iv-sotet { stroke: #f2f3f5; }
+    }
+  </style>
 
-  <!-- út: a horizonton összeszűkülő sáv, benne a fehér szélső
-       burkolatjelekkel. A perspektíva miatt lefelé szélesednek.      -->
-  <path d="M228 316 L284 316 L474 472 L38 472 Z" fill="#1b1f24"/>
-  <path d="M231 316 L238 316 L96 472 L62 472 Z" fill="#ffffff"/>
-  <path d="M274 316 L281 316 L450 472 L416 472 Z" fill="#ffffff"/>
+  <!-- út: lent széles, a horizont felé elkeskenyedő sáv -->
+  <path class="ut" d="M78 452 C140 392 250 330 322 266 L348 266 C392 330 430 392 428 452 Z"/>
 
-  <!-- felezővonal: a perspektíva miatt lefelé hosszabb szakaszokkal -->
-  <g fill="#ffffff">
-    <path d="M253.4 322 L258.6 322 L259.4 340 L252.6 340 Z"/>
-    <path d="M252.2 354 L259.8 354 L261 379 L251 379 Z"/>
-    <path d="M250.2 396 L261.8 396 L263.6 431 L248.4 431 Z"/>
-    <path d="M247.6 449 L264.4 449 L265.4 470 L246.6 470 Z"/>
+  <!-- felezővonal: a perspektíva miatt lefelé hosszabb és szélesebb -->
+  <g class="csik">
+    <path d="M331.0 272 L335.4 272 L329.0 296 L323.1 296 Z"/>
+    <path d="M318.5 310 L325.3 310 L313.9 340 L305.1 340 Z"/>
+    <path d="M297.8 356 L307.6 356 L295.0 392 L282.8 392 Z"/>
+    <path d="M269.0 410 L282.3 410 L261.0 452 L245.0 452 Z"/>
   </g>
 
-  <!-- mérőív: sötét fő szakasz, piros vég -->
-  <path d="M96 300 A160 160 0 0 1 331 158" fill="none" stroke="#1b1f24"
-        stroke-width="34" stroke-linecap="round"/>
-  <path d="M341 164 A160 160 0 0 1 411 288" fill="none" stroke="#e01b1b"
-        stroke-width="34" stroke-linecap="round"/>
+  <!-- a két végpontot összekötő ív -->
+  <path class="iv-piros" d="M100 258 A161 161 0 0 1 238.2 141.4"/>
+  <path class="iv-sotet" d="M271.8 141.4 A161 161 0 0 1 410 258"/>
 
-  <!-- mutató: a piros mező felé áll -->
-  <path d="M256 300 L366 190" fill="none" stroke="#e01b1b"
-        stroke-width="20" stroke-linecap="round"/>
-  <circle cx="256" cy="300" r="21" fill="#e01b1b"/>
-
-  <!-- START kapu -->
-  <g fill="#e01b1b">
-    <rect x="70" y="292" width="140" height="46" rx="8"/>
-    <rect x="76" y="338" width="22" height="118" rx="6"/>
-    <rect x="182" y="338" width="22" height="118" rx="6"/>
+  <!-- helyjelölő tűk: a szakasz eleje és vége -->
+  <g class="piros">
+    <path d="M71.5 308.8 A42 42 0 1 1 148.5 308.8 L110 397 Z"/>
+    <path d="M361.5 308.8 A42 42 0 1 1 438.5 308.8 L400 397 Z"/>
   </g>
-  <text x="140" y="325" text-anchor="middle" fill="#ffffff"
-        font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700"
-        letter-spacing="1">START</text>
-
-  <!-- END kapu -->
-  <g fill="#1b1f24">
-    <rect x="316" y="292" width="126" height="46" rx="8"/>
-    <rect x="322" y="338" width="22" height="118" rx="6"/>
-    <rect x="414" y="338" width="22" height="118" rx="6"/>
-  </g>
-  <text x="379" y="325" text-anchor="middle" fill="#ffffff"
-        font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700"
-        letter-spacing="1">END</text>
 </svg>
