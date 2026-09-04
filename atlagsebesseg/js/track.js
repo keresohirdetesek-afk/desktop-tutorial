@@ -24,6 +24,20 @@ const ALLO_SEBESSEG = 3;      // km/h — ez alatt állónak tekintjük
 const ALLAS_KERDES = 70000;   // ms — ennyi állás után kérdezünk
 const FOLYTAT_SEBESSEG = 10;  // km/h — ennél gyorsabban magától folytatja
 
+/* Nem minden vevő adja meg a `coords.speed` értéket (asztali böngésző,
+   néhány androidos készülék, wifis helymeghatározás). Ilyenkor a
+   sebességet a fixekből kell számolni — két szomszédos fixből viszont
+   állva is 10-20 km/h jön ki, mert a vevő néhány métert ugrál. Ezért a
+   „megálltunk-e” döntéshez hosszabb ablakot nézünk: a zaj kiátlagolódik,
+   a valódi mozgás átüt rajta. Itt a késés nem számít, hiszen amúgy is
+   percnyi állásra várunk.                                            */
+const SIMA_ABLAK = 12000;     // ms
+
+/* Az elindulást viszont gyorsan észre kell venni, és arra a megtett
+   távolság a legmegbízhatóbb jel: állva a vevő szórása néhány méter,
+   elhajtva viszont pillanatok alatt túl vagyunk ezen.                */
+const FOLYTAT_TAVOLSAG = 60;  // m — ennyit elhagyva a szünet magától véget ér
+
 export const ALLAPOT = {
   ALLO: 'allo',           // nem fut a GPS
   VAR: 'var',             // fut, de a kezdőpontra vár
@@ -55,6 +69,7 @@ export class Meres {
   reset() {
     this.allapot = ALLAPOT.ALLO;
     this.pontok = [];
+    this.nyersek = [];       // az utolsó másodpercek nyers fixei (simításhoz)
     this.utolso = null;      // legutóbbi nyers fix (rögzítés nélkül is)
     this.kezdoTav = null;    // távolság a szakasz elejétől
     this.vegTav = null;      // távolság a szakasz végétől
@@ -66,6 +81,7 @@ export class Meres {
     this.hianyos = false;     // volt-e olyan GPS-kiesés, ami kihagyott utat
     this.szunet = false;      // fel van-e függesztve a mérés
     this.szunetKezdet = null; // mikor függesztettük fel
+    this.szunetPont = null;   // hol álltunk meg, amikor felfüggesztettük
     this.szunetOsszes = 0;    // ms, összesen ennyit álltunk felfüggesztve
     this.allasKezdete = null; // mióta állunk egyhelyben
     this.allasKerdezve = false;
@@ -145,6 +161,32 @@ export class Meres {
     return dt > 0 ? Math.min((haversine(a, b) / dt) * 3.6, MAX_SEBESSEG) : 0;
   }
 
+  /** Simított tempó a nyers fixekből, km/h. Zajra sokkal kevésbé érzékeny,
+      mint a pillanatnyi érték, cserébe pár másodpercet késik. */
+  get tempo() {
+    const n = this.nyersek;
+    if (n.length < 2) return 0;
+    const veg = n[n.length - 1];
+    let elso = n[0];
+    for (let i = n.length - 1; i >= 0; i--) {
+      if (veg.t - n[i].t >= SIMA_ABLAK) { elso = n[i]; break; }
+    }
+    const dt = (veg.t - elso.t) / 1000;
+    if (dt <= 0) return 0;
+    return Math.min((haversine(elso, veg) / dt) * 3.6, MAX_SEBESSEG);
+  }
+
+  /* Amivel a megállást és az elindulást eldöntjük. Ha a vevő maga adja a
+     sebességet, az a legmegbízhatóbb; ha nem, a simított tempó. A
+     kijelzett `pillanatnyi` szándékosan marad nyers: azt a vezető
+     azonnali visszajelzésként nézi, nem döntünk belőle.               */
+  get vezetesiTempo() {
+    if (this.utolso && typeof this.utolso.spd === 'number' && this.utolso.spd >= 0) {
+      return Math.min(this.utolso.spd * 3.6, MAX_SEBESSEG);
+    }
+    return this.tempo;
+  }
+
   /* --------------------------------------------------------- belső rész */
 
   #fix(pos) {
@@ -166,9 +208,18 @@ export class Meres {
     }
 
     this.figyelmeztet = false;
+    this.#nyersRogzit(p);
     if (this.allapot === ALLAPOT.VAR) this.#varakozas(p);
     else if (this.allapot === ALLAPOT.MER) this.#meres(p);
     this.onChange(this);
+  }
+
+  /* A simításhoz elég az utolsó két ablaknyi fix; a régieket eldobjuk,
+     hogy egy órás úton se nőjön a lista.                             */
+  #nyersRogzit(p) {
+    this.nyersek.push(p);
+    const hatar = p.t - SIMA_ABLAK * 2;
+    while (this.nyersek.length > 2 && this.nyersek[0].t < hatar) this.nyersek.shift();
   }
 
   /* A kezdő- és végpontnál nem az számít, mikor lépünk be a körbe, hanem
@@ -227,6 +278,7 @@ export class Meres {
     if (this.allapot !== ALLAPOT.MER || this.szunet) return;
     this.szunet = true;
     this.szunetKezdet = this.utolso ? this.utolso.t : Date.now();
+    this.szunetPont = this.utolso;   // innen mérjük, elindultunk-e
     this.uzenet = 'A mérés felfüggesztve. Elindulásra magától folytatódik.';
     this.onChange(this);
   }
@@ -238,6 +290,7 @@ export class Meres {
     this.szunetOsszes += Math.max(0, most - (this.szunetKezdet ?? most));
     this.szunet = false;
     this.szunetKezdet = null;
+    this.szunetPont = null;
     this.allasKezdete = null;
     this.allasKerdezve = false;
     this.uzenet = 'A mérés folytatódik.';
@@ -248,7 +301,10 @@ export class Meres {
     /* Szünetben csak figyelünk: sem időt, sem utat nem számolunk, és
        amint elindulsz, magától folytatja.                            */
     if (this.szunet) {
-      if (this.pillanatnyi > FOLYTAT_SEBESSEG) this.folytat();
+      const elhagyta = this.szunetPont
+        ? haversine(this.szunetPont, p) > FOLYTAT_TAVOLSAG
+        : false;
+      if (this.vezetesiTempo > FOLYTAT_SEBESSEG || elhagyta) this.folytat();
       return;
     }
 
@@ -320,7 +376,7 @@ export class Meres {
      amúgy is lezárja a mérést, és az ottani állás a szakasz része.   */
   #allasFigyeles(p) {
     if (this.szakasz.start || this.szakasz.end) return;
-    if (this.pillanatnyi >= ALLO_SEBESSEG) {
+    if (this.vezetesiTempo >= ALLO_SEBESSEG) {
       this.allasKezdete = null;
       this.allasKerdezve = false;
       return;

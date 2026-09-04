@@ -30,6 +30,13 @@ const kozel = (a, b, turés = 0.5) => Math.abs(a - b) <= turés;
 /**
  * Menetprofil: szakaszok listája [sebesség km/h, hossz méter].
  * A watchPosition ezt játssza le, két másodperces fixekkel.
+ *
+ * `megadSpeed: false` a valósághűbb eset a vevők egy részén (asztali
+ * böngésző, néhány androidos készülék): ilyenkor a `coords.speed` üres,
+ * és az appnak a fixekből kell sebességet számolnia. `zaj` méterben adja
+ * meg a vevő szórását — enélkül a nyomvonal gyanúsan tökéletes, és a
+ * zajra érzékeny hibák nem derülnek ki. A véletlen determinisztikus,
+ * hogy a teszt megismételhető maradjon.
  */
 function gpsSzimulator() {
   return (o) => {
@@ -38,6 +45,11 @@ function gpsSzimulator() {
     let szakasz = 0;
     let szakaszMegtett = 0;
     let fixSzam = 0;
+    let mag = 12345;
+    const veletlen = () => {
+      mag = (mag * 1103515245 + 12345) & 0x7fffffff;
+      return mag / 0x7fffffff - 0.5;         // -0,5 .. +0,5
+    };
 
     const kovetkezo = () => {
       if (szakasz >= o.menet.length) return null;
@@ -51,9 +63,11 @@ function gpsSzimulator() {
       let acc = o.pontossag;
       if (o.gyengeElso && fixSzam <= o.gyengeElso) acc = 90;
       if (o.ugras && fixSzam === o.ugras.fix) lat += o.ugras.fokban;
+      const zajLat = o.zaj ? (veletlen() * 2 * o.zaj) / 111320 : 0;
+      const zajLon = o.zaj ? (veletlen() * 2 * o.zaj) / (111320 * Math.cos(lat * Math.PI / 180)) : 0;
       return {
         coords: {
-          latitude: lat, longitude: o.lon, accuracy: acc,
+          latitude: lat + zajLat, longitude: o.lon + zajLon, accuracy: acc,
           speed: o.megadSpeed ? kmh / 3.6 : null,
         },
         timestamp: t,
@@ -77,7 +91,7 @@ function gpsSzimulator() {
 }
 
 const GPS_ALAP = { kezdoLat: 47.5, lon: 19.0, pontossag: 8, megadSpeed: true,
-                   ugras: null, gyengeElso: 0 };
+                   ugras: null, gyengeElso: 0, zaj: 0 };
 
 async function ujLap(b, { tema = 'sotet', szelesseg = 390, gps = null } = {}) {
   const p = await b.newPage({ viewport: { width: szelesseg, height: 880 }, deviceScaleFactor: 2 });
@@ -1542,6 +1556,87 @@ async function jogiTeszt(b) {
       sw.includes("'adatvedelem.html'"));
 }
 
+/* ================================ 26. sebességet nem adó, zajos vevő */
+
+/* A vevők egy része nem tölti ki a `coords.speed` mezőt. Ilyenkor a
+   sebességet a fixekből kell számolni, két szomszédos fixből viszont
+   állva is 10-20 km/h jön ki a szórás miatt. Emiatt korábban sem a
+   megállást nem vette észre az app, sem a felfüggesztésből nem indult
+   újra: a mérés csendben felfüggesztve maradt az út végéig.          */
+async function sebessegNelkulTeszt(b) {
+  console.log('\n26. Sebességet nem adó, zajos vevő');
+  const gps = { megadSpeed: false, zaj: 4 };
+
+  // a) hosszú állásnál akkor is rákérdez, ha nincs GPS-sebesség
+  const p = await ujLap(b, { gps: { ...gps, menet: [[90, 2000], [0.5, 45], [90, 3000]] } });
+  await p.goto(CIM);
+  await p.click('#btn-cta');
+  await p.click('#mod-vezetek');
+  await p.waitForSelector('#meres-elo:not([hidden])');
+  await p.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
+  await p.click('#btn-meres');
+
+  const kerdez = await p.waitForSelector('#allas-lap:not([hidden])', { timeout: 30000 })
+    .then(() => true).catch(() => false);
+  all('GPS-sebesség nélkül is észreveszi a megállást', kerdez);
+
+  if (kerdez) {
+    await p.click('#btn-allas-igen');
+    await p.waitForTimeout(200);
+    all('IGEN-re felfüggeszt (sebesség nélkül)',
+        await p.evaluate(() => window.atlagsebesseg.meres.szunet === true));
+
+    // elindulásra magától folytatnia kell — ez volt a hiba
+    const folytat = await p.waitForFunction(
+      () => window.atlagsebesseg.meres.szunet === false, null, { timeout: 40000 }
+    ).then(() => true).catch(() => false);
+    all('GPS-sebesség nélkül is magától folytat elinduláskor', folytat);
+  }
+  p.__hibak.length && all('nincs JS hiba (sebesség nélkül)', false, p.__hibak.join(' | '));
+  await p.close();
+
+  // b) állva a simított tempó nulla közeli marad, a zaj ellenére is
+  const p2 = await ujLap(b, { gps: { ...gps, menet: [[0.4, 60]] } });
+  await p2.goto(CIM);
+  await p2.click('#btn-cta');
+  await p2.click('#mod-vezetek');
+  await p2.waitForSelector('#meres-elo:not([hidden])');
+  await p2.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
+  await p2.click('#btn-meres');
+  await p2.waitForFunction(() => window.atlagsebesseg.meres.nyersek.length >= 5,
+                           null, { timeout: 15000 });
+  const allo = await p2.evaluate(() => ({
+    tempo: window.atlagsebesseg.meres.tempo,
+    vez: window.atlagsebesseg.meres.vezetesiTempo,
+  }));
+  all('állva a simított tempó az álló küszöb alatt marad',
+      allo.tempo < 3, allo.tempo.toFixed(2));
+  all('a döntési tempó ugyanezt adja sebesség nélkül',
+      Math.abs(allo.vez - allo.tempo) < 0.01, `${allo.vez} / ${allo.tempo}`);
+  await p2.close();
+
+  // c) haladva a simított tempó a valós sebességet mutatja
+  const p3 = await ujLap(b, { gps: { ...gps, menet: [[80, 4000]] } });
+  await p3.goto(CIM);
+  await p3.click('#btn-cta');
+  await p3.click('#mod-vezetek');
+  await p3.waitForSelector('#meres-elo:not([hidden])');
+  await p3.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
+  await p3.click('#btn-meres');
+  await p3.waitForFunction(() => window.atlagsebesseg.meres.tav > 1500,
+                           null, { timeout: 20000 });
+  const megy = await p3.evaluate(() => ({
+    tempo: window.atlagsebesseg.meres.tempo,
+    atlag: window.atlagsebesseg.meres.atlag,
+  }));
+  all('haladva a simított tempó a valós sebesség közelében van',
+      Math.abs(megy.tempo - 80) < 8, megy.tempo.toFixed(1));
+  all('zajos vevővel is helyes marad a szakaszátlag',
+      Math.abs(megy.atlag - 80) < 8, megy.atlag.toFixed(1));
+  p3.__hibak.length && all('nincs JS hiba (zajos menet)', false, p3.__hibak.join(' | '));
+  await p3.close();
+}
+
 /* ================================================================ futás */
 
 const b = await chromium.launch({ executablePath: BONGESZO });
@@ -1571,6 +1666,7 @@ try {
   await allasTeszt(b);
   await javitasTeszt(b);
   await jogiTeszt(b);
+  await sebessegNelkulTeszt(b);
 } finally {
   await b.close();
 }
