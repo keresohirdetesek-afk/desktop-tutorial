@@ -113,6 +113,10 @@ html, body {
 body { display: flex; flex-direction: column; }
 button, input, select { font: inherit; color: inherit; }
 
+/* A böngésző alapértelmezett kékje mindkét témán idegen test. */
+a { color: var(--accent); text-underline-offset: 2px; }
+a.btn, a.chip, a.hirdetes { text-decoration: none; }
+
 /* --------------------------------------------------------------- váz */
 
 #topbar {
@@ -994,6 +998,15 @@ input[type="number"], select {
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; text-align: right; font-weight: 600; }
 
+/* Hosszabb, mondatnyi értékekhez: balra igazítva, nem félkövéren.
+   Keskeny kijelzőn a két hasáb egymás alá kerül.                     */
+.kv.szeles { grid-template-columns: minmax(84px, max-content) 1fr; gap: 8px 14px; }
+.kv.szeles dd { text-align: left; font-weight: 400; }
+@media (max-width: 420px) {
+  .kv.szeles { grid-template-columns: 1fr; gap: 2px; }
+  .kv.szeles dd { margin-bottom: 8px; }
+}
+
 .tick { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 
 /* Bírságsávok: kategóriánként a két lényeges szám, a részletezés zárva. */
@@ -1015,6 +1028,18 @@ input[type="number"], select {
 .jog-savok[open] summary::after { content: ' -'; }
 .jog-savok .kv { padding-top: 6px; }
 
+/* ------------------------------------------- adatvédelem, impresszum */
+
+/* Külön oldal, saját URL-lel: a hirdetési rendszerek és az áruházak is
+   linkelhető tájékoztatót kérnek, nem egy fülre rejtett szakaszt.     */
+.jogi { max-width: 720px; margin: 0 auto; padding-bottom: 32px; }
+.jog-focim { margin: 4px 0 0; font-size: 22px; line-height: 1.2; letter-spacing: -0.4px; }
+.jog-alcim { margin: 6px 0 0; font-size: 14px; font-weight: 650; }
+.jogi code { font-size: 12px; word-break: break-all; }
+/* Itt nevek és címek állnak, nem műszeradatok: nem kell műszer-betű. */
+.jogi .kv dd { font-family: inherit; }
+#topbar .jog-vissza-jel { display: flex; flex: none; color: var(--text); text-decoration: none; }
+
 /* Az adatvédelmi blokk saját arca, hogy ne öt egyforma kártya jöjjön. */
 .card.kiemelt {
   background: var(--surface-2);
@@ -1023,17 +1048,33 @@ input[type="number"], select {
 
 /* --------------------------------------------------------- hirdetés */
 
-/* Helykitöltő: ide kerül majd a hirdetéskód. Fix magassággal foglaljuk a
-   helyet, hogy a betöltődő hirdetés ne ugráltassa a tartalmat.        */
+/* Ide kerül majd a hirdetéskód. Amíg nincs hirdető, nem „Hirdetés helye”
+   fejlesztői felirat áll itt, hanem maga az ajánlat: a szaggatott keret
+   így is elmondja, hogy a felület szabad. Fix minimummagassággal
+   foglaljuk a helyet, hogy a betöltődő hirdetés ne ugráltassa a
+   tartalmat.                                                          */
 .hirdetes {
   min-height: 100px;
   display: grid;
-  place-items: center;
+  place-content: center;
+  justify-items: center;
+  gap: 5px;
+  padding: 14px 16px;
   border: 1px dashed var(--border);
   border-radius: var(--radius);
   color: var(--muted);
   font-size: 12px;
+  text-align: center;
+  text-decoration: none;
 }
+.hirdetes strong {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--accent);
+}
+a.hirdetes:hover strong, a.hirdetes:focus-visible strong { text-decoration: underline; }
+a.hirdetes:hover, a.hirdetes:focus-visible { border-color: var(--accent); }
 
 .leaflet-container { background: var(--surface-2); font: inherit; }
 .leaflet-control-attribution { font-size: 10px; }

@@ -39,6 +39,17 @@ export class Meres {
     this.reset();
     this.watchId = null;
     this.wakeLock = null;
+
+    /* A képernyőzárat a böngésző magától elengedi, amint a lap
+       háttérbe kerül — és vissza NEM kéri. Enélkül elég egyszer
+       kiváltani egy üzenetre, és onnantól a kijelző menet közben
+       elalszik, a mérés pedig vakon fut tovább.                     */
+    this.lathatosag = () => {
+      if (document.visibilityState === 'visible' && this.watchId !== null) {
+        this.#kepernyoEbren();
+      }
+    };
+    document.addEventListener('visibilitychange', this.lathatosag);
   }
 
   reset() {
@@ -345,6 +356,8 @@ export class Meres {
   }
 
   async #kepernyoEbren() {
+    // ha az élő zár még áll, ne kérjünk másodikat: az elsőt elszivárogtatná
+    if (this.wakeLock && !this.wakeLock.released) return;
     try {
       if ('wakeLock' in navigator) this.wakeLock = await navigator.wakeLock.request('screen');
     } catch { /* nem kritikus */ }

@@ -253,11 +253,12 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 176 ellenőrzést futtat végig 24 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 211 ellenőrzést futtat végig 25 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
-két témán, hozzáférhetőség, offline működés, valamint hat valósághű
+két témán (a rejtett élő nézetet is beleértve), hozzáférhetőség, offline
+működés, képernyőzár visszakérése, adatvédelmi oldal, valamint hat valósághű
 menetszimuláció (autópálya, lakott terület, dugó utáni gyorsítás).
 
 A GPS-t egy menetprofil-lejátszó helyettesíti: szakaszok listája
@@ -289,29 +290,31 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (176 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (211 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
+├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
 ├── icons/  manifest.webmanifest  sw.js
 ```
 
 ## Hirdetések
 
-A helyek elő vannak készítve: `.hirdetes` osztályú dobozok (`data-slot`
-attribútummal) a mérés, a kalkulátor és a tudnivalók képernyő alján. Fix
-minimummagasságot foglalnak, hogy a betöltődő hirdetés ne ugráltassa a
+A helyek elő vannak készítve: `.hirdetes` osztályú elemek (`data-slot`
+attribútummal) a nyitóképernyő, a mérés, a kalkulátor és a tudnivalók alján.
+Fix minimummagasságot foglalnak, hogy a betöltődő hirdetés ne ugráltassa a
 tartalmat.
 
-Bekötés előtt két dolog kell:
+Amíg nincs hirdető, nem üres helykitöltő áll bennük, hanem maga az ajánlat:
+„Hirdessen itt” felirat, mailto-linkkel. A szaggatott keret így is elmondja,
+hogy a felület szabad.
 
-1. **Sütibanner / hozzájárulás-kezelő (CMP).** A jelenlegi app egyetlen
-   sütit sem tesz le; a hirdetéskód viszont igen, ezért az EU-ban IAB TCF
-   szerinti hozzájárulás kell hozzá.
-2. **Adatvédelmi tájékoztató oldal**, amit a hirdetési rendszerek megkövetelnek.
-   A „Tudnivalók” képernyő adatvédelmi része ennek az alapja — ki kell
-   egészíteni a hirdetési partnerek adatkezelésével.
+Bekötés előtt még egy dolog kell:
 
-Amíg ez nincs meg, a dobozok üresen maradnak, és az app végig süti- és
-követésmentes.
+- **Sütibanner / hozzájárulás-kezelő (CMP).** A jelenlegi app egyetlen sütit
+  sem tesz le; a hirdetéskód viszont igen, ezért az EU-ban IAB TCF szerinti
+  hozzájárulás kell hozzá. A tájékoztató 7. pontja is átírandó ilyenkor.
+
+Az adatvédelmi tájékoztató (amit a hirdetési rendszerek megkövetelnek) megvan:
+`adatvedelem.html`, önálló URL-lel.
 
 ## Adatvédelem
 
@@ -325,9 +328,15 @@ követésmentes.
   `localStorage.setItem` hívás) kiveszi, és a választás csak a lap
   bezárásáig él.
 - Külső kérés csak kettő fordul elő, mindkettő kikapcsolható:
-  a térképcsempék (OpenStreetMap) és a sebességhatárok lekérése
-  (Overpass API, csak gombnyomásra).
+  a térképcsempék (OpenStreetMap világos témán, CARTO sötéten) és a
+  sebességhatárok lekérése (Overpass API). Ez utóbbi mérés közben magától
+  is fut, nagyjából kilométerenként — a tájékoztató 4/c pontja ezt írja le.
 - A service worker kizárólag az app saját fájljait gyorsítótárazza.
+- A jogi szöveg külön oldalon él: `adatvedelem.html` (adatvédelmi
+  tájékoztató + impresszum, `#impresszum` horgonnyal). Önálló URL, mert
+  a hirdetési rendszerek és az alkalmazásáruházak linkelhető
+  tájékoztatót kérnek, nem egy fülre rejtett szakaszt. A dátumát
+  („Hatályos:”) minden érdemi változásnál át kell írni.
 
 ## Jogi
 
