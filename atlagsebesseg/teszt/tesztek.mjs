@@ -671,6 +671,34 @@ async function elrendezesTeszt(b) {
         all(`${sz}px ${tema} ${scr}: nincs vízszintes túllógás`,
             t.doc <= t.cw && t.rossz.length === 0, `${t.doc}/${t.cw} ${t.rossz.join(',')}`);
       }
+      /* Az élő nézet rejtett elemben ül, a fenti bejárás ezért nem látja.
+         A térkép alatti gombsor pont így tudott kilógni a képernyőről. */
+      await p.click('#tabs .tab[data-scr="scr-meres"]');
+      await p.evaluate(() => {
+        document.getElementById('meres-intro').hidden = true;
+        document.getElementById('meres-elo').hidden = false;
+      });
+      await p.waitForTimeout(180);
+      const elo = await p.evaluate(() => {
+        const sav = document.querySelector('.map-tools');
+        const sk = sav.getBoundingClientRect();
+        const gombok = [...sav.querySelectorAll('.chip')];
+        return {
+          gorget: sav.scrollWidth > sav.clientWidth + 1,
+          kilog: gombok
+            .filter((g) => {
+              const r = g.getBoundingClientRect();
+              return r.width === 0 || r.right > sk.right + 1 || r.left < sk.left - 1;
+            })
+            .map((g) => g.id),
+          doc: document.documentElement.scrollWidth,
+          cw: document.documentElement.clientWidth,
+        };
+      });
+      all(`${sz}px ${tema} élő nézet: a térkép alatti gombsor nem görget`,
+          !elo.gorget && elo.kilog.length === 0 && elo.doc <= elo.cw,
+          `${elo.gorget} ${elo.kilog.join(',')} ${elo.doc}/${elo.cw}`);
+
       p.__hibak.length && all(`nincs JS hiba (${sz} ${tema})`, false, p.__hibak.join(' | '));
       await p.close();
     }

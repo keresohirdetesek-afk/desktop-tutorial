@@ -34,53 +34,61 @@ const ALLAPOT_SZIN = { ok: SZIN.ok, hatar: SZIN.hatar, birsag: SZIN.birsag, seml
    megrajzolva. A képet a böngésző készíti, ide nem tölthetünk be SVG-t
    anélkül, hogy a vászon idegen tartalommal szennyeződne.            */
 function jelkepVaszonra(c, x, y, meret) {
-  const k = meret / 512;
-  const p = (vx, vy) => [x + vx * k, y + vy * k];
+  // ugyanaz a kivágat, mint a fejlécben: viewBox 60 118 392 344
+  const k = meret / 392;
+  const p = (vx, vy) => [x + (vx - 60) * k, y + (vy - 118) * k];
 
   c.save();
-  // út
+  // út: lent széles, a horizont felé elkeskenyedő sáv
   c.beginPath();
-  c.moveTo(...p(228, 316));
-  c.lineTo(...p(284, 316));
-  c.lineTo(...p(474, 472));
-  c.lineTo(...p(38, 472));
+  c.moveTo(...p(78, 452));
+  c.bezierCurveTo(...p(140, 392), ...p(250, 330), ...p(322, 266));
+  c.lineTo(...p(348, 266));
+  c.bezierCurveTo(...p(392, 330), ...p(430, 392), ...p(428, 452));
   c.closePath();
   c.fillStyle = SZIN.szoveg;
   c.fill();
 
-  // mérőív: sötét fő szakasz és piros vég
-  const iv = (tol, ig, szin) => {
+  // felezővonal
+  c.fillStyle = SZIN.hatter;
+  for (const cs of [
+    [[331.0, 272], [335.4, 272], [329.0, 296], [323.1, 296]],
+    [[318.5, 310], [325.3, 310], [313.9, 340], [305.1, 340]],
+    [[297.8, 356], [307.6, 356], [295.0, 392], [282.8, 392]],
+    [[269.0, 410], [282.3, 410], [261.0, 452], [245.0, 452]],
+  ]) {
     c.beginPath();
-    c.arc(...p(256, 300), 160 * k, tol, ig);
-    c.strokeStyle = szin;
-    c.lineWidth = 44 * k;
-    c.lineCap = 'round';
-    c.stroke();
-  };
-  iv(Math.PI, -Math.PI * 0.31, SZIN.szoveg);
-  iv(-Math.PI * 0.28, -Math.PI * 0.04, SZIN.marka);
+    cs.forEach((pt, i) => (i ? c.lineTo(...p(...pt)) : c.moveTo(...p(...pt))));
+    c.closePath();
+    c.fill();
+  }
 
-  // mutató
-  c.beginPath();
-  c.moveTo(...p(256, 300));
-  c.lineTo(...p(366, 190));
-  c.strokeStyle = SZIN.marka;
+  // a két végpontot összekötő ív: bal fele tömör piros, jobb fele szaggatott
   c.lineWidth = 26 * k;
-  c.stroke();
   c.beginPath();
-  c.arc(...p(256, 300), 26 * k, 0, Math.PI * 2);
-  c.fillStyle = SZIN.marka;
-  c.fill();
+  c.arc(...p(255, 301.5), 161 * k, -2.868, -1.6755);
+  c.strokeStyle = SZIN.marka;
+  c.lineCap = 'round';
+  c.stroke();
 
-  // kapuk: bal a szakasz eleje, jobb a vége
-  const kapu = (bx, szeles, szin) => {
-    c.fillStyle = szin;
-    c.fillRect(...p(bx, 292), szeles * k, 46 * k);
-    c.fillRect(...p(bx + 6, 338), 28 * k, 118 * k);
-    c.fillRect(...p(bx + szeles - 34, 338), 28 * k, 118 * k);
-  };
-  kapu(70, 140, SZIN.marka);
-  kapu(316, 126, SZIN.szoveg);
+  c.beginPath();
+  c.arc(...p(255, 301.5), 161 * k, -1.466, -0.274);
+  c.strokeStyle = SZIN.szoveg;
+  c.lineCap = 'butt';
+  c.setLineDash([30 * k, 20 * k]);
+  c.stroke();
+  c.setLineDash([]);
+
+  // helyjelölő tűk: a szakasz eleje és vége
+  c.fillStyle = SZIN.marka;
+  for (const cx of [110, 400]) {
+    // csepp: a körhöz érintőlegesen futnak le az oldalak a csúcsig
+    c.beginPath();
+    c.arc(...p(cx, 292), 42 * k, 2.729, 6.695);
+    c.lineTo(...p(cx, 397));
+    c.closePath();
+    c.fill();
+  }
   c.restore();
 }
 
@@ -119,13 +127,13 @@ export async function keszitKep(adat) {
   c.fillRect(0, 0, SZ, MA);
 
   // fejléc: jelkép és szóvédjegy
-  jelkepVaszonra(c, 76, 40, 88);
+  jelkepVaszonra(c, 74, 36, 96);
   c.fillStyle = SZIN.marka;
   c.font = `italic 800 44px ${sans}`;
   c.textAlign = 'left';
-  c.fillText('átlag', 182, 112);
+  c.fillText('átlag', 190, 112);
   c.fillStyle = SZIN.szoveg;
-  c.fillText('sebesség.hu', 182 + c.measureText('átlag').width, 112);
+  c.fillText('sebesség.hu', 190 + c.measureText('átlag').width, 112);
 
   if (adat.szakaszNev) {
     c.fillStyle = SZIN.halvany;

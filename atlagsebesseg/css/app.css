@@ -128,8 +128,8 @@ button, input, select { font: inherit; color: inherit; }
 /* A jelkép sötét részei a szövegszínt veszik fel, így mindkét témában
    megmarad a kontraszt; a piros a márkaszín, az marad. */
 #topbar .logo {
-  width: 38px;
-  height: 31px;
+  width: 40px;
+  height: 35px;
   flex: none;
   color: var(--text);
 }
@@ -253,7 +253,24 @@ button, input, select { font: inherit; color: inherit; }
 
 #map { height: 42dvh; min-height: 220px; background: var(--surface-2); z-index: 0; }
 
-.map-tools { display: flex; gap: 8px; padding: 8px 12px 0; overflow-x: auto; }
+/* A térkép alatti gombsor tördel, nem görget: oldalra csúsztatva a
+   "Kijelölés törlése" és a nagyítógombok eltűntek a képernyő szélén,
+   vezetés közben pedig senki nem keresi őket görgetéssel.            */
+.map-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px 0;
+}
+.map-tools .chip { flex: 1 1 auto; }
+/* A két kapujelölő mindig egy teljes sort kap: ez a fő művelet. */
+#btn-start-jelol, #btn-end-jelol { flex: 1 1 calc(50% - 4px); }
+/* A nézetgombok keskeny kijelzőn ikonná zsugorodnak. */
+.chip-szuk { flex: 0 0 auto; }
+.chip-szuk .chip-szo { display: none; }
+@media (min-width: 460px) {
+  .chip-szuk .chip-szo { display: inline; }
+}
 
 .chip {
   border: 1px solid var(--border);
