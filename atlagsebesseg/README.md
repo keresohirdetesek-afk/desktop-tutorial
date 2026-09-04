@@ -285,7 +285,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 237 ellenőrzést futtat végig 25 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 244 ellenőrzést futtat végig 26 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -296,6 +296,12 @@ menetszimuláció (autópálya, lakott terület, dugó utáni gyorsítás).
 A GPS-t egy menetprofil-lejátszó helyettesíti: szakaszok listája
 `[sebesség km/h, hossz méter]` alakban, két másodperces fixekkel. Így egy
 tízperces út két másodperc alatt lejátszható.
+
+Két kapcsolója a valósághűséghez: `megadSpeed: false` az olyan vevőket
+utánozza, amelyek nem töltik ki a `coords.speed` mezőt (asztali böngésző,
+néhány androidos készülék), `zaj` pedig méterben adja meg a vevő szórását.
+E kettő nélkül a nyomvonal gyanúsan tökéletes, és a zajra érzékeny hibák
+nem derülnek ki — a 26. szakasz pont ezeket járja körbe.
 
 ```
 python3 -m http.server 8768 --directory atlagsebesseg
@@ -322,7 +328,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (237 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (244 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
 ├── robots.txt  sitemap.xml
