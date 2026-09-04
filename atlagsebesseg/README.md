@@ -253,7 +253,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 211 ellenőrzést futtat végig 25 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 213 ellenőrzést futtat végig 25 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -290,7 +290,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (211 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (213 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
 ├── icons/  manifest.webmanifest  sw.js
