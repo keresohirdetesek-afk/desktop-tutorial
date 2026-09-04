@@ -20,11 +20,28 @@
 </script>
 <meta name="description" content="Nézd meg, hogyan működne nálad az átlagsebesség-mérés, ha Magyarországon a jelenleg egyeztetett rendszer bevezetésre kerül. Nincs regisztráció, nem követünk, csak számolunk.">
 <title>Átlagsebesség.hu</title>
+<link rel="canonical" href="https://atlagsebesseg.hu/">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
+<!-- A `mobile-web-app-capable` a szabványos név; az apple- előtagú
+     változat elavult, de a régebbi iOS-ek még azt nézik. -->
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Átlagsebesség">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Megosztáskor (Messenger, Facebook, WhatsApp) ez látszik a linkből. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Átlagsebesség.hu">
+<meta property="og:locale" content="hu_HU">
+<meta property="og:url" content="https://atlagsebesseg.hu/">
+<meta property="og:title" content="Szabályosan érnél célba?">
+<meta property="og:description" content="Vezess úgy, ahogy szoktál. Megmutatjuk, mi lenne az eredmény egy átlagsebesség-mérős szakaszon. Nincs regisztráció, nem követünk, csak számolunk.">
+<meta property="og:image" content="https://atlagsebesseg.hu/icons/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Átlagsebesség.hu — Szabályosan érnél célba?">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="css/app.css">
 </head>
@@ -412,10 +429,12 @@
         </div>
 
         <div id="mezo-ido" class="row-between">
-          <label>Menetidő</label>
+          <span class="mezo-cim">Menetidő</span>
           <span class="inline">
-            <input id="in-perc" type="number" min="0" step="1" value="12" inputmode="numeric"> perc
-            <input id="in-mp" type="number" min="0" max="59" step="1" value="0" inputmode="numeric"> mp
+            <input id="in-perc" type="number" min="0" step="1" value="12" inputmode="numeric"
+                   aria-label="Menetidő, perc"> perc
+            <input id="in-mp" type="number" min="0" max="59" step="1" value="0" inputmode="numeric"
+                   aria-label="Menetidő, másodperc"> mp
           </span>
         </div>
 

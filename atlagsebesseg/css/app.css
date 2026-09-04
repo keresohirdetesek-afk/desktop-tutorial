@@ -177,8 +177,8 @@ a.btn, a.chip, a.hirdetes { text-decoration: none; }
 .gps-pill[data-allapot="gyenge"] .dot { background: var(--warn); }
 
 .ikon-gomb {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   flex: none;
   border-radius: 999px;
   border: 1px solid var(--border);
@@ -281,7 +281,10 @@ a.btn, a.chip, a.hirdetes { text-decoration: none; }
   background: var(--surface);
   color: var(--text);
   border-radius: 999px;
-  padding: 6px 12px;
+  /* függőlegesen bőven: vezetés közben, rázkódó autóban a 33 képpontos
+     gomb kevés volt — a szélességet nem növeljük, hogy a gombsor
+     továbbra is két sorban elférjen.                                   */
+  padding: 9px 12px;
   font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
@@ -1194,9 +1197,25 @@ a.hirdetes:hover, a.hirdetes:focus-visible { border-color: var(--accent); }
 
 /* -------------------------------------------------- keskeny kijelző */
 
+/* A fejlécben a szóvédjegy a legfontosabb: ha nem fér ki, előbb a „GPS”
+   felirat megy — a pötty magában is megmondja, van-e jel, a jelentése
+   pedig a súgócímkében ott van. 430 px alatt (a mai telefonok zöme) már
+   szükség van rá, mert a nagyobb ikongombok elvennék a helyét.        */
+@media (max-width: 430px) {
+  .gps-szo { display: none; }
+  /* Csak a pötty marad: vegye fel az ikongombok méretét, hogy a fejléc
+     egyenletes maradjon. */
+  .gps-pill { padding: 0; width: 34px; height: 34px; justify-content: center; }
+}
+
 /* 360 px alatt a nagybetűs státuszsáv és a szóvédjegy tördelődne. */
 @media (max-width: 360px) {
   #topbar h1 { font-size: 15px; }
+  #topbar { gap: 6px; }
+  #topbar .logo { width: 32px; height: 28px; }
+  /* 320 px-en a szóvédjegy nem fér ki 34-es gombokkal; a WCAG 2.5.8
+     minimuma 24, ezt a 28 még tartja.                                */
+  .ikon-gomb, .gps-pill { width: 28px; height: 28px; }
   .statusz-fo { font-size: 15px; }
   .statusz-al { font-size: 13px; }
   .statusz-megj { font-size: 12px; }
@@ -1205,10 +1224,6 @@ a.hirdetes:hover, a.hirdetes:focus-visible { border-color: var(--accent); }
   .btn.nagy { font-size: 15px; padding: 14px; letter-spacing: 0.3px; }
   .hero h2 { font-size: 22px; }
   .tema-opcio { flex-direction: column; gap: 3px; font-size: 12px; }
-  /* A szóvédjegy előbbre való, mint a „GPS” felirat: a pötty magában is
-     megmondja, van-e jel, a jelentése pedig a súgócímkében ott van.    */
-  .gps-szo { display: none; }
-  .gps-pill { padding: 4px; }
 }
 
 /* A szakaszlistában a „+X km/h” önmagában nem mondja meg, mihez képest. */
@@ -1270,8 +1285,8 @@ a.hirdetes:hover, a.hirdetes:focus-visible { border-color: var(--accent); }
 .figyelem { color: var(--warn) !important; }
 
 input[type="checkbox"] {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   accent-color: var(--accent);
 }
 

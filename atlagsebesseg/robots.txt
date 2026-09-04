@@ -1,0 +1,5 @@
+# Átlagsebesség.hu — nyilvános, indexelhető. Nincs zárt tartalom.
+User-agent: *
+Allow: /
+
+Sitemap: https://atlagsebesseg.hu/sitemap.xml
