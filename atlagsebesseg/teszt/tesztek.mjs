@@ -1449,6 +1449,7 @@ async function jogiTeszt(b) {
     all(`${sz}px: nincs vízszintes túllógás`, !r.tul);
     if (sz !== 390) { await j.close(); continue; }
     for (const kell of ['Tóth András', '4110 Biharkeresztes', '67255829-2-29',
+                        '44535361', 'egyéni vállalkozó',
                         'keresohirdetesek@gmail.com', 'NAIH', 'localStorage',
                         'Overpass', 'GitHub', 'OpenStreetMap', 'CARTO']) {
       all(`az oldal tartalmazza: ${kell}`, r.szoveg.includes(kell));
