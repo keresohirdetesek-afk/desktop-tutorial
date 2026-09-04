@@ -1365,6 +1365,106 @@ async function javitasTeszt(b) {
   await p.close();
 }
 
+/* ============================== 25. adatvédelem, impresszum, hirdetés */
+
+async function jogiTeszt(b) {
+  console.log('\n25. Adatvédelem, impresszum, hirdetési felület');
+
+  /* A hirdetési helyek: amíg nincs hirdető, ne fejlesztői helykitöltő
+     álljon ott, hanem kattintható ajánlat.                            */
+  const p = await ujLap(b);
+  await p.goto(CIM);
+  const h = await p.evaluate(() => {
+    const dobozok = [...document.querySelectorAll('.hirdetes')];
+    return {
+      db: dobozok.length,
+      linkek: dobozok.filter((d) => d.tagName === 'A' && d.href.startsWith('mailto:')).length,
+      cimkek: dobozok.filter((d) => /Hirdessen itt/.test(d.textContent)).length,
+      regi: /Hirdetés helye/.test(document.body.textContent),
+      lap: !!document.querySelector('a[href="adatvedelem.html"]'),
+      impresszum: !!document.querySelector('a[href="adatvedelem.html#impresszum"]'),
+    };
+  });
+  all('minden hirdetési hely megvan', h.db === 4, String(h.db));
+  all('mindegyik kattintható mailto-link', h.linkek === h.db, `${h.linkek}/${h.db}`);
+  all('mindegyiken a „Hirdessen itt” felirat áll', h.cimkek === h.db, `${h.cimkek}/${h.db}`);
+  all('nem maradt „Hirdetés helye” helykitöltő', !h.regi);
+  all('a Tudnivalókból elérhető az adatvédelmi tájékoztató', h.lap);
+  all('az impresszum külön is linkelve van', h.impresszum);
+
+  /* A képernyőzárat a lap visszatérésekor újra kell kérni, különben
+     egyetlen appváltás után elalszik a kijelző menet közben.          */
+  const zar = await p.evaluate(async () => {
+    const m = await import(new URL('js/track.js', location.href).href);
+    let keresek = 0;
+    let elengedve = false;
+    const sentinel = { released: false, release() { elengedve = true; this.released = true; } };
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: { request: async () => { keresek++; sentinel.released = false; return sentinel; } },
+    });
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { watchPosition: () => 1, clearWatch: () => {} },
+    });
+    const meres = new m.Meres({});
+    await meres.indit({ start: null, end: null, sugar: 60 });
+    const elso = keresek;
+
+    // háttérbe kerülés: a böngésző elengedi a zárat
+    sentinel.released = true;
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise((r) => setTimeout(r, 20));
+    const visszateres = keresek;
+
+    // ismételt esemény álló zárral: ne kérjen újabbat
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise((r) => setTimeout(r, 20));
+    const ismetelt = keresek;
+
+    meres.leallit();
+    return { elso, visszateres, ismetelt, elengedve };
+  });
+  all('méréskor kér képernyőzárat', zar.elso === 1, String(zar.elso));
+  all('visszatéréskor újra kéri a zárat', zar.visszateres === 2, String(zar.visszateres));
+  all('álló zárral nem kér másodikat', zar.ismetelt === 2, String(zar.ismetelt));
+  all('leállításkor elengedi a zárat', zar.elengedve);
+
+  p.__hibak.length && all('nincs JS hiba (hirdetés, zár)', false, p.__hibak.join(' | '));
+  await p.close();
+
+  // Az adatvédelmi oldal: önálló URL, saját tartalommal.
+  for (const sz of [320, 390]) {
+    const j = await ujLap(b, { szelesseg: sz });
+    const cim = new URL('adatvedelem.html', CIM).href;
+    await j.goto(cim);
+    const r = await j.evaluate(() => ({
+      cim: document.title,
+      szoveg: document.body.textContent,
+      impresszum: !!document.getElementById('impresszum'),
+      vissza: !!document.querySelector('a[href="index.html"]'),
+      tul: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    }));
+    all(`${sz}px: az adatvédelmi oldal betölt`, /Adatvédelem/.test(r.cim), r.cim);
+    all(`${sz}px: nincs vízszintes túllógás`, !r.tul);
+    if (sz !== 390) { await j.close(); continue; }
+    for (const kell of ['Tóth András', '4110 Biharkeresztes', '67255829-2-29',
+                        'keresohirdetesek@gmail.com', 'NAIH', 'localStorage',
+                        'Overpass', 'GitHub', 'OpenStreetMap', 'CARTO']) {
+      all(`az oldal tartalmazza: ${kell}`, r.szoveg.includes(kell));
+    }
+    all('van impresszum-horgony', r.impresszum);
+    all('van visszaút az alkalmazásba', r.vissza);
+    j.__hibak.length && all('nincs JS hiba (adatvédelem)', false, j.__hibak.join(' | '));
+    await j.close();
+  }
+
+  // offline is elérhetőnek kell lennie: rajta van a gyorsítótár listáján
+  const sw = await (await fetch(new URL('sw.js', CIM).href)).text();
+  all('a service worker gyorsítótárazza az adatvédelmi oldalt',
+      sw.includes("'adatvedelem.html'"));
+}
+
 /* ================================================================ futás */
 
 const b = await chromium.launch({ executablePath: BONGESZO });
@@ -1393,6 +1493,7 @@ try {
   await mozgasTeszt(b);
   await allasTeszt(b);
   await javitasTeszt(b);
+  await jogiTeszt(b);
 } finally {
   await b.close();
 }

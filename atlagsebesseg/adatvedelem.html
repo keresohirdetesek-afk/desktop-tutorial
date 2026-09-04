@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e10">
+<script>
+/* Ugyanaz a témabetöltés, mint a főoldalon: a stíluslap előtt dől el,
+   különben betöltéskor felvillanna a másik szín. */
+(function () {
+  var m = null;
+  try { m = localStorage.getItem('atlagsebesseg-tema'); } catch (e) { /* privát ablak */ }
+  var sotet = m === 'sotet' ||
+    (m !== 'vilagos' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', sotet ? 'dark' : 'light');
+  if (!sotet) {
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#eef0f5');
+  }
+})();
+</script>
+<meta name="description" content="Az átlagsebesseg.hu adatvédelmi tájékoztatója és impresszuma. Nincs regisztráció, nincs analitika, a mérési adatok nem hagyják el a készüléket.">
+<title>Adatvédelem és impresszum – Átlagsebesség.hu</title>
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header id="topbar">
+  <a class="jog-vissza-jel" href="index.html" aria-label="Vissza az alkalmazáshoz">
+    <svg class="logo" aria-hidden="true" viewBox="60 118 392 344">
+      <path d="M78 452 C140 392 250 330 322 266 L348 266 C392 330 430 392 428 452 Z" fill="currentColor"/>
+      <g fill="var(--surface)">
+        <path d="M331.0 272 L335.4 272 L329.0 296 L323.1 296 Z"/>
+        <path d="M318.5 310 L325.3 310 L313.9 340 L305.1 340 Z"/>
+        <path d="M297.8 356 L307.6 356 L295.0 392 L282.8 392 Z"/>
+        <path d="M269.0 410 L282.3 410 L261.0 452 L245.0 452 Z"/>
+      </g>
+      <path d="M100 258 A161 161 0 0 1 238.2 141.4" fill="none" stroke="var(--marka)" stroke-width="26" stroke-linecap="round"/>
+      <path d="M271.8 141.4 A161 161 0 0 1 410 258" fill="none" stroke="currentColor" stroke-width="26" stroke-dasharray="30 20"/>
+      <g fill="var(--marka)">
+        <path d="M71.5 308.8 A42 42 0 1 1 148.5 308.8 L110 397 Z"/>
+        <path d="M361.5 308.8 A42 42 0 1 1 438.5 308.8 L400 397 Z"/>
+      </g>
+    </svg>
+  </a>
+  <h1><span class="wm-elso">átlag</span>sebesség.hu</h1>
+  <a class="btn ghost small" href="index.html">Vissza</a>
+</header>
+
+<main id="main">
+  <div class="pad jogi">
+
+    <h2 class="jog-focim">Adatvédelmi tájékoztató</h2>
+    <p class="muted small">
+      Hatályos: 2026. szeptember 4. · Ez a tájékoztató az
+      <strong>atlagsebesseg.hu</strong> weboldalra és a belőle telepíthető
+      alkalmazásra (PWA) vonatkozik.
+    </p>
+
+    <section class="card kiemelt">
+      <h3 class="card-title">A lényeg egy bekezdésben</h3>
+      <p>
+        Nincs regisztráció, nincs bejelentkezés, nincs analitika, nincs
+        hirdetéskövetés. <strong>Nincs szerveroldal:</strong> a számítás a te
+        készülékeden fut, a mérési adatok — helyzet, nyomvonal, sebesség,
+        eredmény — a böngésző memóriájában maradnak, és a lap bezárásával
+        nyomtalanul eltűnnek. Ezekhez mi soha nem férünk hozzá. A készüléken
+        egyetlen dolog marad meg tartósan: a választott téma (világos vagy
+        sötét). Két külső szolgáltatás felé indul kérés — a térképcsempékért
+        és a sebességhatárokért —, ezek a 4. pontban vannak felsorolva, és a
+        Haladó beállításokban kikapcsolhatók.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">1. Az adatkezelő</h3>
+      <dl class="kv">
+        <dt>Név</dt><dd>Tóth András</dd>
+        <dt>Cím</dt><dd>4110 Biharkeresztes, Petőfi u. 1.</dd>
+        <dt>Adószám</dt><dd>67255829-2-29</dd>
+        <dt>E-mail</dt><dd><a href="mailto:keresohirdetesek@gmail.com">keresohirdetesek@gmail.com</a></dd>
+      </dl>
+      <p class="muted small">
+        Adatvédelmi tisztviselő kijelölése nem kötelező és nem is történt:
+        a szolgáltatás nem végez nagy számú érintettre kiterjedő, rendszeres
+        és szisztematikus megfigyelést, és nem kezel különleges adatot.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">2. Amit a készüléked kezel — és mi nem</h3>
+      <p>
+        A szolgáltatás lényege, hogy a mérés helyben történik. Az alábbiak
+        <strong>nem kerülnek el a készülékedről</strong>, semmilyen formában:
+      </p>
+      <ul class="tick">
+        <li><strong>Helyadat (GPS).</strong> A böngésző helymeghatározási
+            engedélyével az app olvassa a pozíciót, és ebből számol
+            szakaszátlagot. A pontok a lap memóriájában vannak; nincs fájl,
+            nincs adatbázis, nincs feltöltés. A lap bezárásakor megsemmisülnek.</li>
+        <li><strong>Nyomvonal, sebességprofil, eredmény, bírságszámítás.</strong>
+            Ugyanígy: a böngésző memóriájában keletkeznek és ott is maradnak.</li>
+        <li><strong>Az eredménykép.</strong> A megosztható képet a böngésző
+            rajzolja a készüléken. Csak akkor kerül bárhová, ha te magad
+            mented vagy megosztod — azt már te indítod, és arra a célalkalmazás
+            saját szabályzata vonatkozik.</li>
+      </ul>
+      <p class="muted small">
+        A helymeghatározási engedélyt a böngésző kéri, és bármikor
+        visszavonhatod a böngésző oldalbeállításaiban. Enélkül a GPS-es
+        szimuláció nem működik, a kalkulátor viszont igen.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">3. Amit a készüléken tárolunk</h3>
+      <dl class="kv szeles">
+        <dt>Mi</dt><dd>a választott téma („rendszer”, „világos” vagy „sötét”)</dd>
+        <dt>Hol</dt><dd><code>localStorage</code>, kulcs: <code>atlagsebesseg-tema</code></dd>
+        <dt>Meddig</dt><dd>amíg ki nem törlöd a böngészőadatokat</dd>
+        <dt>Jogalap</dt><dd>az általad kifejezetten kért szolgáltatáshoz feltétlenül szükséges tárolás</dd>
+      </dl>
+      <p>
+        Ez egyetlen szó, nem azonosít téged, nem kerül el a készülékről, és
+        nem is olvassa senki rajtad kívül. <strong>Sütit (cookie-t) az oldal
+        nem használ</strong>, és mérési adatot soha nem tárol.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">4. Külső szolgáltatások</h3>
+      <p>
+        Három ponton hagy el adat a készüléket. Mindhárom esetben az adott
+        szolgáltató a saját szabályzata szerint kezeli, amit lát; erre nekünk
+        nincs ráhatásunk.
+      </p>
+
+      <h4 class="jog-alcim">a) Tárhely — GitHub Pages</h4>
+      <p>
+        Az oldal fájljait a GitHub, Inc. (88 Colin P. Kelly Jr. Street, San
+        Francisco, CA 94107, USA) szolgálja ki. A kiszolgálás során a
+        szolgáltató naplózhatja a kérés IP-címét, idejét és a böngésző
+        azonosítóját — ez minden weboldalnál így van, üzemeltetési és
+        biztonsági célból. <strong>Ezekhez a naplókhoz mi nem férünk hozzá.</strong>
+        A GitHub az Egyesült Államokban székel; az adattovábbítás alapja az
+        EU–USA adatvédelmi keretrendszer, illetve a szolgáltató általános
+        szerződési feltételei.
+        <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener" target="_blank">Adatvédelmi tájékoztatójuk</a>.
+      </p>
+
+      <h4 class="jog-alcim">b) Térképcsempék</h4>
+      <p>
+        A térkép csempéit világos témában az
+        <a href="https://osmfoundation.org/wiki/Privacy_Policy" rel="noopener" target="_blank">OpenStreetMap Foundation</a>
+        (Egyesült Királyság), sötét témában a
+        <a href="https://carto.com/privacy" rel="noopener" target="_blank">CARTO</a>
+        szervere adja. Ezek a kérések elárulják a szolgáltatónak a te
+        IP-címedet és azt, hogy a térkép melyik területét nézed — tehát
+        hozzávetőlegesen azt is, hol jársz. A CARTO kiszolgálói az EGT-n
+        kívülről is válaszolhatnak.
+      </p>
+
+      <h4 class="jog-alcim">c) Sebességhatárok — Overpass API</h4>
+      <p>
+        A táblák szerinti sebességhatárokat az OpenStreetMap adataiból kérjük
+        le az <strong>overpass-api.de</strong>, illetve tartalékként az
+        <strong>overpass.kumi.systems</strong> szolgáltatástól (mindkettő
+        Németország). A kérés a vizsgált útszakasz koordinátáit tartalmazza,
+        és mérés közben <strong>magától is lefut</strong>, nagyjából
+        kilométerenként, hogy a kijelzett határ mindig az legyen, ami tényleg
+        ki van téve. A szolgáltató ilyenkor látja a kérés IP-címét és a kért
+        terület koordinátáit.
+      </p>
+      <p class="figyelem">
+        Mindkettő kikapcsolható: a térkép rétege és a „Sebességhatárok
+        automatikus lekérése” kapcsoló is a Haladó beállítások között van.
+        Kikapcsolva semmilyen adat nem hagyja el a készüléket.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">5. Jogalap, megőrzés, címzettek</h3>
+      <dl class="kv szeles">
+        <dt>Jogalap</dt>
+        <dd>A készüléken maradó mérési adatokat nem mi kezeljük. A külső
+            kérésekre a szolgáltatás nyújtásához fűződő jogos érdek
+            (GDPR 6. cikk (1) f)) az alap; a helymeghatározáshoz a
+            hozzájárulásodat a böngésző engedélykérője rögzíti, és bármikor
+            visszavonható.</dd>
+        <dt>Megőrzés</dt>
+        <dd>Mi semmit nem őrzünk meg, mert semmit nem gyűjtünk. A külső
+            szolgáltatók naplóira a saját megőrzési idejük vonatkozik.</dd>
+        <dt>Címzettek</dt>
+        <dd>A 4. pontban felsorolt szolgáltatók. Adatot senkinek nem adunk
+            át, nem értékesítünk, és profilalkotás sem történik.</dd>
+        <dt>Automatizált döntéshozatal</dt>
+        <dd>Nincs. Az app számításai tájékoztató jellegűek, nem járnak rád
+            nézve joghatással.</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">6. A te jogaid</h3>
+      <p>
+        A GDPR alapján kérheted a rád vonatkozó adatokhoz való hozzáférést,
+        azok helyesbítését, törlését, a kezelés korlátozását, tiltakozhatsz a
+        kezelés ellen, és kérheted az adathordozhatóságot. A gyakorlatban
+        ezek nagy része tárgytalan: nem tárolunk rólad semmit, amit ki
+        lehetne adni vagy törölni lehetne. A készüléken maradó adatokat te
+        magad törlöd a lap bezárásával, illetve a böngészőadatok törlésével.
+      </p>
+      <p>
+        Kérdés, kérés, panasz: <a href="mailto:keresohirdetesek@gmail.com">keresohirdetesek@gmail.com</a>.
+        Legkésőbb egy hónapon belül válaszolunk.
+      </p>
+      <h4 class="jog-alcim">Panasz és jogorvoslat</h4>
+      <p>
+        Ha úgy érzed, sérült a személyes adataid védelméhez fűződő jogod,
+        panaszt tehetsz a felügyeleti hatóságnál, vagy bírósághoz fordulhatsz
+        (a per a lakóhelyed szerinti törvényszék előtt is megindítható).
+      </p>
+      <dl class="kv">
+        <dt>Hatóság</dt><dd>Nemzeti Adatvédelmi és Információszabadság Hatóság (NAIH)</dd>
+        <dt>Cím</dt><dd>1055 Budapest, Falk Miksa utca 9–11.</dd>
+        <dt>Postacím</dt><dd>1363 Budapest, Pf. 9.</dd>
+        <dt>Telefon</dt><dd>+36 1 391 1400</dd>
+        <dt>E-mail</dt><dd><a href="mailto:ugyfelszolgalat@naih.hu">ugyfelszolgalat@naih.hu</a></dd>
+        <dt>Web</dt><dd><a href="https://naih.hu" rel="noopener" target="_blank">naih.hu</a></dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">7. Hirdetések</h3>
+      <p>
+        Az oldalon jelenleg <strong>nincs hirdetés</strong>, és nincs
+        hirdetési sütiszkript sem. Ha később hirdetés kerül ki, az ezzel járó
+        adatkezelést itt írjuk le, és — ahogy az EU-ban kötelező — előtte
+        hozzájárulást kérünk egy sütikezelő felületen. Amíg ez a mondat itt
+        áll, addig nincs mit engedélyezned.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">8. A tájékoztató változása</h3>
+      <p>
+        Ha a szolgáltatás úgy változik, hogy az az adatkezelést is érinti, ezt
+        az oldalt frissítjük, és a tetején lévő hatálybalépési dátumot
+        átírjuk. Érdemes ránézni, ha új funkciót látsz.
+      </p>
+    </section>
+
+    <section class="card" id="impresszum">
+      <h3 class="card-title">Impresszum</h3>
+      <p class="muted small">
+        Az elektronikus kereskedelmi szolgáltatásokról szóló 2001. évi CVIII.
+        törvény 4. §-a szerinti tájékoztatás.
+      </p>
+      <dl class="kv">
+        <dt>Szolgáltató</dt><dd>Tóth András</dd>
+        <dt>Cím</dt><dd>4110 Biharkeresztes, Petőfi u. 1.</dd>
+        <dt>Adószám</dt><dd>67255829-2-29</dd>
+        <dt>E-mail</dt><dd><a href="mailto:keresohirdetesek@gmail.com">keresohirdetesek@gmail.com</a></dd>
+      </dl>
+      <dl class="kv szeles">
+        <dt>Tárhely</dt><dd>GitHub, Inc. (GitHub Pages), 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, USA</dd>
+        <dt>Szolgáltatás</dt><dd>atlagsebesseg.hu — ingyenes, regisztráció nélküli tájékoztató alkalmazás</dd>
+      </dl>
+      <p class="muted small">
+        Az oldal tájékoztató jellegű, nem hatósági eszköz, és nem minősül jogi
+        tanácsadásnak. A számított értékek becslések; a tényleges hatósági
+        eljárásban a hatóság saját mérése az irányadó.
+      </p>
+    </section>
+
+    <p class="muted small center">
+      <a href="index.html">Vissza az alkalmazáshoz</a>
+    </p>
+  </div>
+</main>
+
+</body>
+</html>
