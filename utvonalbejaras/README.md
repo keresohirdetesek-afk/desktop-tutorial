@@ -78,6 +78,10 @@ Ami ilyenkor a helyére kerül:
   külön sorban szerepel az adatlapon;
 - a bejárás adatlapján felsorolva látszik minden elvetett szakasz az
   indoklásával;
+- a **Pontos nyomvonal térképen** gomb a ténylegesen bejárt vonalat nyitja
+  meg térképnézőben, utcákkal (a Google Maps útvonaltervezője ezzel szemben
+  csak pontokat kap és maga tervez utat — ezért az külön, *közelítő*
+  jelöléssel szerepel);
 - a **GPX** fő nyomvonala csak az érvényes útvonalat tartalmazza (ott, ahol
   elvetett szakasz szakítja meg, új `trkseg` kezdődik), az elvetett részek
   pedig külön, elnevezett nyomvonalként maradnak a fájlban (`<type>rejected</type>`),
@@ -145,6 +149,42 @@ Első használatkor a böngésző kéri a **helymeghatározás**, a **kamera** �
 
 ---
 
+## Helyadatok megbízhatósága
+
+A dokumentáció csak akkor ér valamit, ha a koordináta oda tartozik, ahová
+állítja. Ezért:
+
+- **Friss mérés minden elemhez.** Rögzítés közben a nyomvonal utolsó, 10
+  másodpercnél nem régebbi fixe használható; egyébként új mérés indul, tárolt
+  koordináta elfogadása nélkül. Ha csak tárolt fix érhető el, az elem
+  „GPS, tárolt mérés” jelölést kap.
+- **Importált képeknél a felvétel helye számít.** Galériából behozott
+  fotóknál az app kiolvassa a kép EXIF-adatából a készítés helyét és idejét —
+  nem a behozatal pillanatnyi helyét használja. Ha nincs EXIF-adat, az elem
+  helyadat nélkül marad, és ezt jelzi is.
+- **Kézi helymegadás.** Az elem adatlapján a *Hely megadása / javítása*
+  gombbal a koordináta beírható, átvehető friss méréssel, vagy a nyomvonal
+  időben legközelebbi pontjáról.
+- Az adatlapon mindig látszik, **honnan** való a koordináta és mekkora a
+  mérési pontosság.
+
+### GPS-kimaradás
+
+Ha a jel hosszabb időre elveszik (2 percnél tovább, és közben 250 méternél
+nagyobbat ugrik a pozíció), vagy a rögzítést leállítják és később
+újraindítják, a köztes szakaszt nem jártuk be igazolhatóan. Az ilyen rész
+**pontozott, halvány vonalként** jelenik meg, **nem számít bele** a bejárt
+távba, az adatlapon külön sorban szerepel, a GPX-ben és a GeoJSON-ban pedig
+ott megszakad a nyomvonal. Így nem keletkezik légvonalbeli „szellemút”.
+
+## Biztonsági mentés
+
+Az adatok a böngésző helyi adatbázisában vannak — a böngészőadatok törlése
+mindent visz. Ezért a bejárás adatlapján mindig látszik a **mentés állapota**:
+mikor készült utoljára teljes mentés, és változott-e azóta bármi. A sávra
+koppintva azonnal kiírható a JSON mentés; a rögzítés leállításakor az app
+emlékeztet is rá.
+
 ## Adatkezelés
 
 - Minden adat a böngésző **IndexedDB** tárolójában marad, a készüléken.
@@ -152,8 +192,11 @@ Első használatkor a böngésző kéri a **helymeghatározás**, a **kamera** �
   ne törölje a felvételeket helyszűke esetén.
 - A fotók mentés előtt max. 2000 képpontra zsugorodnak (kb. 300–600 kB / kép),
   hogy egy hosszabb bejárás is elférjen.
-- Külső hálózati hívás egyetlen helyen történik, és csak ha Ön kéri:
-  a *Megnyitás térképen* / *Térképen* gombok Google Maps linket nyitnak.
+- Külső hálózati hívás csak akkor történik, ha Ön kéri: a *Pontos nyomvonal
+  térképen* (geojson.io), az *Útvonalterv Google Maps* és az elemek
+  *Térképen* gombja nyit külső oldalt. A geojson.io esetében az adat a
+  hivatkozás horgony részében utazik, amit a böngésző nem küld el a
+  kiszolgálónak — az app előtte rákérdez.
 - A böngészőadatok törlése a bejárásokat is törli — fontos anyagot mentsen ki
   JSON-ba vagy GPX-be.
 

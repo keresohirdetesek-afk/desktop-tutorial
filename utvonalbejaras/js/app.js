@@ -3,10 +3,10 @@
 import * as db from './db.js';
 import {
   TrackRecorder, currentPosition, renderTrack, lengthByStatus, isRejected,
-  rejectedSections, drawnLength, formatDistance, formatDuration, formatCoord, toGPX,
-  typeLabel, describeItem,
+  rejectedSections, drawnLength, detectGap, formatDistance, formatDuration,
+  formatCoord, toGPX, toGeoJSON, typeLabel, describeItem,
 } from './geo.js';
-import { AudioRecorder, shrinkImage, makeThumb } from './media.js';
+import { AudioRecorder, shrinkImage, makeThumb, readExif } from './media.js';
 import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
 import { $, $$, el, toast, modal, download, formatDateTime, formatTime } from './ui.js';
@@ -32,6 +32,7 @@ let editor = null;
 let trackEditor = null;
 let tickTimer = null;
 let trackHit = null;
+let firstPointAfterStart = false;
 
 /* ------------------------------------------------------------ segédek */
 
@@ -249,7 +250,11 @@ function renderMeta() {
     });
     rows.push(['Bejárt összesen', formatDistance(len.total)]);
   }
+  if (len.gaps) {
+    rows.push(['GPS-kimaradás', `${len.gaps} db · ${formatDistance(len.gap)} ismeretlen szakasz`]);
+  }
   rows.push(['Megjegyzés', s.note || '—']);
+  renderBackupStatus();
   $('#session-meta').innerHTML = '';
   for (const [k, v] of rows) {
     $('#session-meta').appendChild(
@@ -306,6 +311,11 @@ function startRecording() {
   recorder = new TrackRecorder({
     onPoint: async (pt) => {
       const rec = { ...pt, sessionId: state.session.id };
+      // az újraindítás utáni első pont, illetve a hosszú jelkimaradás után
+      // érkező pont mögött nincs igazolt útvonal
+      const prev = state.points[state.points.length - 1];
+      if (prev && (firstPointAfterStart || detectGap(prev, rec))) rec.gap = true;
+      firstPointAfterStart = false;
       state.points.push(rec);
       rec.id = await db.addPoint(rec); // az azonosító kell a későbbi szerkesztéshez
       $('#gps-status').textContent = RECORDING_HINT;
@@ -328,6 +338,7 @@ function startRecording() {
 
   state.recording = true;
   state.recStartedAt = Date.now();
+  firstPointAfterStart = true;   // az újraindítás előtti pontokhoz nincs igazolt út
   if (!state.session.stats?.startedAt) {
     state.session.stats = { ...(state.session.stats || {}), startedAt: Date.now() };
   }
@@ -343,7 +354,7 @@ async function stopRecording(silent = false) {
   if (!state.recording) return;
   state.recording = false;
   state.recElapsed += Date.now() - state.recStartedAt;
-  if (recorder) recorder.stop();
+  if (recorder) { recorder.stop(); recorder = null; }
   clearInterval(tickTimer);
   keepAwake(false);
   $('#rec-toggle').textContent = '● Nyomvonal rögzítése';
@@ -361,7 +372,15 @@ async function stopRecording(silent = false) {
     await db.saveSession(state.session);
     renderMeta();
   }
-  if (!silent) toast('Rögzítés leállítva, a nyomvonal mentve.');
+  if (!silent) {
+    toast('Rögzítés leállítva, a nyomvonal mentve.');
+    if (backupStale(state.session)) {
+      setTimeout(() => {
+        toast('Ne felejtse kiírni a biztonsági mentést a bejárás végén.');
+        renderBackupStatus();
+      }, 3400);
+    }
+  }
 }
 
 /**
@@ -424,13 +443,31 @@ async function keepAwake(on) {
 
 /* --------------------------------------------------------- elem rögzítés */
 
+/** Rögzítés közben a nyomvonal utolsó fixe ennyi ideig fogadható el (ms). */
+const POSITION_MAX_AGE = 10000;
+
+/**
+ * Aktuális pozíció elemhez. Csak akkor használja a rögzítő utolsó fixét,
+ * ha az valóban friss — különben új mérést kér. Így nem ragad be egy régi,
+ * más helyszínen mért koordináta egy most készült fotóra.
+ */
 async function positionNow() {
-  if (recorder && recorder.current) {
-    const c = recorder.current;
-    return { lat: c.lat, lon: c.lon, acc: c.acc, heading: c.heading };
+  const now = Date.now();
+  const cur = state.recording && recorder ? recorder.current : null;
+  if (cur && cur.t && now - cur.t < POSITION_MAX_AGE) {
+    return { lat: cur.lat, lon: cur.lon, acc: cur.acc, heading: cur.heading, posAt: cur.t, posSource: 'gps' };
   }
-  const p = await currentPosition();
-  return p || { lat: null, lon: null, acc: null, heading: null };
+  // valóban új mérés (tárolt fix nem fogadható el)
+  const fresh = await currentPosition(7000, 0);
+  if (fresh) {
+    return { lat: fresh.lat, lon: fresh.lon, acc: fresh.acc, heading: fresh.heading, posAt: fresh.t || now, posSource: 'gps' };
+  }
+  // ha nincs friss jel, inkább egy megjelölt, tárolt mérés, mint semmi
+  const cached = await currentPosition(3000, 60000);
+  if (cached) {
+    return { lat: cached.lat, lon: cached.lon, acc: cached.acc, heading: cached.heading, posAt: cached.t || null, posSource: 'gps-cached' };
+  }
+  return { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none' };
 }
 
 async function onPhotoSelected(e) {
@@ -439,18 +476,36 @@ async function onPhotoSelected(e) {
   if (!files.length) return;
 
   toast(files.length > 1 ? `${files.length} fotó feldolgozása…` : 'Fotó feldolgozása…');
-  const pos = await positionNow();
+
+  // Egy most készült fotóhoz friss mérés kell. Több fájl egyszerre viszont
+  // jellemzően galériából jön: azoknál a készítés helye a képben van (EXIF),
+  // az eszköz pillanatnyi helye félrevezető lenne.
+  const live = files.length === 1 ? await positionNow() : null;
   let firstId = null;
+  let noPos = 0;
 
   for (const file of files) {
     try {
+      const exif = await readExif(file);
+      let pos;
+      if (exif && exif.lat != null) {
+        pos = { lat: exif.lat, lon: exif.lon, acc: null, heading: null, posAt: exif.takenAt || null, posSource: 'exif' };
+      } else if (live) {
+        pos = live;
+      } else {
+        pos = { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none' };
+      }
+      if (pos.lat == null) noPos++;
+
       const { blob, width, height } = await shrinkImage(file);
       const thumb = await makeThumb(blob);
       const item = {
         id: db.uid(),
         sessionId: state.session.id,
         type: 'photo',
-        created: Date.now(),
+        // importált képnél a felvétel ideje a mérvadó, nem a behozatalé
+        created: (exif && exif.takenAt) || Date.now(),
+        importedAt: exif && exif.takenAt ? Date.now() : undefined,
         ...pos,
         title: '',
         note: '',
@@ -470,8 +525,19 @@ async function onPhotoSelected(e) {
       toast('A fotó nem menthető: ' + err.message, 'error');
     }
   }
+  state.items.sort((a, b) => a.created - b.created);
+  markUnsaved();
   renderItems();
   drawTrack();
+
+  if (noPos) {
+    toast(
+      noPos === files.length
+        ? 'Nincs helyadat a fotó(k)hoz — a részleteknél kézzel megadható.'
+        : `${noPos} fotóhoz nincs helyadat — a részleteknél kézzel megadható.`,
+      'error'
+    );
+  }
 
   if (files.length === 1 && firstId) {
     await annotate(firstId);
@@ -501,6 +567,7 @@ async function annotate(itemId) {
   await db.saveItem(item);
   const idx = state.items.findIndex((i) => i.id === item.id);
   if (idx >= 0) state.items[idx] = item;
+  markUnsaved();
   renderItems();
   toast(res.dims.length ? `Mentve — ${res.dims.length} méret rögzítve.` : 'Jelölések mentve.');
 }
@@ -563,6 +630,7 @@ async function recordAudio(attachToItemId = null) {
     };
     await db.saveItem(item);
     state.items.push(item);
+    markUnsaved();
     renderItems();
     drawTrack();
     toast(`Hangjegyzet mentve (${formatDuration(out.duration)}).`);
@@ -596,6 +664,7 @@ async function addNote() {
   };
   await db.saveItem(item);
   state.items.push(item);
+  markUnsaved();
   renderItems();
   drawTrack();
   toast('Jegyzet mentve.');
@@ -617,6 +686,7 @@ async function markPoint() {
   };
   await db.saveItem(item);
   state.items.push(item);
+  markUnsaved();
   renderItems();
   drawTrack();
   toast('Pont jelölve.');
@@ -670,6 +740,79 @@ function itemCard(item, extraSub) {
 
 let viewerItem = null;
 
+/** Honnan való a helyadat, és mennyire megbízható. */
+function positionNote(item) {
+  if (item.lat == null) return '';
+  const parts = [];
+  const src = {
+    gps: 'GPS',
+    'gps-cached': 'GPS, tárolt mérés',
+    exif: 'a kép EXIF-adatából',
+    manual: 'kézzel megadva',
+    track: 'nyomvonalról',
+  }[item.posSource];
+  if (src) parts.push(src);
+  if (item.acc != null) parts.push('±' + item.acc + ' m');
+  if (item.posAt && Math.abs(item.created - item.posAt) > 60000) {
+    parts.push('mérés: ' + formatDateTime(item.posAt));
+  }
+  return parts.length ? ` (${parts.join(', ')})` : '';
+}
+
+/** Helyadat pótlása vagy javítása: nyomvonalról, friss méréssel, vagy kézzel. */
+async function editItemPosition(item) {
+  const res = await modal({
+    title: item.lat == null ? 'Hely megadása' : 'Hely javítása',
+    text: item.lat == null
+      ? 'Ehhez az elemhez nincs helyadat. Adja meg a koordinátát, vagy vegye át a nyomvonal legközelebbi pontját.'
+      : 'A koordináta felülírható, ha a mért érték pontatlan volt.',
+    fields: [
+      { name: 'lat', label: 'Szélesség (lat)', inputmode: 'decimal', value: item.lat != null ? item.lat.toFixed(6) : '' },
+      { name: 'lon', label: 'Hosszúság (lon)', inputmode: 'decimal', value: item.lon != null ? item.lon.toFixed(6) : '' },
+      {
+        name: 'mode', label: 'Vagy vegye át innen', type: 'select', value: '',
+        options: [
+          { value: '', label: '— a fenti koordinátát használom —' },
+          { value: 'now', label: 'Friss GPS-mérés most' },
+          { value: 'track', label: 'A nyomvonal időben legközelebbi pontja' },
+        ],
+      },
+    ],
+    okText: 'Mentés',
+  });
+  if (!res) return;
+
+  let next = null;
+  if (res.mode === 'now') {
+    const p = await positionNow();
+    if (p.lat == null) { toast('Nem sikerült helyadatot mérni.', 'error'); return; }
+    next = p;
+  } else if (res.mode === 'track') {
+    if (!state.points.length) { toast('Ehhez a bejáráshoz nincs nyomvonal.', 'error'); return; }
+    let best = state.points[0];
+    for (const p of state.points) {
+      if (Math.abs(p.t - item.created) < Math.abs(best.t - item.created)) best = p;
+    }
+    next = { lat: best.lat, lon: best.lon, acc: best.acc, posAt: best.t, posSource: 'track' };
+  } else {
+    const lat = Number(String(res.lat).replace(',', '.'));
+    const lon = Number(String(res.lon).replace(',', '.'));
+    if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+      toast('Érvénytelen koordináta.', 'error');
+      return;
+    }
+    next = { lat, lon, acc: null, posAt: Date.now(), posSource: 'manual' };
+  }
+
+  Object.assign(item, next);
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  closeViewer();
+  toast('Helyadat mentve.');
+}
+
 async function openViewer(id) {
   const item = state.items.find((i) => i.id === id) || (await db.getItem(id));
   if (!item) return;
@@ -690,8 +833,8 @@ async function openViewer(id) {
 
   const info = el('div', { class: 'meta-card' });
   const rows = [
-    ['Idő', formatDateTime(item.created)],
-    ['Pozíció', formatCoord(item.lat, item.lon)],
+    [item.importedAt ? 'Felvétel ideje' : 'Idő', formatDateTime(item.created)],
+    ['Pozíció', formatCoord(item.lat, item.lon) + positionNote(item)],
   ];
   if (item.dims && item.dims.length) rows.push(['Méretek', item.dims.join(' · ')]);
   if (item.texts && item.texts.length) rows.push(['Feliratok', item.texts.join(' · ')]);
@@ -720,6 +863,11 @@ async function openViewer(id) {
     } }));
   }
   actions.appendChild(el('button', { class: 'btn ghost small', text: '📝 Megjegyzés', onclick: () => editItemNote(item) }));
+  actions.appendChild(el('button', {
+    class: item.lat == null ? 'btn primary small' : 'btn ghost small',
+    text: item.lat == null ? '📍 Hely megadása' : '📍 Hely javítása',
+    onclick: () => editItemPosition(item),
+  }));
   if (item.lat != null) {
     actions.appendChild(el('a', {
       class: 'btn ghost small',
@@ -752,6 +900,7 @@ async function editItemNote(item) {
   item.note = res.note;
   item.dims = res.dims ? res.dims.split(',').map((s) => s.trim()).filter(Boolean) : [];
   await db.saveItem(item);
+  markUnsaved();
   renderItems();
   closeViewer();
   toast('Mentve.');
@@ -767,6 +916,7 @@ async function deleteCurrentItem() {
   if (!ok) return;
   await db.deleteItem(viewerItem.id);
   state.items = state.items.filter((i) => i.id !== viewerItem.id);
+  markUnsaved();
   closeViewer();
   renderItems();
   drawTrack();
@@ -839,6 +989,10 @@ async function exportJSON() {
   };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   download(blob, `${slug(state.session.name)}-mentes.json`);
+
+  state.session.lastBackupAt = Date.now();
+  await db.saveSession(state.session);
+  renderBackupStatus();
   toast(`Mentés kész (${(blob.size / 1048576).toFixed(1).replace('.', ',')} MB).`);
 }
 
@@ -869,6 +1023,81 @@ async function importJSON(file) {
   }
 }
 
+/* ------------------------------------------------- biztonsági mentés */
+
+/** A bejárás változott a legutóbbi kimentés óta? */
+function backupStale(s) {
+  if (!s) return false;
+  return !s.lastBackupAt || s.lastBackupAt < (s.updated || 0);
+}
+
+function markUnsaved() {
+  if (!state.session) return;
+  db.saveSession(state.session).catch(() => {}); // az `updated` azonnal frissül
+  renderBackupStatus();
+}
+
+function renderBackupStatus() {
+  const box = $('#backup-status');
+  const s = state.session;
+  if (!box || !s) return;
+  const stale = backupStale(s);
+  box.classList.toggle('warn', stale);
+  box.textContent = s.lastBackupAt
+    ? (stale
+      ? `⚠️ Változott a legutóbbi mentés óta (${formatDateTime(s.lastBackupAt)}) — mentés kiírása`
+      : `✓ Biztonsági mentés: ${formatDateTime(s.lastBackupAt)}`)
+    : '⚠️ Még nincs biztonsági mentés — a böngészőadatok törlése mindent visz. Mentés kiírása';
+}
+
+/* ------------------------------------------------------- térképnézet */
+
+/**
+ * A ténylegesen bejárt vonal megjelenítése térképnézőben. A Google Maps
+ * útvonaltervezője csak pontokat kap és maga tervez utat — ez viszont magát
+ * a vonalat adja át, az elvetett és a berajzolt szakaszokkal együtt.
+ */
+async function openTrackOnMap() {
+  const build = (tolerance) =>
+    JSON.stringify(toGeoJSON(state.session, state.points, state.items, { tolerance }));
+
+  let tolerance = 0.00004;
+  let json = build(tolerance);
+  if (JSON.parse(json).features.length === 0) {
+    toast('Nincs megjeleníthető nyomvonal.', 'error');
+    return;
+  }
+  // hosszú bejárásnál ritkítunk, hogy elférjen a hivatkozásban
+  while (json.length > 30000 && tolerance < 0.002) {
+    tolerance *= 2;
+    json = build(tolerance);
+  }
+
+  const ok = await modal({
+    title: 'Megnyitás térképnézőben',
+    text: 'A nyomvonal a geojson.io oldalon jelenik meg, utcákkal és településekkel. '
+      + 'Az adat a hivatkozás horgony részében utazik, amit a böngésző nem küld el a kiszolgálónak — '
+      + 'de ez akkor is egy külső oldal. Megnyitjuk?',
+    okText: 'Megnyitás',
+  });
+  if (!ok) return;
+
+  window.open(
+    'https://geojson.io/#data=data:application/json,' + encodeURIComponent(json),
+    '_blank',
+    'noopener'
+  );
+}
+
+function exportGeoJSON() {
+  const gj = toGeoJSON(state.session, state.points, state.items, { tolerance: 0 });
+  download(
+    new Blob([JSON.stringify(gj, null, 1)], { type: 'application/geo+json' }),
+    `${slug(state.session.name)}.geojson`
+  );
+  toast('GeoJSON letöltve.');
+}
+
 function openInMaps() {
   // csak az érvényes útvonal: az elvetett szakaszokon nem kell végigvinni
   const pts = state.points.filter((p) => !isRejected(p));
@@ -878,6 +1107,7 @@ function openInMaps() {
   const step = Math.max(1, Math.floor(pts.length / 8));
   const way = [];
   for (let i = step; i < pts.length - 1 && way.length < 8; i += step) way.push(`${pts[i].lat},${pts[i].lon}`);
+  toast('A Google Maps saját útvonalat tervez a megadott pontok között — ez közelítés, nem a bejárt vonal.');
   const url =
     `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lon}` +
     `&destination=${dest.lat},${dest.lon}` +
@@ -941,8 +1171,11 @@ function bind() {
 
   $('#edit-session').addEventListener('click', editSessionData);
   $('#export-gpx').addEventListener('click', exportGPX);
+  $('#export-geojson').addEventListener('click', exportGeoJSON);
   $('#export-json').addEventListener('click', exportJSON);
+  $('#open-track-map').addEventListener('click', openTrackOnMap);
   $('#open-maps').addEventListener('click', openInMaps);
+  $('#backup-status').addEventListener('click', exportJSON);
   $('#delete-session').addEventListener('click', deleteSession);
 
   $('#import-btn').addEventListener('click', () => $('#import-file').click());
@@ -989,7 +1222,47 @@ async function init() {
     navigator.storage.persist().catch(() => {});
   }
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js')
+      .then(() => checkOfflineReady())
+      .catch((err) => setOfflineStatus('Offline készenlét: nem sikerült beállítani (' + err.message + ').', true));
+  }
+}
+
+function setOfflineStatus(text, warn = false) {
+  const box = $('#offline-status');
+  if (!box) return;
+  box.textContent = text;
+  box.classList.toggle('warn-text', warn);
+}
+
+/**
+ * Az offline készenlét ellenőrzése. Korábban a letöltési hibák némán
+ * elvesztek, így nem lehetett tudni, tényleg használható-e terepen.
+ */
+async function checkOfflineReady() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sw = navigator.serviceWorker.controller || reg.active;
+    if (!sw) {
+      setOfflineStatus('Offline készenlét: még nem aktív — töltse újra az oldalt.', true);
+      return;
+    }
+    const res = await new Promise((resolve, reject) => {
+      const ch = new MessageChannel();
+      const timer = setTimeout(() => reject(new Error('nincs válasz')), 4000);
+      ch.port1.onmessage = (e) => { clearTimeout(timer); resolve(e.data); };
+      sw.postMessage({ type: 'status' }, [ch.port2]);
+    });
+    if (res && res.cached >= res.expected) {
+      setOfflineStatus(`✓ Offline használatra kész (${res.cached} fájl).`);
+    } else {
+      setOfflineStatus(
+        `⚠️ Offline készenlét hiányos (${res ? res.cached : 0}/${res ? res.expected : '?'} fájl) — `
+        + 'töltse újra az oldalt hálózaton.', true
+      );
+    }
+  } catch (err) {
+    setOfflineStatus('⚠️ Az offline készenlét nem ellenőrizhető: ' + err.message, true);
   }
 }
 

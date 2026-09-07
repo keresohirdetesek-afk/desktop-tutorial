@@ -39,6 +39,7 @@
         <button id="import-btn" class="btn ghost small">Mentés visszatöltése (JSON)</button>
         <input id="import-file" type="file" accept="application/json" hidden>
         <p id="storage-info" class="muted small"></p>
+        <p id="offline-status" class="muted small"></p>
       </div>
     </div>
   </section>
@@ -92,11 +93,15 @@
 
       <h2 class="section-title">Bejárás adatai</h2>
       <div id="session-meta" class="meta-card"></div>
+      <button id="backup-status" class="backup-status"></button>
+
       <div class="btn-grid">
         <button id="edit-session" class="btn ghost small">Adatok szerkesztése</button>
+        <button id="open-track-map" class="btn ghost small">🗺️ Pontos nyomvonal térképen</button>
         <button id="export-gpx" class="btn ghost small">GPX export</button>
+        <button id="export-geojson" class="btn ghost small">GeoJSON export</button>
         <button id="export-json" class="btn ghost small">Teljes mentés (JSON)</button>
-        <button id="open-maps" class="btn ghost small">Megnyitás térképen</button>
+        <button id="open-maps" class="btn ghost small">Útvonalterv Google Maps (közelítő)</button>
         <button id="delete-session" class="btn danger small">Bejárás törlése</button>
       </div>
     </div>
