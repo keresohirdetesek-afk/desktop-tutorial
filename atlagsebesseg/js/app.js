@@ -243,7 +243,7 @@ function bontas(pontok) {
     súlyozott érték — ennyivel lehet a szakaszt szabályosan teljesíteni. */
 function megengedettAtlag(eredmeny) {
   if (!eredmeny.szabalyosIdo) return S.alap;
-  return (eredmeny.osszTav / (eredmeny.szabalyosIdo / 1000)) * 3.6;
+  return eredmeny.teljes.megengedett;
 }
 
 /** Az az átlag, ami felett már bírság járna (ugyanígy súlyozva). */
@@ -278,15 +278,16 @@ function nevelo(n) {
 
 function allapotJel(eredmeny) {
   if (!eredmeny || eredmeny.szakaszok.length === 0) return 'semleges';
-  if (eredmeny.birsagosak.length > 0) return 'birsag';
+  if (eredmeny.teljes?.ertekeles?.birsagos) return 'birsag';
   if (eredmeny.osszAtlag > megengedettAtlag(eredmeny) + 0.05) return 'hatar';
   return 'ok';
 }
 
-/* Egy szakasz, egy bírság. A szakaszellenőrzés a szakasz egészét méri, és
-   egy áthaladás egy szabálysértés: akkor sem jár több csekk, ha a szakaszon
-   belül több, eltérő korlátozású részen is a határ fölött voltál. A tételt
-   a legsúlyosabb rész szabja meg, mert az ottani túllépés a legnagyobb. */
+/* Egy szakasz, egy bírság — és a teljes szakasz egyetlen átlagából. A
+   mérőrendszer két pont között méri az időt: nem tudja, a szakaszon belül
+   hol mentél gyorsabban, tehát részenként nem is szankcionálhat. A
+   viszonyítás a szakasz megengedett átlaga (végig a táblát tartva ennyi
+   jönne ki); egységes korlátozásnál ez maga a tábla.                  */
 /* A kilométeróra törvény szerint sosem mutathat kevesebbet a tényleges
    sebességnél, felfelé viszont eltérhet: legfeljebb a valós érték
    110%-a plusz 4 km/h (ENSZ-EGB 39. előírás). A gyártók ezt ki is
@@ -299,8 +300,7 @@ function muszerfalKb(gps) {
 }
 
 function birsagOsszeg(eredmeny) {
-  if (!eredmeny.birsagosak.length) return 0;
-  return eredmeny.legsulyosabb.ertekeles.osszeg;
+  return eredmeny.teljes?.ertekeles?.birsagos ? eredmeny.teljes.ertekeles.osszeg : 0;
 }
 
 /* ------------------------------------------------- megállás a mérésben
@@ -448,8 +448,9 @@ function verdiktRender(node, eredmeny) {
     node.textContent = 'Még nincs elég adat a számításhoz.';
     return;
   }
+  const t = eredmeny.teljes;
   const b = eredmeny.birsagosak;
-  if (b.length === 0) {
+  if (!t?.ertekeles?.birsagos) {
     const tartalek = Math.min(...eredmeny.szakaszok.map((s) => s.ertekeles.tartalek));
     const megengedett = megengedettAtlag(eredmeny);
     const felette = eredmeny.osszAtlag > megengedett + 0.05;
@@ -457,36 +458,53 @@ function verdiktRender(node, eredmeny) {
     const szoros = eredmeny.szakaszok.reduce(
       (a, sz) => (sz.ertekeles.tartalek < a.ertekeles.tartalek ? sz : a)
     );
+    /* A viszonyítás mindig a teljes szakasz: egy áthaladás, egy átlag.
+       A részenkénti bontás csak akkor kerül szóba, ha szigorúbb lenne —
+       különben félrevezetne.                                          */
+    const tt = t.ertekeles;
     node.innerHTML = felette
       ? `<strong>Gyorsabb voltál a megengedettnél, de e szerint a számítás ` +
         `szerint bírság nem járna.</strong><br>` +
-        `<span class="small">A legszorosabb ${nevelo(szoros.limit)} ${szoros.limit} km/h-s szakasz volt: ` +
-        `${fmtSpeed1(szoros.ertekeles.mert)} km/h átlaggal. ` +
-        (tartalek < 0.5
+        `<span class="small">A teljes szakaszon ${fmtSpeed1(t.atlag)} km/h ` +
+        `átlaggal mentél, a megengedett ${fmtSpeed1(t.megengedett)} km/h. ` +
+        (tt.tartalek < 0.5
           ? 'Épp a bírsághatáron vagy.'
-          : `A bírsághatárig még ${fmtSpeed1(tartalek)} km/h maradt.`) +
+          : `A bírsághatárig még ${fmtSpeed1(tt.tartalek)} km/h maradt.`) +
+        reszenkentiMegjegyzes(eredmeny) +
         `</span>`
       : `<strong>Ebben a szimulációban nem lépted túl az átlagsebesség-határt.</strong><br>` +
         `<span class="small">` +
-        (tartalek < 0.5
+        (tt.tartalek < 0.5
           ? 'Épp a határon vagy. Egy hajszállal gyorsabban már jönne a csekk.'
-          : `A legszorosabb szakaszon még ${fmtSpeed1(tartalek)} km/h ráhagyásod volt.`) +
+          : `A teljes szakaszon még ${fmtSpeed1(tt.tartalek)} km/h ráhagyásod volt.`) +
+        reszenkentiMegjegyzes(eredmeny) +
         `</span>`;
     return;
   }
-  const e = eredmeny.legsulyosabb.ertekeles;
+  const tt = t.ertekeles;
   node.className = 'verdikt birsag';
   node.innerHTML =
     `<strong>Becsült bírság: ${fmtForint(birsagOsszeg(eredmeny))}</strong><br>` +
     `<span class="small">` +
-    (b.length > 1
-      ? `${b.length} szakaszrészen lépted túl a határt, de <strong>egy ` +
-        `szakasz egy bírság</strong>: a legsúlyosabb rész számít, ` +
-        `${nevelo(e.limit)} ${e.limit} km/h-s részen ${fmtSpeed1(e.mert)} km/h ` +
-        `átlag (+${fmtSpeed1(e.tullepes)} km/h).`
-      : `${e.limit} km/h-s szakaszon ${fmtSpeed1(e.mert)} km/h átlag ` +
-        `(+${fmtSpeed1(e.tullepes)} km/h).`) +
+    (t.egysegesLimit
+      ? `${t.egysegesLimit} km/h-s szakaszon ${fmtSpeed1(t.atlag)} km/h átlag ` +
+        `(+${fmtSpeed1(tt.tullepes)} km/h).`
+      : `A teljes szakaszon ${fmtSpeed1(t.atlag)} km/h átlag, a megengedett ` +
+        `${fmtSpeed1(t.megengedett)} km/h (+${fmtSpeed1(tt.tullepes)} km/h). ` +
+        `<strong>Egy áthaladás, egy bírság</strong>: a mérés a szakasz ` +
+        `egészét nézi, nem részenként.`) +
     `</span>`;
+}
+
+/* Ha a részenkénti bontás szigorúbb lenne, mint a teljes szakasz, azt
+   érdemes tudni: máshol, rövidebb szakaszhatárok közt már jönne a csekk.
+   Fordítva nem írjuk ki, mert az csak megnyugtatna, tévesen.          */
+function reszenkentiMegjegyzes(eredmeny) {
+  if (!eredmeny.birsagosak.length) return '';
+  const e = eredmeny.legsulyosabb.ertekeles;
+  return ` <br><span class="muted">Ha viszont ${nevelo(e.limit)} ` +
+    `${e.limit} km/h-s részen külön mérés lenne, ott ${fmtSpeed1(e.mert)} km/h ` +
+    `átlaggal ${fmtForint(e.osszeg)} járna.</span>`;
 }
 
 function jelvenyek(sz) {

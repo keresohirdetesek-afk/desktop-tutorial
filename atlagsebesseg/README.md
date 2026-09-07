@@ -266,6 +266,32 @@ letöltés irányban mozog).
 Az OSM-lekérés helye egy fájlban van: `js/limits.js` (`OVERPASS_VEGPONTOK`,
 `utHatara`). Új forrás bekötéséhez csak ezt kell bővíteni.
 
+## Egy szakasz, egy átlag, egy ítélet
+
+Ez a projekt legfontosabb modellezési döntése. Egy átlagsebesség-mérő két
+ponton azonosítja a járművet, és a menetidőből számol átlagot: **nem tudja,
+hogy a szakaszon belül hol mentél gyorsabban**. Ezért a bírság a teljes
+szakasz egyetlen átlagából jön (`eredmeny.teljes`), nem a korlátozás
+szerinti részekből.
+
+A viszonyítási érték a szakasz **megengedett átlaga**: az a sebesség, ami
+akkor jönne ki, ha végig pontosan a táblát tartanád
+(`osszTav / szabalyosIdo`). Egységes korlátozásnál ez maga a tábla, tehát a
+szokásos eset változatlanul jön ki. Vegyes szakaszon viszont ez az egyetlen
+tisztességes viszonyítás: aki 5 km-t 50-nel, majd 5 km-t 100-zal tesz meg,
+annak 66,7 km/h az átlaga — és pont 66,7 a megengedett átlag is, tehát
+nincs túllépés.
+
+A korlátozás szerinti bontás megmarad (`szakaszok`, `birsagosak`,
+`reszenkentiOsszeg`), de **csak magyarázat**: megmutatja, hol keletkezett az
+átlag, és mi lenne, ha minden egységes határú részen külön mérés állna. Ez
+szigorúbb, mint egyetlen mérés, ezért nem ebből lesz a bírság — de ha a
+kettő eltér, az eredménynél kiírjuk.
+
+Korábban a bírság a legsúlyosabb szakaszrészből jött. Az a modell többet
+feltételezett a rendszerről, mint amit tud, és a vegyes korlátozású, végig
+szabályos menetre is bírságot hozott ki.
+
 ## A bírságtáblázat
 
 Egyetlen helyen, a `js/birsag.js` fájlban van, dátumozva. Ha a rendelet
@@ -285,7 +311,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 279 ellenőrzést futtat végig 27 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 297 ellenőrzést futtat végig 28 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -334,7 +360,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (279 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (297 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
 ├── PUBLIKALAS.md       lépésenkénti kiadási leírás

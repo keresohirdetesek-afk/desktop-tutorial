@@ -80,6 +80,12 @@ export function birsagmentesMax(limit) {
  *            birsagos:boolean, hatar:number, tartalek:number,
  *            kovetkezoSav:?{tullepes:number, osszeg:number}}}
  */
+/* A sávhatárok „bezárólag” értendők, a mért érték viszont osztás
+   eredménye: 4 km / 120 mp pontosan 120 km/h, lebegőpontosan viszont
+   120,00000000000001. Enélkül egy hajszálnyi számítási maradék átvinné a
+   vezetőt a következő, drágább sávba.                                 */
+const HATAR_TURES = 1e-9;
+
 export function ertekel(limit, mert) {
   const kat = kategoria(limit);
   const tullepes = mert - limit;
@@ -95,13 +101,13 @@ export function ertekel(limit, mert) {
     birsagos: false,
     kovetkezoSav: null,
   };
-  if (tullepes <= kat.kuszob) {
+  if (tullepes <= kat.kuszob + HATAR_TURES) {
     out.kovetkezoSav = { tullepes: kat.kuszob + 1, osszeg: kat.savok[0].osszeg };
     return out;
   }
   out.birsagos = true;
   for (let i = 0; i < kat.savok.length; i++) {
-    if (tullepes <= kat.savok[i].max) {
+    if (tullepes <= kat.savok[i].max + HATAR_TURES) {
       out.osszeg = kat.savok[i].osszeg;
       const kov = kat.savok[i + 1];
       if (kov) out.kovetkezoSav = { tullepes: kat.savok[i].max + 1, osszeg: kov.osszeg };
@@ -112,10 +118,20 @@ export function ertekel(limit, mert) {
 }
 
 /**
- * Több, eltérő sebességhatárú szakasz összesített értékelése.
- * Minden szakasz a saját korlátozásához mérve kap bírságot; az összesített
- * eredmény a legsúlyosabb szakaszt emeli ki (a hatóság szakaszonként
- * szankcionál, nem az egész út „vegyes” átlagára).
+ * Egy szakasz összesített értékelése.
+ *
+ * A bírság a TELJES szakasz egyetlen átlagából jön (`teljes`). Egy
+ * átlagsebesség-mérő két pont között méri az időt, és nem tudja, hogy a
+ * szakaszon belül hol mentél gyorsabban — így nem is szankcionálhat
+ * szakaszrészenként. A viszonyítási érték a szakasz megengedett átlaga:
+ * az a sebesség, ami akkor jönne ki, ha végig pontosan a táblát tartanád.
+ * Egységes korlátozású szakaszon ez pontosan maga a korlátozás, tehát a
+ * szokásos eset változatlanul jön ki.
+ *
+ * A korlátozás szerinti bontás (`szakaszok`, `birsagosak`) megmarad, de
+ * már csak magyarázat: megmutatja, hol keletkezett az átlag, és mi lenne,
+ * ha minden egységes határú részen külön mérés állna. Ez szigorúbb, mint
+ * egyetlen mérés, ezért nem ebből lesz a bírság.
  *
  * @param {Array<{tav:number, ido:number, limit:number}>} szakaszok
  *        tav: méter, ido: ezredmásodperc, limit: km/h
@@ -144,16 +160,31 @@ export function ertekelSzakaszok(szakaszok) {
     null
   );
 
+  const osszAtlag = osszIdo > 0 ? (osszTav / (osszIdo / 1000)) * 3.6 : 0;
+  const megengedett = szabalyosIdo > 0 ? (osszTav / (szabalyosIdo / 1000)) * 3.6 : 0;
+  const limitek = [...new Set(ervenyes.map((s) => s.limit))];
+
+  /* Ez a mérvadó értékelés: egy áthaladás, egy átlag, egy ítélet. */
+  const teljes = {
+    atlag: osszAtlag,
+    megengedett,
+    // ha végig ugyanaz a korlátozás, a megengedett átlag maga a tábla
+    egysegesLimit: limitek.length === 1 ? limitek[0] : null,
+    ertekeles: megengedett > 0 ? ertekel(megengedett, osszAtlag) : null,
+  };
+
   return {
     szakaszok: eredmenyek,
     osszTav,
     osszIdo,
-    osszAtlag: osszIdo > 0 ? (osszTav / (osszIdo / 1000)) * 3.6 : 0,
+    osszAtlag,
     minIdo,
     szabalyosIdo,
+    teljes,
     birsagosak,
     legsulyosabb,
-    // Tájékoztató: ha több szakaszon is bírságolnának, az összegek halmozódnak.
-    osszegHalmozott: birsagosak.reduce((a, e) => a + e.ertekeles.osszeg, 0),
+    /* Csak összehasonlításnak: ennyi lenne, ha minden egységes határú
+       részen külön mérés állna, és a legsúlyosabb rész számítana. */
+    reszenkentiOsszeg: legsulyosabb ? legsulyosabb.ertekeles.osszeg : 0,
   };
 }
