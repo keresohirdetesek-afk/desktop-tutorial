@@ -89,21 +89,22 @@
           Vezess úgy, ahogy szoktál. Megmutatjuk, mi lenne az eredmény egy
           átlagsebesség-mérős szakaszon.
         </p>
-        <button id="btn-cta" class="btn nagy"><svg class="ikon" aria-hidden="true"><use href="#i-play"/></svg>SZIMULÁCIÓ INDÍTÁSA</button>
-
-        <div id="mod-valaszto" class="mod-valaszto" hidden>
+        <!-- Két közvetlen választás. Korábban egy „szimuláció indítása”
+             gomb állt előttük, ami csak lenyitotta ezt a kettőt: egy
+             kattintás, ami semmit nem döntött el. -->
+        <div id="mod-valaszto" class="mod-valaszto">
           <button class="mod" id="mod-vezetek">
             <span class="mod-ikon"><svg class="ikon nagy-ikon" aria-hidden="true"><use href="#i-car"/></svg></span>
             <span class="mod-szoveg">
-              <strong>Most vezetek</strong>
-              GPS-szel, valós menet közben méri a szakaszátlagodat.
+              <strong>GPS-mérés — most vezetek</strong>
+              Valós menet közben méri a szakaszátlagodat.
             </span>
           </button>
           <button class="mod" id="mod-kiprobalnam">
             <span class="mod-ikon"><svg class="ikon nagy-ikon" aria-hidden="true"><use href="#i-calculator"/></svg></span>
             <span class="mod-szoveg">
-              <strong>Csak kipróbálnám</strong>
-              Beírod a szakasz hosszát és a menetidőt. GPS nem kell hozzá.
+              <strong>Kalkulátor — GPS nélkül</strong>
+              Beírod a szakasz hosszát és a menetidőt. Elindulni sem kell.
             </span>
           </button>
         </div>
@@ -123,7 +124,7 @@
       </section>
 
       <section class="lepesek">
-        <div><span class="lepes-szam">1</span> Elindítod a szimulációt az út elején.</div>
+        <div><span class="lepes-szam">1</span> A GPS-mérést elindítod az út elején.</div>
         <div><span class="lepes-szam">2</span> Vezetsz, ahogy szoktál. Az oldal maradjon nyitva — a képernyőt ébren tartjuk, de más appra váltva a mérés megáll.</div>
         <div><span class="lepes-szam">3</span> A végén megmutatjuk, mi lett volna az eredmény.</div>
       </section>
@@ -141,6 +142,41 @@
            görgetéssel keresgélni, hol áll le a mérés. -->
       <div class="fo-gomb-sav">
         <button id="btn-meres" class="btn nagy"><svg class="ikon" aria-hidden="true"><use href="#i-play"/></svg>MÉRÉS INDÍTÁSA</button>
+      </div>
+
+      <!-- Amit indulás előtt érdemes eldönteni. Mérés közben elrejtjük:
+           vezetés közben nem beállítani kell, hanem vezetni. -->
+      <div class="pad indulas-elott" id="indulas-elott">
+        <section class="card">
+          <h2 class="card-title">Indulás előtt</h2>
+          <div class="row-between">
+            <label for="chk-auto-hatar-fo">Sebességhatárok automatikus lekérése</label>
+            <input id="chk-auto-hatar-fo" type="checkbox" checked>
+          </div>
+          <p class="muted small">
+            Menet közben, kilométerenként lekéri a táblák szerinti határokat
+            az OpenStreetMapből. Kikapcsolva semmilyen adat nem hagyja el a
+            készüléket, és a lenti alapértékkel számolunk.
+          </p>
+          <div class="row-between">
+            <label for="sel-alap-fo">Ha nincs lekért adat, ezzel számolunk</label>
+            <select id="sel-alap-fo">
+              <option value="30">30 km/h</option>
+              <option value="40">40 km/h</option>
+              <option value="50">50 km/h</option>
+              <option value="70">70 km/h</option>
+              <option value="80">80 km/h</option>
+              <option value="90" selected>90 km/h</option>
+              <option value="100">100 km/h</option>
+              <option value="110">110 km/h</option>
+              <option value="130">130 km/h</option>
+            </select>
+          </div>
+          <p class="muted small">
+            Szakaszt a térképen jelölhetsz ki, lejjebb. Kijelölés nélkül a
+            mérés kézzel indul és áll le.
+          </p>
+        </section>
       </div>
 
       <div class="pad">
@@ -276,18 +312,18 @@
           </div>
 
           <div class="adatracs">
-            <div><span class="adat-lbl">Itt érvényes</span><span class="adat-val" id="ki-hely-limit">-</span></div>
+            <div class="reszlet"><span class="adat-lbl">Itt érvényes</span><span class="adat-val" id="ki-hely-limit">-</span></div>
             <div><span class="adat-lbl">Megtett táv</span><span class="adat-val" id="ki-tav">0 m</span></div>
             <div><span class="adat-lbl">Eltelt idő</span><span class="adat-val" id="ki-ido">0:00</span></div>
-            <div><span class="adat-lbl">Bírságveszély</span><span class="adat-val" id="ki-birsag">0 Ft</span></div>
+            <div class="reszlet"><span class="adat-lbl">Bírságveszély</span><span class="adat-val" id="ki-birsag">0 Ft</span></div>
           </div>
 
-          <p id="h-projekcio" class="projekcio" hidden></p>
-          <p id="hatar-allapot" class="muted small center">Sebességhatárok: a beállított alapértékkel számolunk.</p>
-          <p id="ki-melleklet" class="muted small center">Táv: 0 m · GPS: -</p>
+          <p id="h-projekcio" class="projekcio reszlet" hidden></p>
+          <p id="hatar-allapot" class="muted small center reszlet">Sebességhatárok: a beállított alapértékkel számolunk.</p>
+          <p id="ki-melleklet" class="muted small center reszlet">Táv: 0 m · GPS: -</p>
           <p id="gps-uzenet" class="muted small center"></p>
 
-          <button id="btn-ujra" class="btn ghost small">Új mérés</button>
+          <button id="btn-ujra" class="btn ghost small reszlet">Új mérés</button>
         </section>
       </div>
 
@@ -303,7 +339,7 @@
       </div>
 
       <div class="pad">
-        <p id="kapu-allapot" class="muted small">
+        <p id="kapu-allapot" class="muted small reszlet">
           Nincs kijelölt szakasz. Kézi indítás és leállítás.
         </p>
 

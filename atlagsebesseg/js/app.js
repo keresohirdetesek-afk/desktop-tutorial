@@ -426,9 +426,18 @@ function limitLapZar() {
 function limitBeallit(v) {
   S.alap = v;
   if (S.utak) S.kezi = v;          // a lekért adatot írjuk felül
-  const sel = $('sel-alap');
-  if ([...sel.options].some((o) => Number(o.value) === v)) sel.value = String(v);
+  alapSelectFrissit();
   elonezetFrissit();
+}
+
+/** A két alapérték-választó a tényleges állapotot mutassa. */
+function alapSelectFrissit() {
+  for (const id of ['sel-alap', 'sel-alap-fo']) {
+    const sel = $(id);
+    if ([...sel.options].some((o) => Number(o.value) === S.alap)) {
+      sel.value = String(S.alap);
+    }
+  }
 }
 
 /* ========================================================= megjelenítés */
@@ -936,6 +945,9 @@ function elonezetFrissit() {
   terkep?.pozicioRajz(meres.utolso);
 
   const fut = meres.allapot === ALLAPOT.VAR || meres.allapot === ALLAPOT.MER;
+  /* Vezetés közben a felület a műszerre szűkül: a részletek, a beállítások
+     és a szakaszlista a mérés végén olvasandók, nem a volán mögül. */
+  $('meres-elo').classList.toggle('mer-fut', fut);
   $('btn-meres').innerHTML = fut
     ? '<svg class="ikon" aria-hidden="true"><use href="#i-stop"/></svg>Mérés leállítása'
     : '<svg class="ikon" aria-hidden="true"><use href="#i-play"/></svg>Mérés indítása';
@@ -1451,10 +1463,6 @@ function esemenyek() {
     if (e.key === 'Escape' && !$('limit-lap').hidden) limitLapZar();
   });
 
-  $('btn-cta').addEventListener('click', () => {
-    $('mod-valaszto').hidden = false;
-    gorget($('mod-valaszto'));
-  });
   $('mod-vezetek').addEventListener('click', () => eloNezet(true));
   $('mod-kiprobalnam').addEventListener('click', () => fulre('scr-kalk'));
 
@@ -1542,11 +1550,19 @@ function esemenyek() {
     kapukFrissit();
   });
 
-  $('sel-alap').addEventListener('change', (e) => {
-    S.alap = parseInt(e.target.value, 10);
+  /* Az alapértelmezett határ és az automatikus lekérés két helyen is
+     állítható: az „Indulás előtt” kártyán (mert ott van rá szükség) és a
+     Haladó beállítások közt (mert ott keresi, aki keresi). Egy állapot,
+     két vezérlő — a párját mindig együtt írjuk át.                    */
+  const alapValt = (ertek) => {
+    S.alap = ertek;
     if (S.kezi != null) S.kezi = S.alap;
+    alapSelectFrissit();
     elonezetFrissit();
-  });
+  };
+  for (const id of ['sel-alap', 'sel-alap-fo']) {
+    $(id).addEventListener('change', (e) => alapValt(parseInt(e.target.value, 10)));
+  }
 
   $('btn-hang').addEventListener('click', (e) => {
     gong.be = !gong.be;
@@ -1573,11 +1589,15 @@ function esemenyek() {
 
   $('btn-osm').addEventListener('click', osmLekeres);
 
-  $('chk-auto-hatar').addEventListener('change', (e) => {
-    S.autoHatar = e.target.checked;
-    if (S.autoHatar) hatarokFrissitese();
-    elonezetFrissit();
-  });
+  for (const id of ['chk-auto-hatar', 'chk-auto-hatar-fo']) {
+    $(id).addEventListener('change', (e) => {
+      S.autoHatar = e.target.checked;
+      $('chk-auto-hatar').checked = S.autoHatar;
+      $('chk-auto-hatar-fo').checked = S.autoHatar;
+      if (S.autoHatar) hatarokFrissitese();
+      elonezetFrissit();
+    });
+  }
 
   $('btn-kozepre').addEventListener('click', () => {
     if (meres.utolso) {

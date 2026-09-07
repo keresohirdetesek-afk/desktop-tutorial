@@ -187,7 +187,6 @@ async function kapusMeres(b) {
   // 6 km 100 km/h-val: 3:36 menetidő, a 90-es határ fölött
   const p = await ujLap(b, { gps: { menet: [[100, 7000]] } });
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
 
@@ -241,7 +240,6 @@ async function vegkapubanMegall(b) {
   console.log('\n3. Megállás a végkapuban');
   const p = await ujLap(b, { gps: { menet: [[80, 3000], [0.2, 400]] } });
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
   await p.evaluate(() => {
@@ -265,7 +263,6 @@ async function keziMeres(b) {
   console.log('\n4. Kézi indítás és leállítás, kapuk nélkül');
   const p = await ujLap(b, { gps: { menet: [[120, 20000]] } });
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
   await p.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -318,7 +315,6 @@ async function ugrasSzures(b) {
     gps: { menet: [[90, 6000]], ugras: { fix: 10, fokban: 0.02 } },   // ~2,2 km ugrás
   });
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
   await p.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -339,7 +335,6 @@ async function ugrasSzures(b) {
 
   const p2 = await ujLap(b, { gps: { menet: [[90, 4000]], gyengeElso: 400 } });
   await p2.goto(CIM);
-  await p2.click('#btn-cta');
   await p2.click('#mod-vezetek');
   await p2.waitForSelector('#meres-elo:not([hidden])');
   await p2.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -362,7 +357,6 @@ async function celTempoTeszt(b) {
   console.log('\n6. Tartható tempó és az utasítás váltásai');
   const p = await ujLap(b);
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
 
@@ -416,7 +410,6 @@ async function kalkulatorTeszt(b) {
   console.log('\n7. Kalkulátor');
   const p = await ujLap(b);
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-kiprobalnam');
   await p.waitForSelector('#scr-kalk:not([hidden])');
 
@@ -519,7 +512,6 @@ async function profilTeszt(b) {
   console.log('\n8. Sebességprofil, nagyítás, teljes képernyő');
   const p = await ujLap(b);
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-kiprobalnam');
   await p.waitForSelector('#scr-kalk:not([hidden])');
   await p.evaluate(async () => {
@@ -586,7 +578,6 @@ async function megosztasTeszt(b) {
   console.log('\n9. Megosztható kép');
   const p = await ujLap(b, { gps: { menet: [[110, 8000]] } });
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
   await p.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -859,7 +850,6 @@ async function eszkozTeszt(b) {
 async function menetEredmeny(b, { menet, limit, cimke }) {
   const p = await ujLap(b, { gps: { menet } });
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
   await p.evaluate((l) => {
@@ -934,7 +924,6 @@ async function hangTeszt(b) {
   console.log('\n15. Hangjelzés');
   const p = await ujLap(b, { gps: { menet: [[60, 800], [140, 3000], [40, 2000]] } });
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
   await p.evaluate(() => {
@@ -976,7 +965,7 @@ async function offlineTeszt(b) {
   await ctx.setOffline(true);
   const ok = await p.reload({ timeout: 15000 }).then(() => true).catch(() => false);
   const mukodik = ok && await p.evaluate(() =>
-    !!document.getElementById('btn-cta') && !!document.querySelector('#topbar h1'));
+    !!document.getElementById('mod-vezetek') && !!document.querySelector('#topbar h1'));
   all('offline is betölt az app', mukodik === true, String(mukodik));
   if (mukodik) {
     await p.click('#tabs .tab[data-scr="scr-kalk"]');
@@ -1000,7 +989,6 @@ async function ujraTeszt(b) {
   console.log('\n17. Újra ugyanazon a szakaszon');
   const p = await ujLap(b, { gps: { menet: [[100, 4000]] } });
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
   await p.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -1067,7 +1055,6 @@ async function hibasHelyzetek(b) {
     Object.defineProperty(navigator, 'geolocation', { value: geo, configurable: true });
   });
   await p1.goto(CIM);
-  await p1.click('#btn-cta');
   await p1.click('#mod-vezetek');
   await p1.waitForSelector('#meres-elo:not([hidden])');
   await p1.click('#btn-meres');
@@ -1084,7 +1071,6 @@ async function hibasHelyzetek(b) {
     Object.defineProperty(navigator, 'geolocation', { value: undefined, configurable: true });
   });
   await p2.goto(CIM);
-  await p2.click('#btn-cta');
   await p2.click('#mod-vezetek');
   await p2.waitForSelector('#meres-elo:not([hidden])');
   await p2.click('#btn-meres');
@@ -1097,7 +1083,6 @@ async function hibasHelyzetek(b) {
   // c) álló jármű: nincs nullával osztás, nincs NaN
   const p3 = await ujLap(b, { gps: { menet: [[0.05, 20]] } });
   await p3.goto(CIM);
-  await p3.click('#btn-cta');
   await p3.click('#mod-vezetek');
   await p3.waitForSelector('#meres-elo:not([hidden])');
   await p3.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -1122,7 +1107,6 @@ async function kalkModok(b) {
   console.log('\n20. Kalkulátor: tempó mód és határválasztó');
   const p = await ujLap(b);
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-kiprobalnam');
   await p.waitForSelector('#scr-kalk:not([hidden])');
 
@@ -1194,7 +1178,6 @@ async function hosszuSzakasz(b) {
   console.log('\n21. Hosszú szakasz és teljesítmény');
   const p = await ujLap(b);
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-kiprobalnam');
   await p.waitForSelector('#scr-kalk:not([hidden])');
   const ido = await p.evaluate(async () => {
@@ -1236,7 +1219,6 @@ async function mozgasTeszt(b) {
   const hibak = [];
   p.on('pageerror', (e) => hibak.push(e.message));
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-kiprobalnam');
   await p.waitForSelector('#scr-kalk:not([hidden])');
   const r = await p.evaluate(async () => {
@@ -1260,7 +1242,6 @@ async function allasTeszt(b) {
   // a) kapu nélkül, hosszú állás után kérdez
   const p = await ujLap(b, { gps: { menet: [[90, 3000], [0.5, 400], [90, 3000]] } });
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
   await p.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -1292,7 +1273,6 @@ async function allasTeszt(b) {
   // b) IGEN: felfüggeszt, az idő nem nő, elindulásra magától folytat
   const p2 = await ujLap(b, { gps: { menet: [[90, 3000], [0.5, 400], [90, 3000]] } });
   await p2.goto(CIM);
-  await p2.click('#btn-cta');
   await p2.click('#mod-vezetek');
   await p2.waitForSelector('#meres-elo:not([hidden])');
   await p2.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -1337,7 +1317,6 @@ async function allasTeszt(b) {
   // c) kijelölt szakasznál nem kérdez: ott a végkapu zár
   const p3 = await ujLap(b, { gps: { menet: [[90, 2000], [0.5, 400]] } });
   await p3.goto(CIM);
-  await p3.click('#btn-cta');
   await p3.click('#mod-vezetek');
   await p3.waitForSelector('#meres-elo:not([hidden])');
   await p3.evaluate(() => {
@@ -1371,7 +1350,6 @@ async function javitasTeszt(b) {
     }] }),
   }));
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
   await p.click('#btn-meres');
@@ -1570,7 +1548,6 @@ async function sebessegNelkulTeszt(b) {
   // a) hosszú állásnál akkor is rákérdez, ha nincs GPS-sebesség
   const p = await ujLap(b, { gps: { ...gps, menet: [[90, 2000], [0.5, 45], [90, 3000]] } });
   await p.goto(CIM);
-  await p.click('#btn-cta');
   await p.click('#mod-vezetek');
   await p.waitForSelector('#meres-elo:not([hidden])');
   await p.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -1598,7 +1575,6 @@ async function sebessegNelkulTeszt(b) {
   // b) állva a simított tempó nulla közeli marad, a zaj ellenére is
   const p2 = await ujLap(b, { gps: { ...gps, menet: [[0.4, 60]] } });
   await p2.goto(CIM);
-  await p2.click('#btn-cta');
   await p2.click('#mod-vezetek');
   await p2.waitForSelector('#meres-elo:not([hidden])');
   await p2.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -1618,7 +1594,6 @@ async function sebessegNelkulTeszt(b) {
   // c) haladva a simított tempó a valós sebességet mutatja
   const p3 = await ujLap(b, { gps: { ...gps, menet: [[80, 4000]] } });
   await p3.goto(CIM);
-  await p3.click('#btn-cta');
   await p3.click('#mod-vezetek');
   await p3.waitForSelector('#meres-elo:not([hidden])');
   await p3.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
@@ -1727,7 +1702,6 @@ async function elemzesTeszt(b) {
      be” állapotot adott 0 km/h-val — pont a szabályosan haladónak. */
   const p2 = await ujLap(b);
   await p2.goto(CIM);
-  await p2.click('#btn-cta');
   await p2.click('#mod-vezetek');
   await p2.waitForSelector('#meres-elo:not([hidden])');
 
@@ -1784,6 +1758,108 @@ async function elemzesTeszt(b) {
   all('a mérleg feltételes módban áll', /Ennyibe kerülne/.test(szoveg));
   p3.__hibak.length && all('nincs JS hiba (szövegek)', false, p3.__hibak.join(' | '));
   await p3.close();
+
+  /* d) Az indítás két kattintás, és vezetés közben a felület a műszerre
+     szűkül. A hirdetési felület szándékosan marad. */
+  const p4 = await ujLap(b, { gps: { menet: [[90, 6000]] } });
+  await p4.goto(CIM);
+  const intro = await p4.evaluate(() => ({
+    cta: !!document.getElementById('btn-cta'),
+    valaszto: !document.getElementById('mod-valaszto').hidden,
+    gombok: [...document.querySelectorAll('#mod-valaszto .mod strong')].map((x) => x.textContent),
+  }));
+  all('nincs köztes „szimuláció indítása” lépés', !intro.cta);
+  all('a két választás rögtön látszik', intro.valaszto);
+  all('a két választás GPS-mérés és Kalkulátor',
+      /GPS-mérés/.test(intro.gombok[0]) && /Kalkulátor/.test(intro.gombok[1]),
+      intro.gombok.join(' | '));
+
+  await p4.click('#mod-vezetek');
+  await p4.waitForSelector('#meres-elo:not([hidden])');
+  await p4.evaluate(() => { window.atlagsebesseg.S.autoHatar = false; });
+  await p4.waitForTimeout(300);
+
+  const elott = await p4.evaluate(() => {
+    const lathato = (id) => {
+      const e = document.getElementById(id);
+      return !!e && e.offsetParent !== null;
+    };
+    return {
+      indulasElott: lathato('indulas-elott'),
+      auto: lathato('chk-auto-hatar-fo'),
+      alap: lathato('sel-alap-fo'),
+      reszletek: [...document.querySelectorAll('#meres-elo .reszlet')]
+        .filter((e) => e.offsetParent !== null).length,
+    };
+  });
+  all('indulás előtt látszik a beállítókártya', elott.indulasElott);
+  all('a két indulás előtti vezérlő elérhető', elott.auto && elott.alap);
+  all('indulás előtt a részletek is látszanak', elott.reszletek > 0, String(elott.reszletek));
+
+  // a két helyen álló vezérlő ugyanazt az állapotot írja
+  const parban = await p4.evaluate(() => {
+    const fo = document.getElementById('sel-alap-fo');
+    fo.value = '50';
+    fo.dispatchEvent(new Event('change'));
+    const egyezik = document.getElementById('sel-alap').value === '50'
+      && window.atlagsebesseg.S.alap === 50;
+    const cb = document.getElementById('chk-auto-hatar-fo');
+    cb.checked = false;
+    cb.dispatchEvent(new Event('change'));
+    return {
+      egyezik,
+      cbEgyezik: document.getElementById('chk-auto-hatar').checked === false
+        && window.atlagsebesseg.S.autoHatar === false,
+    };
+  });
+  all('az alapérték a két választóban együtt mozog', parban.egyezik);
+  all('az automatikus lekérés a két kapcsolóban együtt mozog', parban.cbEgyezik);
+
+  await p4.click('#btn-meres');
+  await p4.waitForFunction(() => window.atlagsebesseg.meres.tav > 300, null, { timeout: 20000 });
+  const kozben = await p4.evaluate(() => {
+    const lathato = (s) => {
+      const e = document.querySelector(s);
+      return !!e && e.offsetParent !== null;
+    };
+    return {
+      osztaly: document.getElementById('meres-elo').classList.contains('mer-fut'),
+      reszletek: [...document.querySelectorAll('#meres-elo .reszlet')]
+        .filter((e) => e.offsetParent !== null).length,
+      indulasElott: lathato('#indulas-elott'),
+      // ami menet közben kell
+      ora: lathato('#ora'),
+      tabla: lathato('#ora-tabla'),
+      harom: ['ki-limit', 'ki-atlag', 'ki-pill']
+        .filter((id) => document.getElementById(id).offsetParent !== null).length,
+      stop: lathato('#btn-meres'),
+      hang: lathato('#btn-hang'),
+      // a hirdetés kifejezetten marad
+      hirdetes: lathato('#meres-elo .hirdetes'),
+      // a javítóeszközök is maradnak
+      halado: !!document.querySelector('#scr-meres details.halado'),
+    };
+  });
+  all('mérés közben vezetési módba vált a nézet', kozben.osztaly);
+  all('mérés közben eltűnnek a részletek', kozben.reszletek === 0, String(kozben.reszletek));
+  all('mérés közben eltűnik a beállítókártya', !kozben.indulasElott);
+  all('mérés közben marad a műszer és a tábla', kozben.ora && kozben.tabla);
+  all('mérés közben mind a három szám látszik', kozben.harom === 3, String(kozben.harom));
+  all('mérés közben elérhető a leállítás és a hang', kozben.stop && kozben.hang);
+  all('a hirdetési felület mérés közben is marad', kozben.hirdetes);
+  all('a határjavítás eszközei megmaradnak', kozben.halado);
+
+  await p4.click('#btn-meres');   // leállítás
+  await p4.waitForTimeout(400);
+  const utana = await p4.evaluate(() => ({
+    osztaly: document.getElementById('meres-elo').classList.contains('mer-fut'),
+    reszletek: [...document.querySelectorAll('#meres-elo .reszlet')]
+      .filter((e) => e.offsetParent !== null).length,
+  }));
+  all('leállítás után visszajönnek a részletek',
+      !utana.osztaly && utana.reszletek > 0, `${utana.osztaly} / ${utana.reszletek}`);
+  p4.__hibak.length && all('nincs JS hiba (vezetési nézet)', false, p4.__hibak.join(' | '));
+  await p4.close();
 }
 
 /* ================================================================ futás */

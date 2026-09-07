@@ -165,6 +165,14 @@ szöveg írásakor ezt tartsuk.
   koppintás átírni.
 - **Élő tanács vezetés közben:** „a hátralévő kb. 6,4 km-en legfeljebb
   84 km/h átlaggal maradsz a bírsághatár alatt”.
+- **Vezetési nézet.** A nyitóképernyőn két közvetlen választás áll:
+  *GPS-mérés* és *Kalkulátor*. Indulás előtt egy kártya kéri be azt a két
+  beállítást, ami menet közben már nem állítható kényelmesen (automatikus
+  határlekérés, alapértelmezett határ). Amíg a mérés fut, a felület a
+  műszerre szűkül: a `.reszlet` osztályú blokkok — bírságveszély, állapotsorok,
+  „Új mérés”, indulás előtti kártya — eltűnnek, és a leállítás után jönnek
+  vissza. A szakaszlista és a Haladó beállítások menet közben is maradnak,
+  mert ezek javítóeszközök: velük írható át a rossz sebességhatár.
 - **Kalkulátor GPS nélkül**, a mérőképernyővel azonos műszer-nyelven:
   ugyanaz a sebességóra mutatja az átlagot, alatta státuszsáv, majd a
   szakasz arányos képe (a szélesség a hossz, a szín az ítélet), végül a
@@ -277,7 +285,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 262 ellenőrzést futtat végig 27 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 279 ellenőrzést futtat végig 27 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -295,9 +303,11 @@ néhány androidos készülék), `zaj` pedig méterben adja meg a vevő szórás
 E kettő nélkül a nyomvonal gyanúsan tökéletes, és a zajra érzékeny hibák
 nem derülnek ki — a 26. szakasz pont ezeket járja körbe.
 
-A 27. szakasz egy külső átnézés két találatát őrzi: a kalkulátor vegyes
+A 27. szakasz egy külső átnézés találatait őrzi: a kalkulátor vegyes
 korlátozásnál egyenletes tempót feltételezett (a szabályos menetre is
-bírságot hozott ki), a tartható tempó feltétele pedig fordítva működött.
+bírságot hozott ki), a tartható tempó feltétele fordítva működött, a
+főoldal többet ígért a valóságnál, és az indítás egy fölösleges lépéssel
+indult.
 
 ```
 python3 -m http.server 8768 --directory atlagsebesseg
@@ -324,7 +334,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (262 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (279 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
 ├── PUBLIKALAS.md       lépésenkénti kiadási leírás
