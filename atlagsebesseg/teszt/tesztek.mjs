@@ -159,11 +159,16 @@ async function birsagTeszt(b) {
       max50: m.birsagmentesMax(50),
       max90: m.birsagmentesMax(90),
       max130: m.birsagmentesMax(130),
-      // egy szakasz, egy bírság: a halmozott összeg megvan, de a UI a
-      // legsúlyosabbat használja
+      /* Egy áthaladás, egy átlag: a bírság a teljes szakaszból jön, a
+         részenkénti bontás csak magyarázat. */
       halmoz: m.ertekelSzakaszok([
         { tav: 1000, ido: 30000, limit: 50 },   // 120 km/h
         { tav: 1000, ido: 40000, limit: 90 },   // 90 km/h
+      ]),
+      /* Egységes korlátozásnál a teljes szakasz értékelése pontosan a
+         megszokott eset: a megengedett átlag maga a tábla. */
+      egyseges: m.ertekelSzakaszok([
+        { tav: 2000, ido: 60000, limit: 90 },   // 120 km/h végig
       ]),
     };
   });
@@ -174,8 +179,30 @@ async function birsagTeszt(b) {
   all('a legsúlyosabb szakaszt megtalálja',
       r.halmoz.legsulyosabb && r.halmoz.legsulyosabb.limit === 50,
       JSON.stringify(r.halmoz.legsulyosabb && r.halmoz.legsulyosabb.limit));
-  all('a halmozott összeg is elérhető marad', r.halmoz.osszegHalmozott > 0,
-      String(r.halmoz.osszegHalmozott));
+  all('a részenkénti összeg összehasonlításnak megmarad',
+      r.halmoz.reszenkentiOsszeg > 0, String(r.halmoz.reszenkentiOsszeg));
+
+  /* A teljes szakasz értékelése: 2 km, 70 mp → 102,9 km/h átlag. A
+     megengedett átlag 1 km 50-nel és 1 km 90-nel = 2000 / (72+40) s =
+     64,3 km/h, tehát a túllépés 38,6 km/h a „legfeljebb 100” sávban. */
+  const t = r.halmoz.teljes;
+  all('a teljes szakasz átlaga a táv és az idő hányadosa',
+      Math.abs(t.atlag - 102.857) < 0.05, String(t.atlag));
+  all('a megengedett átlag a végig szabályos menetből jön',
+      Math.abs(t.megengedett - 64.286) < 0.05, String(t.megengedett));
+  all('vegyes szakasznál nincs egységes tábla', t.egysegesLimit === null);
+  all('a teljes szakaszra jár bírság', t.ertekeles.birsagos);
+  all('a teljes szakasz bírsága nem a részenkénti összeg',
+      t.ertekeles.osszeg !== r.halmoz.reszenkentiOsszeg,
+      `${t.ertekeles.osszeg} vs ${r.halmoz.reszenkentiOsszeg}`);
+
+  const eg = r.egyseges.teljes;
+  all('egységes korlátozásnál a megengedett átlag maga a tábla',
+      eg.egysegesLimit === 90 && Math.abs(eg.megengedett - 90) < 0.01,
+      `${eg.egysegesLimit} / ${eg.megengedett}`);
+  all('egységes korlátozásnál a teljes és a részenkénti ítélet egyezik',
+      eg.ertekeles.osszeg === r.egyseges.reszenkentiOsszeg,
+      `${eg.ertekeles.osszeg} vs ${r.egyseges.reszenkentiOsszeg}`);
   p.__hibak.length && all('nincs JS hiba (bírság)', false, p.__hibak.join(' | '));
   await p.close();
 }
@@ -496,8 +523,9 @@ async function kalkulatorTeszt(b) {
       kv,
     };
   });
-  all('több bírságos résznél egy szakasz egy bírság',
-      /egy szakasz egy bírság/.test(e.verdikt), e.verdikt.replace(/\n/g, ' ').slice(0, 120));
+  all('a verdikt a teljes szakasz átlagából szól',
+      /Egy áthaladás, egy bírság/.test(e.verdikt) || /km\/h-s szakaszon/.test(e.verdikt),
+      e.verdikt.replace(/\n/g, ' ').slice(0, 140));
   const verdOsszeg = (e.verdikt.match(/Becsült bírság: ([\d\s ]+) Ft/) || [])[1];
   all('az „Ennyibe kerül” ugyanaz, mint a verdikt összege',
       verdOsszeg && e.ar.replace(/\s| /g, '') === `${verdOsszeg.replace(/\s| /g, '')}Ft`,
@@ -1862,6 +1890,102 @@ async function elemzesTeszt(b) {
   await p4.close();
 }
 
+/* ============================== 28. egy szakasz, egy átlag, egy ítélet */
+
+/* Egy átlagsebesség-mérő két pont között méri az időt, és nem tudja, hol
+   mentél gyorsabban a szakaszon belül. A bírság ezért a teljes szakasz
+   egyetlen átlagából jön, nem a korlátozás szerinti részekből. */
+async function teljesSzakaszTeszt(b) {
+  console.log('\n28. Egy szakasz, egy átlag, egy ítélet');
+  const p = await ujLap(b);
+  await p.goto(CIM);
+
+  const r = await p.evaluate(async () => {
+    const m = await import(new URL('js/birsag.js', location.href).href);
+    // 5 km 50-nel + 5 km 100-zal: végig szabályos menet
+    const szabalyos = m.ertekelSzakaszok([
+      { tav: 5000, ido: 360000, limit: 50 },
+      { tav: 5000, ido: 180000, limit: 100 },
+    ]);
+    // ugyanez egyenletes 66,7-tel: a teljes átlag azonos, a részek nem
+    const egyenletes = m.ertekelSzakaszok([
+      { tav: 5000, ido: 270000, limit: 50 },
+      { tav: 5000, ido: 270000, limit: 100 },
+    ]);
+    // egységes 90-es szakasz, 120-szal: a szokásos eset
+    const egyszeru = m.ertekelSzakaszok([{ tav: 4000, ido: 120000, limit: 90 }]);
+    return {
+      szabalyos: {
+        atlag: szabalyos.teljes.atlag,
+        megengedett: szabalyos.teljes.megengedett,
+        birsagos: szabalyos.teljes.ertekeles.birsagos,
+        reszek: szabalyos.birsagosak.length,
+      },
+      egyenletes: {
+        atlag: egyenletes.teljes.atlag,
+        birsagos: egyenletes.teljes.ertekeles.birsagos,
+        reszek: egyenletes.birsagosak.length,
+        reszOsszeg: egyenletes.reszenkentiOsszeg,
+      },
+      egyszeru: {
+        limit: egyszeru.teljes.egysegesLimit,
+        megengedett: egyszeru.teljes.megengedett,
+        osszeg: egyszeru.teljes.ertekeles.osszeg,
+      },
+    };
+  });
+
+  all('vegyes szakaszon a szabályos menet átlaga a megengedettel egyezik',
+      Math.abs(r.szabalyos.atlag - r.szabalyos.megengedett) < 0.01,
+      `${r.szabalyos.atlag} vs ${r.szabalyos.megengedett}`);
+  all('a végig szabályos menetre nincs bírság', !r.szabalyos.birsagos);
+  all('a részenkénti bontás sem talál túllépést', r.szabalyos.reszek === 0,
+      String(r.szabalyos.reszek));
+
+  /* Ugyanaz a 66,7-es teljes átlag egyenletes tempóval: a teljes szakasz
+     szerint ugyanúgy nincs bírság, a részenkénti bontás szerint viszont
+     lenne — ez a kettő különbsége, és ezt ki is írjuk. */
+  all('egyenletes tempónál is ugyanaz a teljes átlag',
+      Math.abs(r.egyenletes.atlag - r.szabalyos.atlag) < 0.01,
+      `${r.egyenletes.atlag}`);
+  all('a teljes szakasz szerint így sincs bírság', !r.egyenletes.birsagos);
+  all('a részenkénti bontás viszont találna túllépést',
+      r.egyenletes.reszek > 0 && r.egyenletes.reszOsszeg > 0,
+      `${r.egyenletes.reszek} / ${r.egyenletes.reszOsszeg}`);
+
+  all('egységes szakaszon a megengedett átlag maga a tábla',
+      r.egyszeru.limit === 90 && Math.abs(r.egyszeru.megengedett - 90) < 0.01,
+      `${r.egyszeru.limit} / ${r.egyszeru.megengedett}`);
+  all('egységes szakaszon a szokásos összeg jön ki (120 a 90-esen)',
+      r.egyszeru.osszeg === 50000, String(r.egyszeru.osszeg));
+
+  // a felületen is a teljes szakasz szól, és a különbséget kiírja
+  await p.click('#tabs .tab[data-scr="scr-kalk"]');
+  await p.waitForTimeout(150);
+  await p.evaluate(() => {
+    window.atlagsebesseg.S.kalkSorok = [
+      { hossz: 5, limit: 50, tempo: 50 },
+      { hossz: 5, limit: 100, tempo: 100 },
+    ];
+    const sel = document.getElementById('sel-mod');
+    sel.value = 'ido'; sel.dispatchEvent(new Event('change'));
+    document.getElementById('in-perc').value = '9';
+    document.getElementById('in-mp').value = '0';
+    document.getElementById('in-perc').dispatchEvent(new Event('input'));
+  });
+  await p.waitForTimeout(300);
+  const v = await p.evaluate(() => document.getElementById('k-verdikt').innerText);
+  all('a felületen sem lesz bírság a szabályos vegyes menetből',
+      /nem lépted túl/.test(v), v.replace(/\n/g, ' ').slice(0, 140));
+  all('de kiírja, hogy részenként mérve más jönne ki',
+      /külön mérés lenne/.test(v), v.replace(/\n/g, ' ').slice(0, 200));
+  all('nem duplázódik a névelő', !/ a az | a a \d/.test(v),
+      v.replace(/\n/g, ' ').slice(0, 200));
+
+  p.__hibak.length && all('nincs JS hiba (teljes szakasz)', false, p.__hibak.join(' | '));
+  await p.close();
+}
+
 /* ================================================================ futás */
 
 const b = await chromium.launch({ executablePath: BONGESZO });
@@ -1893,6 +2017,7 @@ try {
   await jogiTeszt(b);
   await sebessegNelkulTeszt(b);
   await elemzesTeszt(b);
+  await teljesSzakaszTeszt(b);
 } finally {
   await b.close();
 }
