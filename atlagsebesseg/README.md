@@ -216,34 +216,20 @@ a helyzetet.
 
 ## Publikálás
 
-Az app abból indul ki, hogy a **tartomány gyökerében** áll: az `og:url`, a
-`canonical`, a `robots.txt` és a `sitemap.xml` mind `https://atlagsebesseg.hu/`
-alá mutat, és a megosztható kép is ezt írja ki.
+**A részletes, lépésenkénti leírás: [`PUBLIKALAS.md`](PUBLIKALAS.md).**
 
-Ez a repó viszont két alkalmazást tartalmaz, az app pedig az
-`atlagsebesseg/` almappában van. GitHub Pages ilyenkor
-`.../desktop-tutorial/atlagsebesseg/` alatt szolgálja ki. **A kettő nem
-egyezik**, ezért publikálás előtt dönteni kell:
+Röviden: az app abból indul ki, hogy a **tartomány gyökerében** áll — az
+`og:url`, a `canonical`, a `robots.txt` és a `sitemap.xml` mind
+`https://atlagsebesseg.hu/` alá mutat. Ez a repó viszont két alkalmazást
+tartalmaz, és az app az `atlagsebesseg/` almappában van, tehát a kettő nem
+egyezik. A `PUBLIKALAS.md` három utat vesz végig (meglévő tárhely, külön
+repó GitHub Pages-szel, vagy almappa átírt hivatkozásokkal), a DNS-rekordok
+pontos értékeivel és a publikálás utáni ellenőrzőlistával.
 
-1. **Saját repó a gyökérben** (ajánlott). Az `atlagsebesseg/` tartalma egy új
-   repó gyökerébe kerül, a Pages arra mutat, a `CNAME` fájlba
-   `atlagsebesseg.hu` kerül. Ekkor minden fenti hivatkozás stimmel, és az
-   `utvonalbejaras` sem sérül.
-2. **Marad itt, almappában.** Ekkor át kell írni az `og:url`, `canonical`,
-   `robots.txt`, `sitemap.xml` értékeit a tényleges útvonalra, és a
-   `megosztas.js` láblécében a kiírt címet is.
-
-DNS-oldalon a `atlagsebesseg.hu` A-rekordjai a GitHub Pages négy címére
-(185.199.108–111.153) mennek, a `www` pedig CNAME-ként a
-`<felhasználó>.github.io` névre. A HTTPS-t a Pages állítja ki magától
-(Let's Encrypt), ez a DNS átállása után pár perctől pár óráig tart.
-
-Publikálás után érdemes egyszer végigfuttatni:
+A tesztkészlet az éles cím ellen is futtatható:
 
 ```bash
-# a tesztkészlet a helyi kiszolgáló ellen
-python3 -m http.server 8768 --directory atlagsebesseg
-node atlagsebesseg/teszt/tesztek.mjs
+ATLAG_URL=https://atlagsebesseg.hu/index.html node atlagsebesseg/teszt/tesztek.mjs
 ```
 
 ## Honnan jönnek a sebességhatárok?
@@ -331,6 +317,7 @@ atlagsebesseg/
 ├── teszt/tesztek.mjs   szimulációs tesztkészlet (244 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
+├── PUBLIKALAS.md       lépésenkénti kiadási leírás
 ├── robots.txt  sitemap.xml
 ├── icons/  manifest.webmanifest  sw.js
 ```
