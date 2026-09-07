@@ -292,6 +292,19 @@ a.btn, a.chip, a.hirdetes { text-decoration: none; }
 .chip[aria-pressed="false"] { opacity: 0.5; }
 .chip.aktiv { border-color: var(--accent); color: var(--accent); }
 
+/* ------------------------------------------ vezetés közbeni nézet
+
+   Menet közben csak az számít, ami vezetői döntést befolyásol: a
+   pillanatnyi sebesség, a szakaszátlag és a helyi korlátozás. A
+   bírságrészletek, a szakaszlista, a beállítások és az állapotsorok a
+   mérés végén, álló helyzetben olvasandók — futás közben elrejtjük
+   őket, hogy ne vigyék el a figyelmet a műszerről.                   */
+#meres-elo.mer-fut .reszlet,
+#meres-elo.mer-fut .indulas-elott { display: none !important; }
+
+/* Az indulás előtti beállítások a fő gomb alatt: itt még áll az autó. */
+.indulas-elott { padding-bottom: 0; }
+
 /* ------------------------------------------------------ indító nézet */
 
 .hero {
