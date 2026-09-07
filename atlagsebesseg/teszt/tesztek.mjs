@@ -505,7 +505,7 @@ async function kalkulatorTeszt(b) {
   });
   all('több bírságos résznél egy szakasz egy bírság',
       /egy szakasz egy bírság/.test(e.verdikt), e.verdikt.replace(/\n/g, ' ').slice(0, 120));
-  const verdOsszeg = (e.verdikt.match(/Bírság: ([\d\s ]+) Ft/) || [])[1];
+  const verdOsszeg = (e.verdikt.match(/Becsült bírság: ([\d\s ]+) Ft/) || [])[1];
   all('az „Ennyibe kerül” ugyanaz, mint a verdikt összege',
       verdOsszeg && e.ar.replace(/\s| /g, '') === `${verdOsszeg.replace(/\s| /g, '')}Ft`,
       `${e.ar} vs ${verdOsszeg}`);
@@ -881,11 +881,11 @@ async function menetEredmeny(b, { menet, limit, cimke }) {
       tav: m.tav, atlag: m.atlag,
       verdikt: document.getElementById('eredmeny-verdikt').innerText,
       adatok: document.getElementById('eredmeny-adatok').innerText,
-      birsagos: /Bírság: /.test(document.getElementById('eredmeny-verdikt').innerText),
+      birsagos: /Becsült bírság: /.test(document.getElementById('eredmeny-verdikt').innerText),
       merlegRejtve: document.getElementById('eredmeny-merleg').hidden,
       merlegAr: document.getElementById('e-ar').textContent,
       osszeg: (document.getElementById('eredmeny-verdikt').innerText
-        .match(/Bírság: ([\d\s\u00a0\u202f]+) Ft/) || [])[1],
+        .match(/Becsült bírság: ([\d\s\u00a0\u202f]+) Ft/) || [])[1],
     };
   });
   const hiba = p.__hibak.slice();
@@ -1637,6 +1637,155 @@ async function sebessegNelkulTeszt(b) {
   await p3.close();
 }
 
+/* ====================== 27. külső elemzés nyomán javított számítások */
+
+/* Két hiba, amit egy külső átnézés talált. Mindkettő a szabályosan
+   haladót büntette, ezért külön szakaszt kapnak. */
+async function elemzesTeszt(b) {
+  console.log('\n27. Külső elemzés nyomán javított számítások');
+
+  /* a) A kalkulátor vegyes korlátozásnál egyetlen menetidőt hossz
+     arányában osztott szét, vagyis mindenhol ugyanazt a sebességet
+     feltételezte. Az 5 km 50-nel + 5 km 100-zal menet így 66,7-es
+     átlagot kapott az 50-es részre is, és bírságot hozott ki — pedig
+     végig szabályos volt.                                            */
+  const p = await ujLap(b);
+  await p.goto(CIM);
+  await p.click('#tabs .tab[data-scr="scr-kalk"]');
+  await p.waitForTimeout(150);
+
+  const beallit = async (mod) => p.evaluate((m) => {
+    const A = window.atlagsebesseg;
+    A.S.kalkSorok = [
+      { hossz: 5, limit: 50, tempo: 50 },
+      { hossz: 5, limit: 100, tempo: 100 },
+    ];
+    document.getElementById('sel-mod').value = m;
+    document.getElementById('sel-mod').dispatchEvent(new Event('change'));
+    if (m === 'ido') {
+      // 6 perc + 3 perc = 9 perc, ez a valós menetidő
+      document.getElementById('in-perc').value = '9';
+      document.getElementById('in-mp').value = '0';
+      document.getElementById('in-perc').dispatchEvent(new Event('input'));
+    }
+    return null;
+  }, mod);
+
+  await beallit('szakaszonkent');
+  await p.waitForTimeout(250);
+  const szak = await p.evaluate(() => ({
+    verdikt: document.getElementById('k-verdikt').innerText,
+    atlag: document.getElementById('k-st-fo').textContent,
+  }));
+  all('szakaszonkénti tempóval a szabályos menet nem bírságos',
+      !/bírság/i.test(szak.verdikt) || /nem lépted túl/i.test(szak.verdikt),
+      szak.verdikt.replace(/\n/g, ' ').slice(0, 120));
+  all('a szakaszonkénti mód a valós átlagot mutatja',
+      /6[67]/.test(szak.atlag), szak.atlag);
+
+  // a tempómezőknek meg kell jelenniük, és eltűnniük a másik módban
+  all('szakaszonkénti módban van tempómező minden soron',
+      await p.evaluate(() => document.querySelectorAll('#kalk-sorok .k-tempo').length) === 2);
+  all('szakaszonkénti módban nincs egyenletes-tempó figyelmeztetés',
+      await p.evaluate(() => document.getElementById('kalk-feltetel').hidden));
+
+  /* A grafikon is a részenkénti tempót rajzolja, nem az átlagot: itt
+     mindkét rész pont a korlátozáson van, tehát nulla az eltérés. */
+  const gr = await p.evaluate(async () => {
+    const m = await import(new URL('js/profil.js', location.href).href);
+    const minta = m.profilSorokbol(
+      [{ hossz: 5, limit: 50, tempo: 50 }, { hossz: 5, limit: 100, tempo: 100 }], 66.7
+    );
+    return {
+      max: Math.max(...minta.map((x) => Math.abs(x.seb - x.limit))),
+      atlagos: m.profilSorokbol(
+        [{ hossz: 5, limit: 50 }, { hossz: 5, limit: 100 }], 66.7
+      ).map((x) => Math.round(x.seb - x.limit)),
+    };
+  });
+  all('a grafikon a részenkénti tempót rajzolja', gr.max < 0.01, String(gr.max));
+  all('tempó nélkül marad az egyenletes átlag',
+      gr.atlagos[0] === 17 && gr.atlagos[gr.atlagos.length - 1] === -33,
+      `${gr.atlagos[0]} / ${gr.atlagos[gr.atlagos.length - 1]}`);
+
+  await beallit('ido');
+  await p.waitForTimeout(250);
+  const ido = await p.evaluate(() => ({
+    tempoMezo: document.querySelectorAll('#kalk-sorok .k-tempo').length,
+    feltetel: document.getElementById('kalk-feltetel').hidden,
+    szoveg: document.getElementById('kalk-feltetel').textContent,
+  }));
+  all('menetidős módban nincs tempómező', ido.tempoMezo === 0, String(ido.tempoMezo));
+  all('menetidős módban látszik az egyenletes tempó feltevése', !ido.feltetel);
+  all('a figyelmeztetés kimondja a feltevést',
+      /egyenletes tempót feltételezünk/i.test(ido.szoveg));
+  p.__hibak.length && all('nincs JS hiba (kalkulátor módok)', false, p.__hibak.join(' | '));
+  await p.close();
+
+  /* b) A tartható tempó fordítva működött: ha a menetidő már meghaladta a
+     minimumot (vagyis lassabban mentél a megengedettnél), „már nem fér
+     be” állapotot adott 0 km/h-val — pont a szabályosan haladónak. */
+  const p2 = await ujLap(b);
+  await p2.goto(CIM);
+  await p2.click('#btn-cta');
+  await p2.click('#mod-vezetek');
+  await p2.waitForSelector('#meres-elo:not([hidden])');
+
+  const allapotot = (megtett, idoMs, hatra, limit) => p2.evaluate(
+    ({ megtett, idoMs, hatra, limit }) => {
+      const A = window.atlagsebesseg;
+      A.S.autoHatar = false;
+      A.S.alap = limit;
+      A.S.kapuk.start = { lat: 47.5, lon: 19 };
+      A.S.kapuk.end = { lat: 47.5 + (megtett + hatra) / 111320, lon: 19 };
+      const m = A.meres;
+      m.allapot = 'mer';
+      m.szakasz = { ...A.S.kapuk, sugar: 60 };
+      const t0 = 1750000000000;
+      m.pontok = [
+        { lat: 47.5, lon: 19, t: t0, acc: 5, spd: null },
+        { lat: 47.5 + megtett / 111320, lon: 19, t: t0 + idoMs, acc: 5, spd: 25 },
+      ];
+      m.utolso = m.pontok[1];
+      m.nyersek = [...m.pontok];
+      m.onChange(m);
+      return {
+        szo: document.getElementById('utasitas-szo').textContent,
+        val: document.getElementById('utasitas-val').textContent,
+      };
+    }, { megtett, idoMs, hatra, limit });
+
+  // 9 km 7 perc alatt (77 km/h) 100-as határnál, 1 km hátra: bőven belefér
+  const laza = await allapotot(9000, 420000, 1000, 100);
+  all('lassabb menetnél nem „már nem fér be”', !/NEM FÉR/i.test(laza.szo), laza.szo);
+  all('lassabb menetnél a helyi tábla a javasolt tempó',
+      laza.val === '100', `${laza.szo} ${laza.val}`);
+
+  // ugyanez élesen: 5 km 2 perc alatt (150 km/h) 90-es határnál → lassíts
+  const szoros = await allapotot(5000, 120000, 5000, 90);
+  all('gyors menetnél továbbra is lassítást javasol',
+      /LASSÍTS/.test(szoros.szo), `${szoros.szo} ${szoros.val}`);
+  all('a javasolt tempó a tábla alatt van',
+      Number(szoros.val) > 0 && Number(szoros.val) < 90, szoros.val);
+  p2.__hibak.length && all('nincs JS hiba (tempó)', false, p2.__hibak.join(' | '));
+  await p2.close();
+
+  /* c) Az ígéretek és a megfogalmazás: a főoldali szöveg ne mondjon
+     többet, mint amit az app tud. */
+  const p3 = await ujLap(b);
+  await p3.goto(CIM);
+  const szoveg = await p3.evaluate(() => document.body.textContent);
+  all('nem ígéri, hogy a telefon a zsebben is jó', !/zsebben is jó/.test(szoveg));
+  all('kimondja, hogy az oldalt nyitva kell tartani', /maradjon\s+nyitva/.test(szoveg));
+  all('nem állítja, hogy semmilyen adat nem kerül el',
+      !/adat sehová nem kerül el/.test(szoveg));
+  all('elkülöníti a külső szolgáltatók forgalmát',
+      /nem kerül\s+szerverre/.test(szoveg) && /külső\s+szolgáltat/.test(szoveg));
+  all('a mérleg feltételes módban áll', /Ennyibe kerülne/.test(szoveg));
+  p3.__hibak.length && all('nincs JS hiba (szövegek)', false, p3.__hibak.join(' | '));
+  await p3.close();
+}
+
 /* ================================================================ futás */
 
 const b = await chromium.launch({ executablePath: BONGESZO });
@@ -1667,6 +1816,7 @@ try {
   await javitasTeszt(b);
   await jogiTeszt(b);
   await sebessegNelkulTeszt(b);
+  await elemzesTeszt(b);
 } finally {
   await b.close();
 }
