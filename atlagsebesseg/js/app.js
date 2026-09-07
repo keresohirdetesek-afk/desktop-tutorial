@@ -45,7 +45,7 @@ const S = {
   lekeresKozep: null,  // hol jártunk a legutóbbi lekéréskor
   lekeresFut: false,
   lekeresAllapot: 'nincs',   // nincs | fut | kesz | hiba
-  kalkSorok: [{ hossz: 10, limit: 90 }],
+  kalkSorok: [{ hossz: 10, limit: 90, tempo: 90 }],
   /* A sebességprofilok mintája és nagyítása. A minta azért él itt, hogy a
      nagyítás és a teljes képernyős nézet újra tudja rajzolni.         */
   profil: {
@@ -359,9 +359,18 @@ function celTempo(eredmeny) {
 
   const megengedett = megengedettAtlag(eredmeny);
   const teljes = meres.tav + hatra;
+  /* Ennyi ideig kell legalább tartania a teljes szakasznak ahhoz, hogy az
+     átlag a megengedett alatt maradjon. A `maradek` az az idő, amit ebből
+     még el kell tölteni.                                               */
   const megengedettIdo = (teljes / (megengedett / 3.6)) * 1000;
   const maradek = megengedettIdo - meres.ido;
-  if (maradek <= 0) return { seb: 0, tipus: 'lehetetlen' };
+
+  /* Ha a menetidő már így is több a minimumnál, akkor lassabban mentél a
+     megengedettnél: a hátralévő úton mehetsz a táblányit, az átlag innen
+     már biztosan a határ alatt marad (az idő csak nőhet). Korábban ez az
+     ág fordítva szólt, és „már nem fér be” állapotot adott — pont a
+     szabályosan haladóknak.                                            */
+  if (maradek <= 0) return { seb: helyLimit, tipus: 'limit' };
 
   const seb = (hatra / (maradek / 1000)) * 3.6;
   return seb >= helyLimit
@@ -440,7 +449,8 @@ function verdiktRender(node, eredmeny) {
       (a, sz) => (sz.ertekeles.tartalek < a.ertekeles.tartalek ? sz : a)
     );
     node.innerHTML = felette
-      ? `<strong>Gyorsabb voltál a megengedettnél, de bírság nem járna.</strong><br>` +
+      ? `<strong>Gyorsabb voltál a megengedettnél, de e szerint a számítás ` +
+        `szerint bírság nem járna.</strong><br>` +
         `<span class="small">A legszorosabb ${nevelo(szoros.limit)} ${szoros.limit} km/h-s szakasz volt: ` +
         `${fmtSpeed1(szoros.ertekeles.mert)} km/h átlaggal. ` +
         (tartalek < 0.5
@@ -458,7 +468,7 @@ function verdiktRender(node, eredmeny) {
   const e = eredmeny.legsulyosabb.ertekeles;
   node.className = 'verdikt birsag';
   node.innerHTML =
-    `<strong>Bírság: ${fmtForint(birsagOsszeg(eredmeny))}</strong><br>` +
+    `<strong>Becsült bírság: ${fmtForint(birsagOsszeg(eredmeny))}</strong><br>` +
     `<span class="small">` +
     (b.length > 1
       ? `${b.length} szakaszrészen lépted túl a határt, de <strong>egy ` +
@@ -752,12 +762,9 @@ function utasitasFrissit(most, cel) {
   }
   doboz.hidden = false;
 
-  if (cel.tipus === 'lehetetlen') {
-    doboz.className = 'utasitas lassits';
-    $('utasitas-szo').textContent = 'MÁR NEM FÉR BE';
-    $('utasitas-val').textContent = '-';
-    return;
-  }
+  /* „Már nem fér be” állapot nincs: az átlagot lassítással mindig le
+     lehet vinni a határ alá, hiszen az idő csak nőhet. Ha a tartható
+     tempó a helyi táblánál is nagyobb lenne, a tábla a felső korlát. */
   const kul = most - cel.seb;
   const mod = kul > 1 ? 'lassits' : kul < -4 ? 'mehetsz' : 'tartsd';
   doboz.className = `utasitas ${mod}`;
@@ -937,13 +944,27 @@ function elonezetFrissit() {
 
 /* =========================================================== kalkulátor */
 
+/* Melyik megadási mező látszik, és látszik-e az egyenletes tempó
+   figyelmeztetése. Egy helyen, mert indításkor és váltáskor is kell. */
+function kalkModFrissit() {
+  const mod = $('sel-mod').value;
+  $('mezo-ido').hidden = mod !== 'ido';
+  $('mezo-tempo').hidden = mod !== 'tempo';
+  $('kalk-feltetel').hidden = mod === 'szakaszonkent';
+}
+
 function kalkSorokRender() {
   const node = $('kalk-sorok');
+  const szakaszonkent = $('sel-mod').value === 'szakaszonkent';
   node.innerHTML = '';
   S.kalkSorok.forEach((sor, i) => {
     const d = el('div', 'seg edit',
       `<button class="limit-gomb k-limit" aria-label="Sebességhatár"><strong>${sor.limit}</strong><span>km/h</span></button>
-       <div class="seg-info"><label>Hossz <input class="k-hossz" type="number" min="0.1" step="0.1" value="${sor.hossz}" inputmode="decimal"> km</label></div>
+       <div class="seg-info"><label>Hossz <input class="k-hossz" type="number" min="0.1" step="0.1" value="${sor.hossz}" inputmode="decimal"> km</label>${
+         szakaszonkent
+           ? `<label>Itt mentem <input class="k-tempo" type="number" min="1" max="${MAX_SEBESSEG}" step="1" value="${sor.tempo ?? sor.limit}" inputmode="numeric"> km/h</label>`
+           : ''
+       }</div>
        <button class="seg-torol" aria-label="Sor törlése" ${S.kalkSorok.length === 1 ? 'disabled' : ''}><svg class="ikon" aria-hidden="true"><use href="#i-x"/></svg></button>`);
     d.querySelector('.k-limit').addEventListener('click', () => limitLapNyit({
       cim: 'Szakaszrész sebességhatára',
@@ -959,6 +980,11 @@ function kalkSorokRender() {
       S.kalkSorok[i].hossz = parseFloat(String(e.target.value).replace(',', '.')) || 0;
       kalkSzamol();
     });
+    d.querySelector('.k-tempo')?.addEventListener('input', (e) => {
+      const v = parseFloat(String(e.target.value).replace(',', '.')) || 0;
+      S.kalkSorok[i].tempo = Math.min(MAX_SEBESSEG, Math.max(0, v));
+      kalkSzamol();
+    });
     d.querySelector('.seg-torol').addEventListener('click', () => {
       S.kalkSorok.splice(i, 1);
       kalkSorokRender();
@@ -969,12 +995,21 @@ function kalkSorokRender() {
 }
 
 function kalkSzamol() {
-  const sorok = S.kalkSorok.filter((s) => s.hossz > 0 && s.limit > 0);
+  const mod = $('sel-mod').value;
+  const szakaszonkent = mod === 'szakaszonkent';
+  const sorok = S.kalkSorok.filter(
+    (s) => s.hossz > 0 && s.limit > 0 && (!szakaszonkent || (s.tempo ?? s.limit) > 0)
+  );
   const osszTav = sorok.reduce((a, s) => a + s.hossz * 1000, 0);
-  const idoMod = $('sel-mod').value === 'ido';
 
   let osszIdo; // ms
-  if (idoMod) {
+  if (szakaszonkent) {
+    /* Szakaszonként megadott tempó: minden rész a saját idejét hozza.
+       Ez az egyetlen mód, ami vegyes korlátozású úton valós képet ad. */
+    osszIdo = sorok.reduce(
+      (a, s) => a + ((s.hossz * 1000) / ((s.tempo ?? s.limit) / 3.6)) * 1000, 0
+    );
+  } else if (mod === 'ido') {
     const perc = parseFloat($('in-perc').value) || 0;
     const mp = parseFloat($('in-mp').value) || 0;
     osszIdo = (perc * 60 + mp) * 1000;
@@ -999,7 +1034,6 @@ function kalkSzamol() {
     return;
   }
 
-  // Egyenletes tempót feltételezünk: a menetidőt hossz arányában osztjuk szét.
   const atlag = (osszTav / (osszIdo / 1000)) * 3.6;
 
   /* Személyautóval 250 km/h fölött nem közlekedünk: ilyenkor a megadott
@@ -1027,11 +1061,17 @@ function kalkSzamol() {
     $('k-kv').innerHTML = '';
     return;
   }
+  /* Szakaszonkénti módban minden rész a saját tempójának idejét kapja;
+     egyetlen menetidőből viszont nem derül ki, hol mennyivel mentél,
+     ezért ott hossz arányában osztunk — vagyis egyenletes tempót
+     feltételezünk. Ezt a felület ki is írja a mező fölött.           */
   const szakaszok = sorok.map((s) => ({
     tav: s.hossz * 1000,
-    ido: ((s.hossz * 1000) / (atlag / 3.6)) * 1000,
+    ido: szakaszonkent
+      ? ((s.hossz * 1000) / ((s.tempo ?? s.limit) / 3.6)) * 1000
+      : ((s.hossz * 1000) / (atlag / 3.6)) * 1000,
     limit: s.limit,
-    cimke: 'megadott szakaszrész',
+    cimke: szakaszonkent ? 'megadott tempó' : 'megadott szakaszrész',
     nev: '',
     becsult: false,
     utepites: false,
@@ -1064,7 +1104,10 @@ function kalkSzamol() {
   $('k-st-cimke').textContent = STATUSZ[allapot].cimke;
 
   utsavRender(eredmeny);
-  $('k-profil').hidden = !profilAllit('kalk', profilSorokbol(sorok, atlag), osszTav);
+  /* Csak szakaszonkénti módban van valós, részenkénti tempó; egyetlen
+     menetidőből az egyenletes átlagot rajzoljuk. */
+  const profilSorok = szakaszonkent ? sorok : sorok.map((x) => ({ ...x, tempo: 0 }));
+  $('k-profil').hidden = !profilAllit('kalk', profilSorokbol(profilSorok, atlag), osszTav);
 
   verdiktRender($('k-verdikt'), eredmeny);
   szakaszLista($('k-reszletek'), eredmeny, { szerkesztheto: false });
@@ -1574,14 +1617,15 @@ function esemenyek() {
 
   $('btn-sor-add').addEventListener('click', () => {
     const utolso = S.kalkSorok[S.kalkSorok.length - 1];
-    S.kalkSorok.push({ hossz: 2, limit: utolso ? Math.max(30, utolso.limit - 40) : 50 });
+    const ujLimit = utolso ? Math.max(30, utolso.limit - 40) : 50;
+    S.kalkSorok.push({ hossz: 2, limit: ujLimit, tempo: ujLimit });
     kalkSorokRender();
     kalkSzamol();
   });
 
-  $('sel-mod').addEventListener('change', (e) => {
-    $('mezo-ido').hidden = e.target.value !== 'ido';
-    $('mezo-tempo').hidden = e.target.value === 'ido';
+  $('sel-mod').addEventListener('change', () => {
+    kalkModFrissit();
+    kalkSorokRender();     // a szakaszonkénti tempómező jön-megy
     kalkSzamol();
   });
   ['in-perc', 'in-mp', 'in-tempo'].forEach((id) => $(id).addEventListener('input', kalkSzamol));
@@ -1659,6 +1703,7 @@ function indul() {
   fulek();
   esemenyek();
   temaGombFrissit();
+  kalkModFrissit();
   kalkSorokRender();
   kalkSzamol();
   birsagTablaRender();

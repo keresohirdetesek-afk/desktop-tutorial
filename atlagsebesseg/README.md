@@ -169,9 +169,15 @@ szöveg írásakor ezt tartsuk.
   ugyanaz a sebességóra mutatja az átlagot, alatta státuszsáv, majd a
   szakasz arányos képe (a szélesség a hossz, a szín az ítélet), végül a
   projekt legjobban megosztható üzenete két csempén: *ennyit nyersz* és
-  *ennyibe kerül*. A részletes számok lenyithatók.
+  *ennyibe kerülne*. A részletes számok lenyithatók.
   Vegyes korlátozásnál a megengedett átlag nem közúti táblában jelenik meg,
   hanem semleges `Ø` jelként: az az érték sehol nincs kitáblázva.
+  Három megadási mód van. A *menetidő* és az *átlagsebesség* egyetlen
+  számból dolgozik, ezért **egyenletes tempót feltételez** — vegyes
+  korlátozású úton ez a szabályos menetre is bírságot hozhat ki, ezért a
+  felület ki is írja a feltevést. A *szakaszonkénti tempó* módban minden
+  rész a saját sebességét kapja; vegyes szakaszon egyedül ez ad valós
+  képet, és a sebességprofil is a részenkénti tempót rajzolja.
 - **Megosztható eredménykép.** A böngésző rajzolja vászonra a készüléken
   (1080×1180, álló), és a telefon megosztólapjával küldhető; ahol az nincs,
   letöltésként. Semmilyen adat nem megy szerverre, és a megosztást is a
@@ -271,7 +277,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 244 ellenőrzést futtat végig 26 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 262 ellenőrzést futtat végig 27 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -288,6 +294,10 @@ utánozza, amelyek nem töltik ki a `coords.speed` mezőt (asztali böngésző,
 néhány androidos készülék), `zaj` pedig méterben adja meg a vevő szórását.
 E kettő nélkül a nyomvonal gyanúsan tökéletes, és a zajra érzékeny hibák
 nem derülnek ki — a 26. szakasz pont ezeket járja körbe.
+
+A 27. szakasz egy külső átnézés két találatát őrzi: a kalkulátor vegyes
+korlátozásnál egyenletes tempót feltételezett (a szabályos menetre is
+bírságot hozott ki), a tartható tempó feltétele pedig fordítva működött.
 
 ```
 python3 -m http.server 8768 --directory atlagsebesseg
@@ -314,7 +324,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (244 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (262 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
 ├── PUBLIKALAS.md       lépésenkénti kiadási leírás

@@ -107,10 +107,13 @@ export function profilSorokbol(sorok, atlag) {
   let tav = 0;
   for (const s of sorok) {
     const hossz = s.hossz * 1000;
+    /* Ha a soron van saját tempó (szakaszonkénti megadás), azt rajzoljuk;
+       egyetlen menetidőből viszont csak az egyenletes átlag ismert. */
+    const seb = s.tempo > 0 ? s.tempo : atlag;
     // rövid részekből is legyen legalább egy oszlop
     const db = Math.max(1, Math.round(hossz / 100));
     for (let i = 0; i < db; i++) {
-      minta.push({ tav: tav + (hossz * (i + 0.5)) / db, seb: atlag, limit: s.limit });
+      minta.push({ tav: tav + (hossz * (i + 0.5)) / db, seb, limit: s.limit });
     }
     tav += hossz;
   }
