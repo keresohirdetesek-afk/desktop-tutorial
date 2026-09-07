@@ -44,23 +44,50 @@ export const REJECTED = 'rejected';
 
 export const isRejected = (p) => !!p && p.status === REJECTED;
 
+/* --------------------------------------------------------- kimaradások
+
+Ha a GPS hosszabb időre elveszti a jelet, vagy a rögzítést leállítják és
+később újraindítják, a két szomszédos pont közé eső szakaszt NEM jártuk be
+igazolhatóan. Az ilyen pontok `gap` jelet kapnak: az odavezető darab nem
+számít bele a bejárt távba, és nem is rajzolódik ki folytonos vonalként —
+különben egy légvonalbeli egyenes hamis útvonalat mutatna.              */
+
+export const GAP_SECONDS = 120;   // ennél hosszabb szünet gyanús,
+export const GAP_METERS = 250;    // ha közben ekkorát is ugrott a pozíció
+
+export const isGap = (p) => !!p && p.gap === true;
+
+/** Kimaradásnak minősül-e a két pont közötti szakasz? */
+export function detectGap(prev, next) {
+  if (!prev || !next) return false;
+  const dt = (next.t - prev.t) / 1000;
+  return dt > GAP_SECONDS && haversine(prev, next) > GAP_METERS;
+}
+
 /** Egybefüggő, azonos állapotú vonaldarabok a rajzoláshoz. */
 export function styledSegments(points) {
   const segs = [];
   for (let i = 1; i < points.length; i++) {
-    const status = isRejected(points[i]) ? REJECTED : 'ok';
+    const status = isGap(points[i]) ? 'gap' : isRejected(points[i]) ? REJECTED : 'ok';
     const last = segs[segs.length - 1];
-    if (last && last.status === status) last.pts.push(points[i]);
+    // a kimaradás mindig önálló darab: nem folytatódhat belőle vonal
+    if (last && last.status === status && status !== 'gap') last.pts.push(points[i]);
     else segs.push({ status, pts: [points[i - 1], points[i]] });
   }
   return segs;
 }
 
-/** Hossz állapotonként: { ok, rejected, total }. */
+/** Hossz állapotonként: { ok, rejected, gap, gaps, total }. */
 export function lengthByStatus(points) {
-  const out = { ok: 0, rejected: 0, total: 0 };
+  const out = { ok: 0, rejected: 0, gap: 0, gaps: 0, total: 0 };
   for (let i = 1; i < points.length; i++) {
     const d = haversine(points[i - 1], points[i]);
+    if (isGap(points[i])) {
+      // ismeretlen szakasz: se az érvényes, se a bejárt távba nem számít
+      out.gap += d;
+      out.gaps += 1;
+      continue;
+    }
     out.total += d;
     if (isRejected(points[i])) out.rejected += d;
     else out.ok += d;
@@ -180,8 +207,13 @@ export class TrackRecorder {
   }
 }
 
-/** Egyszeri pozíciólekérés (fotóhoz, hangjegyzethez). */
-export function currentPosition(timeout = 8000) {
+/**
+ * Egyszeri pozíciólekérés (fotóhoz, hangjegyzethez).
+ * `maximumAge = 0` esetén a böngésző nem adhat vissza tárolt mérést —
+ * dokumentáláshoz ez a helyes, mert különben egy korábbi helyszín
+ * koordinátája kerülhetne a felvételre.
+ */
+export function currentPosition(timeout = 8000, maximumAge = 0) {
   return new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(
@@ -194,7 +226,7 @@ export function currentPosition(timeout = 8000) {
           t: pos.timestamp || Date.now(),
         }),
       () => resolve(null),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout }
+      { enableHighAccuracy: true, maximumAge, timeout }
     );
   });
 }
@@ -272,10 +304,13 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
 
     for (const seg of styledSegments(coords)) {
       const rejected = seg.status === REJECTED;
-      ctx.setLineDash(rejected ? [lineW * 2, lineW * 1.6] : []);
-      ctx.strokeStyle = rejected ? rejectColor : line;
-      ctx.globalAlpha = rejected ? 0.85 : 1;
-      ctx.lineWidth = rejected ? lineW * 0.8 : lineW;
+      const gap = seg.status === 'gap';
+      // a kimaradás vékony, pontozott, halvány: látszik, hogy hol nincs adat,
+      // de nem téveszthető össze a ténylegesen bejárt úttal
+      ctx.setLineDash(gap ? [1.5, lineW * 1.8] : rejected ? [lineW * 2, lineW * 1.6] : []);
+      ctx.strokeStyle = gap ? dim : rejected ? rejectColor : line;
+      ctx.globalAlpha = gap ? 0.6 : rejected ? 0.85 : 1;
+      ctx.lineWidth = gap ? Math.max(1.5, lineW * 0.4) : rejected ? lineW * 0.8 : lineW;
       ctx.beginPath();
       seg.pts.forEach((p, i) => {
         const { x, y } = project(p.lat, p.lon);
@@ -290,6 +325,7 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     ctx.globalAlpha = 0.45;
     const every = Math.max(1, Math.floor(coords.length / 8));
     for (let i = every; i < coords.length; i += every) {
+      if (isGap(coords[i])) continue; // kimaradásra nem rajzolunk irányjelet
       const a = project(coords[i - 1].lat, coords[i - 1].lon);
       const b = project(coords[i].lat, coords[i].lon);
       ctx.fillStyle = isRejected(coords[i]) ? rejectColor : line;
@@ -421,6 +457,110 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   return { project, unproject, hitboxes, nearest, nearestDrawn, coords };
 }
 
+/* ------------------------------------------------------------- GeoJSON
+
+A Google Maps útvonaltervezője csak pontokat kap, és ő maga tervez utat —
+így nem a ténylegesen bejárt vonalat mutatja. A GeoJSON viszont magát a
+vonalat írja le, ezért térképnézőben pontosan az jelenik meg, amerre
+mentünk.                                                                */
+
+/** Douglas–Peucker egyszerűsítés, hogy a vonal elférjen egy hivatkozásban. */
+export function simplify(points, tolerance = 0.00004) {
+  if (points.length < 3) return points.slice();
+  const sqTol = tolerance * tolerance;
+
+  const sqSegDist = (p, a, b) => {
+    let x = a.lon, y = a.lat;
+    let dx = b.lon - x, dy = b.lat - y;
+    if (dx !== 0 || dy !== 0) {
+      const t = ((p.lon - x) * dx + (p.lat - y) * dy) / (dx * dx + dy * dy);
+      if (t > 1) { x = b.lon; y = b.lat; }
+      else if (t > 0) { x += dx * t; y += dy * t; }
+    }
+    dx = p.lon - x; dy = p.lat - y;
+    return dx * dx + dy * dy;
+  };
+
+  const keep = new Array(points.length).fill(false);
+  keep[0] = keep[points.length - 1] = true;
+  const stack = [[0, points.length - 1]];
+  while (stack.length) {
+    const [first, last] = stack.pop();
+    let maxSq = 0, index = -1;
+    for (let i = first + 1; i < last; i++) {
+      const sq = sqSegDist(points[i], points[first], points[last]);
+      if (sq > maxSq) { maxSq = sq; index = i; }
+    }
+    if (maxSq > sqTol && index > 0) {
+      keep[index] = true;
+      stack.push([first, index], [index, last]);
+    }
+  }
+  return points.filter((_, i) => keep[i]);
+}
+
+/** A bejárás teljes tartalma GeoJSON-ként (vonalak + pontok). */
+export function toGeoJSON(session, points, items = [], opts = {}) {
+  const tol = opts.tolerance ?? 0.00004;
+  const features = [];
+  const line = (pts, props) => {
+    const s = simplify(pts.filter((p) => p.lat != null), tol);
+    if (s.length < 2) return;
+    features.push({
+      type: 'Feature',
+      properties: props,
+      geometry: { type: 'LineString', coordinates: s.map((p) => [+p.lon.toFixed(6), +p.lat.toFixed(6)]) },
+    });
+  };
+
+  // érvényes útvonal, kimaradásnál és elvetett szakasznál megszakítva
+  let run = [];
+  const flush = () => { if (run.length > 1) line(run, { nev: 'Érvényes útvonal', tipus: 'ok', stroke: '#1f6feb', 'stroke-width': 5 }); run = []; };
+  for (const p of points) {
+    if (isRejected(p)) { flush(); }
+    else if (isGap(p)) { flush(); run = [p]; }
+    else run.push(p);
+  }
+  flush();
+
+  rejectedSections(points).forEach((sec, i) => {
+    line(points.slice(sec.from, sec.to + 1), {
+      nev: `Elvetett szakasz ${i + 1}`,
+      indoklas: sec.reason || '',
+      tipus: 'elvetett',
+      stroke: '#ff8a4d',
+      'stroke-width': 4,
+    });
+  });
+
+  (session.drawn || []).forEach((seg, i) => {
+    line(seg.pts, {
+      nev: seg.name || `Berajzolt szakasz ${i + 1}`,
+      megjegyzes: seg.note || '',
+      tipus: 'berajzolt',
+      stroke: '#2ea043',
+      'stroke-width': 5,
+    });
+  });
+
+  for (const i of items) {
+    if (i.lat == null || i.lon == null) continue;
+    features.push({
+      type: 'Feature',
+      properties: {
+        nev: i.title || typeLabel(i.type),
+        tipus: i.type,
+        megjegyzes: i.note || '',
+        meretek: (i.dims || []).join('; '),
+        ido: new Date(i.created).toISOString(),
+      },
+      geometry: { type: 'Point', coordinates: [+i.lon.toFixed(6), +i.lat.toFixed(6)] },
+    });
+  }
+
+  return { type: 'FeatureCollection', properties: { nev: session.name }, features };
+}
+
 /** Kézzel berajzolt szakaszok együttes hossza. */
 export function drawnLength(list = []) {
   return list.reduce((sum, s) => sum + trackLength(s.pts || []), 0);
@@ -527,6 +667,10 @@ export function toGPX(session, points, items = []) {
     if (isRejected(p)) {
       if (run.length > 1) validSegs.push(run);
       run = [];
+    } else if (isGap(p)) {
+      // kimaradás: itt megszakad a hiteles nyomvonal, új szakasz indul
+      if (run.length > 1) validSegs.push(run);
+      run = [p];
     } else {
       run.push(p);
     }

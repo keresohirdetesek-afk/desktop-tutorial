@@ -1,7 +1,8 @@
 // Offline működés: az alkalmazás fájljai gyorsítótárba kerülnek.
 // A bejárások adatai IndexedDB-ben vannak, azokat a service worker nem érinti.
 
-const CACHE = 'utvonalbejaras-v1';
+const PREFIX = 'utvonalbejaras-';
+const CACHE = PREFIX + 'v2';
 const ASSETS = [
   './',
   'index.html',
@@ -20,10 +21,12 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
+  // Szándékosan nincs elnyelve a hiba: ha egy fájl nem tölthető le, a
+  // telepítés elbukik, és marad a korábbi, működő változat — így nem
+  // keletkezik féloffline állapot, amiről nem tudni, hogy hiányos.
   e.waitUntil(
     caches.open(CACHE)
       .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
-      .catch(() => {})
       .then(() => self.skipWaiting())
   );
 });
@@ -31,9 +34,26 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(
+        // CSAK a saját korábbi verzióink törölhetők: a GitHub Pages-en több
+        // alkalmazás osztozik ugyanazon az eredeten, az ő gyorsítótáruk nem
+        // a miénk.
+        keys.filter((k) => k.startsWith(PREFIX) && k !== CACHE).map((k) => caches.delete(k))
+      ))
       .then(() => self.clients.claim())
   );
+});
+
+// Az alkalmazás lekérdezheti, hogy tényleg készen áll-e offline használatra.
+self.addEventListener('message', (e) => {
+  if (!e.data || e.data.type !== 'status') return;
+  const reply = (payload) => {
+    if (e.ports && e.ports[0]) e.ports[0].postMessage(payload);
+  };
+  caches.open(CACHE)
+    .then((c) => c.keys())
+    .then((keys) => reply({ version: CACHE, cached: keys.length, expected: ASSETS.length }))
+    .catch((err) => reply({ version: CACHE, cached: 0, expected: ASSETS.length, error: String(err) }));
 });
 
 self.addEventListener('fetch', (e) => {

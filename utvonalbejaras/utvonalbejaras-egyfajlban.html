@@ -280,6 +280,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
   cursor: pointer;
 }
 
+.backup-status {
+  width: 100%;
+  text-align: left;
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent);
+  border-radius: 11px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.backup-status.warn {
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+}
+
+.warn-text { color: var(--warn); }
+
 .capture-bar {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -628,6 +646,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
         <button id="import-btn" class="btn ghost small">Mentés visszatöltése (JSON)</button>
         <input id="import-file" type="file" accept="application/json" hidden>
         <p id="storage-info" class="muted small"></p>
+        <p id="offline-status" class="muted small"></p>
       </div>
     </div>
   </section>
@@ -681,11 +700,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
       <h2 class="section-title">Bejárás adatai</h2>
       <div id="session-meta" class="meta-card"></div>
+      <button id="backup-status" class="backup-status"></button>
+
       <div class="btn-grid">
         <button id="edit-session" class="btn ghost small">Adatok szerkesztése</button>
+        <button id="open-track-map" class="btn ghost small">🗺️ Pontos nyomvonal térképen</button>
         <button id="export-gpx" class="btn ghost small">GPX export</button>
+        <button id="export-geojson" class="btn ghost small">GeoJSON export</button>
         <button id="export-json" class="btn ghost small">Teljes mentés (JSON)</button>
-        <button id="open-maps" class="btn ghost small">Megnyitás térképen</button>
+        <button id="open-maps" class="btn ghost small">Útvonalterv Google Maps (közelítő)</button>
         <button id="delete-session" class="btn danger small">Bejárás törlése</button>
       </div>
     </div>
@@ -1239,23 +1262,50 @@ const REJECTED = 'rejected';
 
 const isRejected = (p) => !!p && p.status === REJECTED;
 
+/* --------------------------------------------------------- kimaradások
+
+Ha a GPS hosszabb időre elveszti a jelet, vagy a rögzítést leállítják és
+később újraindítják, a két szomszédos pont közé eső szakaszt NEM jártuk be
+igazolhatóan. Az ilyen pontok `gap` jelet kapnak: az odavezető darab nem
+számít bele a bejárt távba, és nem is rajzolódik ki folytonos vonalként —
+különben egy légvonalbeli egyenes hamis útvonalat mutatna.              */
+
+const GAP_SECONDS = 120;   // ennél hosszabb szünet gyanús,
+const GAP_METERS = 250;    // ha közben ekkorát is ugrott a pozíció
+
+const isGap = (p) => !!p && p.gap === true;
+
+/** Kimaradásnak minősül-e a két pont közötti szakasz? */
+function detectGap(prev, next) {
+  if (!prev || !next) return false;
+  const dt = (next.t - prev.t) / 1000;
+  return dt > GAP_SECONDS && haversine(prev, next) > GAP_METERS;
+}
+
 /** Egybefüggő, azonos állapotú vonaldarabok a rajzoláshoz. */
 function styledSegments(points) {
   const segs = [];
   for (let i = 1; i < points.length; i++) {
-    const status = isRejected(points[i]) ? REJECTED : 'ok';
+    const status = isGap(points[i]) ? 'gap' : isRejected(points[i]) ? REJECTED : 'ok';
     const last = segs[segs.length - 1];
-    if (last && last.status === status) last.pts.push(points[i]);
+    // a kimaradás mindig önálló darab: nem folytatódhat belőle vonal
+    if (last && last.status === status && status !== 'gap') last.pts.push(points[i]);
     else segs.push({ status, pts: [points[i - 1], points[i]] });
   }
   return segs;
 }
 
-/** Hossz állapotonként: { ok, rejected, total }. */
+/** Hossz állapotonként: { ok, rejected, gap, gaps, total }. */
 function lengthByStatus(points) {
-  const out = { ok: 0, rejected: 0, total: 0 };
+  const out = { ok: 0, rejected: 0, gap: 0, gaps: 0, total: 0 };
   for (let i = 1; i < points.length; i++) {
     const d = haversine(points[i - 1], points[i]);
+    if (isGap(points[i])) {
+      // ismeretlen szakasz: se az érvényes, se a bejárt távba nem számít
+      out.gap += d;
+      out.gaps += 1;
+      continue;
+    }
     out.total += d;
     if (isRejected(points[i])) out.rejected += d;
     else out.ok += d;
@@ -1375,8 +1425,13 @@ class TrackRecorder {
   }
 }
 
-/** Egyszeri pozíciólekérés (fotóhoz, hangjegyzethez). */
-function currentPosition(timeout = 8000) {
+/**
+ * Egyszeri pozíciólekérés (fotóhoz, hangjegyzethez).
+ * `maximumAge = 0` esetén a böngésző nem adhat vissza tárolt mérést —
+ * dokumentáláshoz ez a helyes, mert különben egy korábbi helyszín
+ * koordinátája kerülhetne a felvételre.
+ */
+function currentPosition(timeout = 8000, maximumAge = 0) {
   return new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(
@@ -1389,7 +1444,7 @@ function currentPosition(timeout = 8000) {
           t: pos.timestamp || Date.now(),
         }),
       () => resolve(null),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout }
+      { enableHighAccuracy: true, maximumAge, timeout }
     );
   });
 }
@@ -1467,10 +1522,13 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
 
     for (const seg of styledSegments(coords)) {
       const rejected = seg.status === REJECTED;
-      ctx.setLineDash(rejected ? [lineW * 2, lineW * 1.6] : []);
-      ctx.strokeStyle = rejected ? rejectColor : line;
-      ctx.globalAlpha = rejected ? 0.85 : 1;
-      ctx.lineWidth = rejected ? lineW * 0.8 : lineW;
+      const gap = seg.status === 'gap';
+      // a kimaradás vékony, pontozott, halvány: látszik, hogy hol nincs adat,
+      // de nem téveszthető össze a ténylegesen bejárt úttal
+      ctx.setLineDash(gap ? [1.5, lineW * 1.8] : rejected ? [lineW * 2, lineW * 1.6] : []);
+      ctx.strokeStyle = gap ? dim : rejected ? rejectColor : line;
+      ctx.globalAlpha = gap ? 0.6 : rejected ? 0.85 : 1;
+      ctx.lineWidth = gap ? Math.max(1.5, lineW * 0.4) : rejected ? lineW * 0.8 : lineW;
       ctx.beginPath();
       seg.pts.forEach((p, i) => {
         const { x, y } = project(p.lat, p.lon);
@@ -1485,6 +1543,7 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
     ctx.globalAlpha = 0.45;
     const every = Math.max(1, Math.floor(coords.length / 8));
     for (let i = every; i < coords.length; i += every) {
+      if (isGap(coords[i])) continue; // kimaradásra nem rajzolunk irányjelet
       const a = project(coords[i - 1].lat, coords[i - 1].lon);
       const b = project(coords[i].lat, coords[i].lon);
       ctx.fillStyle = isRejected(coords[i]) ? rejectColor : line;
@@ -1616,6 +1675,110 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
   return { project, unproject, hitboxes, nearest, nearestDrawn, coords };
 }
 
+/* ------------------------------------------------------------- GeoJSON
+
+A Google Maps útvonaltervezője csak pontokat kap, és ő maga tervez utat —
+így nem a ténylegesen bejárt vonalat mutatja. A GeoJSON viszont magát a
+vonalat írja le, ezért térképnézőben pontosan az jelenik meg, amerre
+mentünk.                                                                */
+
+/** Douglas–Peucker egyszerűsítés, hogy a vonal elférjen egy hivatkozásban. */
+function simplify(points, tolerance = 0.00004) {
+  if (points.length < 3) return points.slice();
+  const sqTol = tolerance * tolerance;
+
+  const sqSegDist = (p, a, b) => {
+    let x = a.lon, y = a.lat;
+    let dx = b.lon - x, dy = b.lat - y;
+    if (dx !== 0 || dy !== 0) {
+      const t = ((p.lon - x) * dx + (p.lat - y) * dy) / (dx * dx + dy * dy);
+      if (t > 1) { x = b.lon; y = b.lat; }
+      else if (t > 0) { x += dx * t; y += dy * t; }
+    }
+    dx = p.lon - x; dy = p.lat - y;
+    return dx * dx + dy * dy;
+  };
+
+  const keep = new Array(points.length).fill(false);
+  keep[0] = keep[points.length - 1] = true;
+  const stack = [[0, points.length - 1]];
+  while (stack.length) {
+    const [first, last] = stack.pop();
+    let maxSq = 0, index = -1;
+    for (let i = first + 1; i < last; i++) {
+      const sq = sqSegDist(points[i], points[first], points[last]);
+      if (sq > maxSq) { maxSq = sq; index = i; }
+    }
+    if (maxSq > sqTol && index > 0) {
+      keep[index] = true;
+      stack.push([first, index], [index, last]);
+    }
+  }
+  return points.filter((_, i) => keep[i]);
+}
+
+/** A bejárás teljes tartalma GeoJSON-ként (vonalak + pontok). */
+function toGeoJSON(session, points, items = [], opts = {}) {
+  const tol = opts.tolerance ?? 0.00004;
+  const features = [];
+  const line = (pts, props) => {
+    const s = simplify(pts.filter((p) => p.lat != null), tol);
+    if (s.length < 2) return;
+    features.push({
+      type: 'Feature',
+      properties: props,
+      geometry: { type: 'LineString', coordinates: s.map((p) => [+p.lon.toFixed(6), +p.lat.toFixed(6)]) },
+    });
+  };
+
+  // érvényes útvonal, kimaradásnál és elvetett szakasznál megszakítva
+  let run = [];
+  const flush = () => { if (run.length > 1) line(run, { nev: 'Érvényes útvonal', tipus: 'ok', stroke: '#1f6feb', 'stroke-width': 5 }); run = []; };
+  for (const p of points) {
+    if (isRejected(p)) { flush(); }
+    else if (isGap(p)) { flush(); run = [p]; }
+    else run.push(p);
+  }
+  flush();
+
+  rejectedSections(points).forEach((sec, i) => {
+    line(points.slice(sec.from, sec.to + 1), {
+      nev: `Elvetett szakasz ${i + 1}`,
+      indoklas: sec.reason || '',
+      tipus: 'elvetett',
+      stroke: '#ff8a4d',
+      'stroke-width': 4,
+    });
+  });
+
+  (session.drawn || []).forEach((seg, i) => {
+    line(seg.pts, {
+      nev: seg.name || `Berajzolt szakasz ${i + 1}`,
+      megjegyzes: seg.note || '',
+      tipus: 'berajzolt',
+      stroke: '#2ea043',
+      'stroke-width': 5,
+    });
+  });
+
+  for (const i of items) {
+    if (i.lat == null || i.lon == null) continue;
+    features.push({
+      type: 'Feature',
+      properties: {
+        nev: i.title || typeLabel(i.type),
+        tipus: i.type,
+        megjegyzes: i.note || '',
+        meretek: (i.dims || []).join('; '),
+        ido: new Date(i.created).toISOString(),
+      },
+      geometry: { type: 'Point', coordinates: [+i.lon.toFixed(6), +i.lat.toFixed(6)] },
+    });
+  }
+
+  return { type: 'FeatureCollection', properties: { nev: session.name }, features };
+}
+
 /** Kézzel berajzolt szakaszok együttes hossza. */
 function drawnLength(list = []) {
   return list.reduce((sum, s) => sum + trackLength(s.pts || []), 0);
@@ -1722,6 +1885,10 @@ function toGPX(session, points, items = []) {
     if (isRejected(p)) {
       if (run.length > 1) validSegs.push(run);
       run = [];
+    } else if (isGap(p)) {
+      // kimaradás: itt megszakad a hiteles nyomvonal, új szakasz indul
+      if (run.length > 1) validSegs.push(run);
+      run = [p];
     } else {
       run.push(p);
     }
@@ -1848,6 +2015,107 @@ async function makeThumb(blob, maxSide = 360) {
   return (await canvasToBlob(canvas, 'image/jpeg', 0.72)) || blob;
 }
 
+
+/* ------------------------------------------------------------- EXIF
+
+Egy korábban készült, galériából behozott képnél a telefon aktuális helye
+félrevezető lenne. A JPEG EXIF-fejlécéből kiolvasható a felvétel helye és
+ideje — ha van benne, azt használjuk, és jelezzük, hogy onnan származik. */
+
+/** @returns {Promise<{lat?:number, lon?:number, takenAt?:number}|null>} */
+async function readExif(file) {
+  try {
+    // az EXIF a fájl elején van; néhány száz kB bőven elég hozzá
+    const head = await file.slice(0, 256 * 1024).arrayBuffer();
+    const view = new DataView(head);
+    if (view.byteLength < 4 || view.getUint16(0) !== 0xffd8) return null; // nem JPEG
+
+    let offset = 2;
+    while (offset + 4 < view.byteLength) {
+      if (view.getUint8(offset) !== 0xff) break;
+      const marker = view.getUint8(offset + 1);
+      const size = view.getUint16(offset + 2);
+      if (marker === 0xe1) {
+        const start = offset + 4;
+        // "Exif\0\0"
+        if (view.getUint32(start) !== 0x45786966) return null;
+        return parseTiff(view, start + 6);
+      }
+      if (marker === 0xda) break; // képadat kezdete
+      offset += 2 + size;
+    }
+  } catch (_) { /* sérült vagy szokatlan fejléc: nincs adat */ }
+  return null;
+}
+
+function parseTiff(view, tiff) {
+  if (tiff + 8 > view.byteLength) return null;
+  const le = view.getUint16(tiff) === 0x4949;
+  const u16 = (o) => view.getUint16(o, le);
+  const u32 = (o) => view.getUint32(o, le);
+  if (u16(tiff + 2) !== 0x002a) return null;
+
+  const out = {};
+  let gpsIfd = 0, exifIfd = 0;
+
+  const readEntries = (dirOffset, handler) => {
+    if (dirOffset + 2 > view.byteLength) return;
+    const count = u16(dirOffset);
+    for (let i = 0; i < count; i++) {
+      const e = dirOffset + 2 + i * 12;
+      if (e + 12 > view.byteLength) return;
+      handler(u16(e), u16(e + 2), u32(e + 4), e + 8);
+    }
+  };
+
+  const ratio = (o) => {
+    const num = u32(o), den = u32(o + 4);
+    return den ? num / den : 0;
+  };
+  const dms = (valueOffset) =>
+    ratio(valueOffset) + ratio(valueOffset + 8) / 60 + ratio(valueOffset + 16) / 3600;
+
+  const ascii = (count, valueOffset) => {
+    let s = '';
+    for (let i = 0; i < count - 1; i++) s += String.fromCharCode(view.getUint8(valueOffset + i));
+    return s;
+  };
+
+  readEntries(tiff + u32(tiff + 4), (tag, _type, _count, valOff) => {
+    if (tag === 0x8825) gpsIfd = tiff + u32(valOff);
+    if (tag === 0x8769) exifIfd = tiff + u32(valOff);
+  });
+
+  if (gpsIfd) {
+    let lat = null, lon = null, latRef = 'N', lonRef = 'E';
+    readEntries(gpsIfd, (tag, type, count, valOff) => {
+      const dataOff = type === 5 || count > 4 ? tiff + u32(valOff) : valOff;
+      if (tag === 0x0001) latRef = String.fromCharCode(view.getUint8(valOff));
+      if (tag === 0x0003) lonRef = String.fromCharCode(view.getUint8(valOff));
+      if (tag === 0x0002) lat = dms(dataOff);
+      if (tag === 0x0004) lon = dms(dataOff);
+    });
+    if (lat != null && lon != null && isFinite(lat) && isFinite(lon) && (lat || lon)) {
+      out.lat = latRef === 'S' ? -lat : lat;
+      out.lon = lonRef === 'W' ? -lon : lon;
+    }
+  }
+
+  if (exifIfd) {
+    readEntries(exifIfd, (tag, type, count, valOff) => {
+      if (tag !== 0x9003 || type !== 2 || count < 19) return; // DateTimeOriginal
+      const dataOff = count > 4 ? tiff + u32(valOff) : valOff;
+      const s = ascii(count, dataOff); // "YYYY:MM:DD HH:MM:SS"
+      const m = s.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+      if (m) {
+        const t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+        if (isFinite(t)) out.takenAt = t;
+      }
+    });
+  }
+
+  return Object.keys(out).length ? out : null;
+}
 
 /* ----------------------------------------------------------- hangjegyzet */
 
@@ -3237,6 +3505,7 @@ let editor = null;
 let trackEditor = null;
 let tickTimer = null;
 let trackHit = null;
+let firstPointAfterStart = false;
 
 /* ------------------------------------------------------------ segédek */
 
@@ -3454,7 +3723,11 @@ function renderMeta() {
     });
     rows.push(['Bejárt összesen', formatDistance(len.total)]);
   }
+  if (len.gaps) {
+    rows.push(['GPS-kimaradás', `${len.gaps} db · ${formatDistance(len.gap)} ismeretlen szakasz`]);
+  }
   rows.push(['Megjegyzés', s.note || '—']);
+  renderBackupStatus();
   $('#session-meta').innerHTML = '';
   for (const [k, v] of rows) {
     $('#session-meta').appendChild(
@@ -3511,6 +3784,11 @@ function startRecording() {
   recorder = new TrackRecorder({
     onPoint: async (pt) => {
       const rec = { ...pt, sessionId: state.session.id };
+      // az újraindítás utáni első pont, illetve a hosszú jelkimaradás után
+      // érkező pont mögött nincs igazolt útvonal
+      const prev = state.points[state.points.length - 1];
+      if (prev && (firstPointAfterStart || detectGap(prev, rec))) rec.gap = true;
+      firstPointAfterStart = false;
       state.points.push(rec);
       rec.id = await db.addPoint(rec); // az azonosító kell a későbbi szerkesztéshez
       $('#gps-status').textContent = RECORDING_HINT;
@@ -3533,6 +3811,7 @@ function startRecording() {
 
   state.recording = true;
   state.recStartedAt = Date.now();
+  firstPointAfterStart = true;   // az újraindítás előtti pontokhoz nincs igazolt út
   if (!state.session.stats?.startedAt) {
     state.session.stats = { ...(state.session.stats || {}), startedAt: Date.now() };
   }
@@ -3548,7 +3827,7 @@ async function stopRecording(silent = false) {
   if (!state.recording) return;
   state.recording = false;
   state.recElapsed += Date.now() - state.recStartedAt;
-  if (recorder) recorder.stop();
+  if (recorder) { recorder.stop(); recorder = null; }
   clearInterval(tickTimer);
   keepAwake(false);
   $('#rec-toggle').textContent = '● Nyomvonal rögzítése';
@@ -3566,7 +3845,15 @@ async function stopRecording(silent = false) {
     await db.saveSession(state.session);
     renderMeta();
   }
-  if (!silent) toast('Rögzítés leállítva, a nyomvonal mentve.');
+  if (!silent) {
+    toast('Rögzítés leállítva, a nyomvonal mentve.');
+    if (backupStale(state.session)) {
+      setTimeout(() => {
+        toast('Ne felejtse kiírni a biztonsági mentést a bejárás végén.');
+        renderBackupStatus();
+      }, 3400);
+    }
+  }
 }
 
 /**
@@ -3629,13 +3916,31 @@ async function keepAwake(on) {
 
 /* --------------------------------------------------------- elem rögzítés */
 
+/** Rögzítés közben a nyomvonal utolsó fixe ennyi ideig fogadható el (ms). */
+const POSITION_MAX_AGE = 10000;
+
+/**
+ * Aktuális pozíció elemhez. Csak akkor használja a rögzítő utolsó fixét,
+ * ha az valóban friss — különben új mérést kér. Így nem ragad be egy régi,
+ * más helyszínen mért koordináta egy most készült fotóra.
+ */
 async function positionNow() {
-  if (recorder && recorder.current) {
-    const c = recorder.current;
-    return { lat: c.lat, lon: c.lon, acc: c.acc, heading: c.heading };
+  const now = Date.now();
+  const cur = state.recording && recorder ? recorder.current : null;
+  if (cur && cur.t && now - cur.t < POSITION_MAX_AGE) {
+    return { lat: cur.lat, lon: cur.lon, acc: cur.acc, heading: cur.heading, posAt: cur.t, posSource: 'gps' };
   }
-  const p = await currentPosition();
-  return p || { lat: null, lon: null, acc: null, heading: null };
+  // valóban új mérés (tárolt fix nem fogadható el)
+  const fresh = await currentPosition(7000, 0);
+  if (fresh) {
+    return { lat: fresh.lat, lon: fresh.lon, acc: fresh.acc, heading: fresh.heading, posAt: fresh.t || now, posSource: 'gps' };
+  }
+  // ha nincs friss jel, inkább egy megjelölt, tárolt mérés, mint semmi
+  const cached = await currentPosition(3000, 60000);
+  if (cached) {
+    return { lat: cached.lat, lon: cached.lon, acc: cached.acc, heading: cached.heading, posAt: cached.t || null, posSource: 'gps-cached' };
+  }
+  return { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none' };
 }
 
 async function onPhotoSelected(e) {
@@ -3644,18 +3949,36 @@ async function onPhotoSelected(e) {
   if (!files.length) return;
 
   toast(files.length > 1 ? `${files.length} fotó feldolgozása…` : 'Fotó feldolgozása…');
-  const pos = await positionNow();
+
+  // Egy most készült fotóhoz friss mérés kell. Több fájl egyszerre viszont
+  // jellemzően galériából jön: azoknál a készítés helye a képben van (EXIF),
+  // az eszköz pillanatnyi helye félrevezető lenne.
+  const live = files.length === 1 ? await positionNow() : null;
   let firstId = null;
+  let noPos = 0;
 
   for (const file of files) {
     try {
+      const exif = await readExif(file);
+      let pos;
+      if (exif && exif.lat != null) {
+        pos = { lat: exif.lat, lon: exif.lon, acc: null, heading: null, posAt: exif.takenAt || null, posSource: 'exif' };
+      } else if (live) {
+        pos = live;
+      } else {
+        pos = { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none' };
+      }
+      if (pos.lat == null) noPos++;
+
       const { blob, width, height } = await shrinkImage(file);
       const thumb = await makeThumb(blob);
       const item = {
         id: db.uid(),
         sessionId: state.session.id,
         type: 'photo',
-        created: Date.now(),
+        // importált képnél a felvétel ideje a mérvadó, nem a behozatalé
+        created: (exif && exif.takenAt) || Date.now(),
+        importedAt: exif && exif.takenAt ? Date.now() : undefined,
         ...pos,
         title: '',
         note: '',
@@ -3675,8 +3998,19 @@ async function onPhotoSelected(e) {
       toast('A fotó nem menthető: ' + err.message, 'error');
     }
   }
+  state.items.sort((a, b) => a.created - b.created);
+  markUnsaved();
   renderItems();
   drawTrack();
+
+  if (noPos) {
+    toast(
+      noPos === files.length
+        ? 'Nincs helyadat a fotó(k)hoz — a részleteknél kézzel megadható.'
+        : `${noPos} fotóhoz nincs helyadat — a részleteknél kézzel megadható.`,
+      'error'
+    );
+  }
 
   if (files.length === 1 && firstId) {
     await annotate(firstId);
@@ -3706,6 +4040,7 @@ async function annotate(itemId) {
   await db.saveItem(item);
   const idx = state.items.findIndex((i) => i.id === item.id);
   if (idx >= 0) state.items[idx] = item;
+  markUnsaved();
   renderItems();
   toast(res.dims.length ? `Mentve — ${res.dims.length} méret rögzítve.` : 'Jelölések mentve.');
 }
@@ -3768,6 +4103,7 @@ async function recordAudio(attachToItemId = null) {
     };
     await db.saveItem(item);
     state.items.push(item);
+    markUnsaved();
     renderItems();
     drawTrack();
     toast(`Hangjegyzet mentve (${formatDuration(out.duration)}).`);
@@ -3801,6 +4137,7 @@ async function addNote() {
   };
   await db.saveItem(item);
   state.items.push(item);
+  markUnsaved();
   renderItems();
   drawTrack();
   toast('Jegyzet mentve.');
@@ -3822,6 +4159,7 @@ async function markPoint() {
   };
   await db.saveItem(item);
   state.items.push(item);
+  markUnsaved();
   renderItems();
   drawTrack();
   toast('Pont jelölve.');
@@ -3875,6 +4213,79 @@ function itemCard(item, extraSub) {
 
 let viewerItem = null;
 
+/** Honnan való a helyadat, és mennyire megbízható. */
+function positionNote(item) {
+  if (item.lat == null) return '';
+  const parts = [];
+  const src = {
+    gps: 'GPS',
+    'gps-cached': 'GPS, tárolt mérés',
+    exif: 'a kép EXIF-adatából',
+    manual: 'kézzel megadva',
+    track: 'nyomvonalról',
+  }[item.posSource];
+  if (src) parts.push(src);
+  if (item.acc != null) parts.push('±' + item.acc + ' m');
+  if (item.posAt && Math.abs(item.created - item.posAt) > 60000) {
+    parts.push('mérés: ' + formatDateTime(item.posAt));
+  }
+  return parts.length ? ` (${parts.join(', ')})` : '';
+}
+
+/** Helyadat pótlása vagy javítása: nyomvonalról, friss méréssel, vagy kézzel. */
+async function editItemPosition(item) {
+  const res = await modal({
+    title: item.lat == null ? 'Hely megadása' : 'Hely javítása',
+    text: item.lat == null
+      ? 'Ehhez az elemhez nincs helyadat. Adja meg a koordinátát, vagy vegye át a nyomvonal legközelebbi pontját.'
+      : 'A koordináta felülírható, ha a mért érték pontatlan volt.',
+    fields: [
+      { name: 'lat', label: 'Szélesség (lat)', inputmode: 'decimal', value: item.lat != null ? item.lat.toFixed(6) : '' },
+      { name: 'lon', label: 'Hosszúság (lon)', inputmode: 'decimal', value: item.lon != null ? item.lon.toFixed(6) : '' },
+      {
+        name: 'mode', label: 'Vagy vegye át innen', type: 'select', value: '',
+        options: [
+          { value: '', label: '— a fenti koordinátát használom —' },
+          { value: 'now', label: 'Friss GPS-mérés most' },
+          { value: 'track', label: 'A nyomvonal időben legközelebbi pontja' },
+        ],
+      },
+    ],
+    okText: 'Mentés',
+  });
+  if (!res) return;
+
+  let next = null;
+  if (res.mode === 'now') {
+    const p = await positionNow();
+    if (p.lat == null) { toast('Nem sikerült helyadatot mérni.', 'error'); return; }
+    next = p;
+  } else if (res.mode === 'track') {
+    if (!state.points.length) { toast('Ehhez a bejáráshoz nincs nyomvonal.', 'error'); return; }
+    let best = state.points[0];
+    for (const p of state.points) {
+      if (Math.abs(p.t - item.created) < Math.abs(best.t - item.created)) best = p;
+    }
+    next = { lat: best.lat, lon: best.lon, acc: best.acc, posAt: best.t, posSource: 'track' };
+  } else {
+    const lat = Number(String(res.lat).replace(',', '.'));
+    const lon = Number(String(res.lon).replace(',', '.'));
+    if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+      toast('Érvénytelen koordináta.', 'error');
+      return;
+    }
+    next = { lat, lon, acc: null, posAt: Date.now(), posSource: 'manual' };
+  }
+
+  Object.assign(item, next);
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  closeViewer();
+  toast('Helyadat mentve.');
+}
+
 async function openViewer(id) {
   const item = state.items.find((i) => i.id === id) || (await db.getItem(id));
   if (!item) return;
@@ -3895,8 +4306,8 @@ async function openViewer(id) {
 
   const info = el('div', { class: 'meta-card' });
   const rows = [
-    ['Idő', formatDateTime(item.created)],
-    ['Pozíció', formatCoord(item.lat, item.lon)],
+    [item.importedAt ? 'Felvétel ideje' : 'Idő', formatDateTime(item.created)],
+    ['Pozíció', formatCoord(item.lat, item.lon) + positionNote(item)],
   ];
   if (item.dims && item.dims.length) rows.push(['Méretek', item.dims.join(' · ')]);
   if (item.texts && item.texts.length) rows.push(['Feliratok', item.texts.join(' · ')]);
@@ -3925,6 +4336,11 @@ async function openViewer(id) {
     } }));
   }
   actions.appendChild(el('button', { class: 'btn ghost small', text: '📝 Megjegyzés', onclick: () => editItemNote(item) }));
+  actions.appendChild(el('button', {
+    class: item.lat == null ? 'btn primary small' : 'btn ghost small',
+    text: item.lat == null ? '📍 Hely megadása' : '📍 Hely javítása',
+    onclick: () => editItemPosition(item),
+  }));
   if (item.lat != null) {
     actions.appendChild(el('a', {
       class: 'btn ghost small',
@@ -3957,6 +4373,7 @@ async function editItemNote(item) {
   item.note = res.note;
   item.dims = res.dims ? res.dims.split(',').map((s) => s.trim()).filter(Boolean) : [];
   await db.saveItem(item);
+  markUnsaved();
   renderItems();
   closeViewer();
   toast('Mentve.');
@@ -3972,6 +4389,7 @@ async function deleteCurrentItem() {
   if (!ok) return;
   await db.deleteItem(viewerItem.id);
   state.items = state.items.filter((i) => i.id !== viewerItem.id);
+  markUnsaved();
   closeViewer();
   renderItems();
   drawTrack();
@@ -4044,6 +4462,10 @@ async function exportJSON() {
   };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   download(blob, `${slug(state.session.name)}-mentes.json`);
+
+  state.session.lastBackupAt = Date.now();
+  await db.saveSession(state.session);
+  renderBackupStatus();
   toast(`Mentés kész (${(blob.size / 1048576).toFixed(1).replace('.', ',')} MB).`);
 }
 
@@ -4074,6 +4496,81 @@ async function importJSON(file) {
   }
 }
 
+/* ------------------------------------------------- biztonsági mentés */
+
+/** A bejárás változott a legutóbbi kimentés óta? */
+function backupStale(s) {
+  if (!s) return false;
+  return !s.lastBackupAt || s.lastBackupAt < (s.updated || 0);
+}
+
+function markUnsaved() {
+  if (!state.session) return;
+  db.saveSession(state.session).catch(() => {}); // az `updated` azonnal frissül
+  renderBackupStatus();
+}
+
+function renderBackupStatus() {
+  const box = $('#backup-status');
+  const s = state.session;
+  if (!box || !s) return;
+  const stale = backupStale(s);
+  box.classList.toggle('warn', stale);
+  box.textContent = s.lastBackupAt
+    ? (stale
+      ? `⚠️ Változott a legutóbbi mentés óta (${formatDateTime(s.lastBackupAt)}) — mentés kiírása`
+      : `✓ Biztonsági mentés: ${formatDateTime(s.lastBackupAt)}`)
+    : '⚠️ Még nincs biztonsági mentés — a böngészőadatok törlése mindent visz. Mentés kiírása';
+}
+
+/* ------------------------------------------------------- térképnézet */
+
+/**
+ * A ténylegesen bejárt vonal megjelenítése térképnézőben. A Google Maps
+ * útvonaltervezője csak pontokat kap és maga tervez utat — ez viszont magát
+ * a vonalat adja át, az elvetett és a berajzolt szakaszokkal együtt.
+ */
+async function openTrackOnMap() {
+  const build = (tolerance) =>
+    JSON.stringify(toGeoJSON(state.session, state.points, state.items, { tolerance }));
+
+  let tolerance = 0.00004;
+  let json = build(tolerance);
+  if (JSON.parse(json).features.length === 0) {
+    toast('Nincs megjeleníthető nyomvonal.', 'error');
+    return;
+  }
+  // hosszú bejárásnál ritkítunk, hogy elférjen a hivatkozásban
+  while (json.length > 30000 && tolerance < 0.002) {
+    tolerance *= 2;
+    json = build(tolerance);
+  }
+
+  const ok = await modal({
+    title: 'Megnyitás térképnézőben',
+    text: 'A nyomvonal a geojson.io oldalon jelenik meg, utcákkal és településekkel. '
+      + 'Az adat a hivatkozás horgony részében utazik, amit a böngésző nem küld el a kiszolgálónak — '
+      + 'de ez akkor is egy külső oldal. Megnyitjuk?',
+    okText: 'Megnyitás',
+  });
+  if (!ok) return;
+
+  window.open(
+    'https://geojson.io/#data=data:application/json,' + encodeURIComponent(json),
+    '_blank',
+    'noopener'
+  );
+}
+
+function exportGeoJSON() {
+  const gj = toGeoJSON(state.session, state.points, state.items, { tolerance: 0 });
+  download(
+    new Blob([JSON.stringify(gj, null, 1)], { type: 'application/geo+json' }),
+    `${slug(state.session.name)}.geojson`
+  );
+  toast('GeoJSON letöltve.');
+}
+
 function openInMaps() {
   // csak az érvényes útvonal: az elvetett szakaszokon nem kell végigvinni
   const pts = state.points.filter((p) => !isRejected(p));
@@ -4083,6 +4580,7 @@ function openInMaps() {
   const step = Math.max(1, Math.floor(pts.length / 8));
   const way = [];
   for (let i = step; i < pts.length - 1 && way.length < 8; i += step) way.push(`${pts[i].lat},${pts[i].lon}`);
+  toast('A Google Maps saját útvonalat tervez a megadott pontok között — ez közelítés, nem a bejárt vonal.');
   const url =
     `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lon}` +
     `&destination=${dest.lat},${dest.lon}` +
@@ -4146,8 +4644,11 @@ function bind() {
 
   $('#edit-session').addEventListener('click', editSessionData);
   $('#export-gpx').addEventListener('click', exportGPX);
+  $('#export-geojson').addEventListener('click', exportGeoJSON);
   $('#export-json').addEventListener('click', exportJSON);
+  $('#open-track-map').addEventListener('click', openTrackOnMap);
   $('#open-maps').addEventListener('click', openInMaps);
+  $('#backup-status').addEventListener('click', exportJSON);
   $('#delete-session').addEventListener('click', deleteSession);
 
   $('#import-btn').addEventListener('click', () => $('#import-file').click());
@@ -4192,6 +4693,45 @@ async function init() {
 
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persist().catch(() => {});
+  }
+  setOfflineStatus('Egyfájlos változat: a teljes alkalmazás ebben a fájlban van, külön offline gyorsítótár nélkül is működik.');
+}
+
+function setOfflineStatus(text, warn = false) {
+  const box = $('#offline-status');
+  if (!box) return;
+  box.textContent = text;
+  box.classList.toggle('warn-text', warn);
+}
+
+/**
+ * Az offline készenlét ellenőrzése. Korábban a letöltési hibák némán
+ * elvesztek, így nem lehetett tudni, tényleg használható-e terepen.
+ */
+async function checkOfflineReady() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sw = navigator.serviceWorker.controller || reg.active;
+    if (!sw) {
+      setOfflineStatus('Offline készenlét: még nem aktív — töltse újra az oldalt.', true);
+      return;
+    }
+    const res = await new Promise((resolve, reject) => {
+      const ch = new MessageChannel();
+      const timer = setTimeout(() => reject(new Error('nincs válasz')), 4000);
+      ch.port1.onmessage = (e) => { clearTimeout(timer); resolve(e.data); };
+      sw.postMessage({ type: 'status' }, [ch.port2]);
+    });
+    if (res && res.cached >= res.expected) {
+      setOfflineStatus(`✓ Offline használatra kész (${res.cached} fájl).`);
+    } else {
+      setOfflineStatus(
+        `⚠️ Offline készenlét hiányos (${res ? res.cached : 0}/${res ? res.expected : '?'} fájl) — `
+        + 'töltse újra az oldalt hálózaton.', true
+      );
+    }
+  } catch (err) {
+    setOfflineStatus('⚠️ Az offline készenlét nem ellenőrizhető: ' + err.message, true);
   }
 }
 
