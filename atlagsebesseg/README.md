@@ -318,7 +318,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 300 ellenőrzést futtat végig 28 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 314 ellenőrzést futtat végig 28 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -367,7 +367,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (300 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (314 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
 ├── PUBLIKALAS.md       lépésenkénti kiadási leírás
@@ -416,6 +416,31 @@ Az adatvédelmi tájékoztató (amit a hirdetési rendszerek megkövetelnek) meg
   a hirdetési rendszerek és az alkalmazásáruházak linkelhető
   tájékoztatót kérnek, nem egy fülre rejtett szakaszt. A dátumát
   („Hatályos:”) minden érdemi változásnál át kell írni.
+
+## Kiadás előtti jogi ellenőrzés
+
+Amit a szövegeknek tartaniuk kell, és amit teszt is véd:
+
+- **Az OpenStreetMap adatlicence.** A sebességhatárok is OSM-adatok, nem csak
+  a térképcsempék: az ODbL feltüntetése mindkettőre vonatkozik. Ezért van a
+  lábléc és az `adatvedelem.html#forrasok` szakasz.
+- **A vendorolt könyvtárak licencei.** A Leaflet (BSD 2-Clause), a JetBrains
+  Mono (OFL 1.1) és a Phosphor Icons (MIT) licencszövege a kiadott fájlok
+  között van (`vendor/*/LICENSE`), és a Források szakasz meg is nevezi őket.
+- **Az app saját kódjára nincs meghirdetett licenc**, ezért az oldal nem
+  állítja magáról, hogy nyílt forrású. Ha az lenne a szándék, egy `LICENSE`
+  fájl kell a repó gyökerébe, és utána a megfogalmazás is visszatehető.
+- **A bírságtételek forrásmegjelölése.** A táblázat mellett ott a rendelet
+  neve, az ellenőrzés dátuma, és link a Hatályos Jogszabályok
+  Gyűjteményéhez — eltérés esetén az a hivatkozási alap.
+- **Nincs túlígéret.** A „kikapcsolva semmilyen adat nem hagyja el a
+  készüléket” mondat kikerült: a tárhely felé az oldal betöltése maga is
+  kérés, és a két kapcsoló külön dolgot old ki.
+- **A service worker gyorsítótára is tárolás**, ezért a tájékoztató 3. pontja
+  külön kimondja, mit tárol és miért.
+- **A tárhelyszolgáltató neve két helyen szerepel** az `adatvedelem.html`-ben,
+  HTML-megjegyzéssel megjelölve. Ha nem GitHub Pages lesz a kiszolgáló, ezt
+  élesítés előtt át kell írni — lásd `PUBLIKALAS.md` gyorslista.
 
 ## Jogi
 
