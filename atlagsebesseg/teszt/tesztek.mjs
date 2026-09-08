@@ -1978,9 +1978,20 @@ async function teljesSzakaszTeszt(b) {
   all('a felületen sem lesz bírság a szabályos vegyes menetből',
       /nem lépted túl/.test(v), v.replace(/\n/g, ' ').slice(0, 140));
   all('de kiírja, hogy részenként mérve más jönne ki',
-      /külön mérés lenne/.test(v), v.replace(/\n/g, ' ').slice(0, 200));
-  all('nem duplázódik a névelő', !/ a az | a a \d/.test(v),
-      v.replace(/\n/g, ' ').slice(0, 200));
+      /külön mérés kerülne/.test(v), v.replace(/\n/g, ' ').slice(0, 220));
+  all('a megjegyzés feloldja az ellentmondást',
+      /nem jelenti, hogy/.test(v) && /nem jár bírság/.test(v),
+      v.replace(/\n/g, ' ').slice(0, 220));
+  all('helyes a névelő', /az 50 km\/h-s rész/.test(v) && !/ a 50 /.test(v),
+      v.replace(/\n/g, ' ').slice(0, 220));
+
+  // a szakaszsorokban nincs forintösszeg: az félreérthető lenne
+  const sorok = await p.evaluate(() => ({
+    ft: /Ft/.test(document.getElementById('k-reszletek').textContent),
+    fej: /magyarázat, nem ítélet/.test(document.querySelector('.lista-fej').textContent),
+  }));
+  all('a szakaszsorokban nincs forintösszeg', !sorok.ft);
+  all('a lista fölött ott áll, hogy magyarázat', sorok.fej);
 
   p.__hibak.length && all('nincs JS hiba (teljes szakasz)', false, p.__hibak.join(' | '));
   await p.close();

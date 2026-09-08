@@ -502,9 +502,11 @@ function verdiktRender(node, eredmeny) {
 function reszenkentiMegjegyzes(eredmeny) {
   if (!eredmeny.birsagosak.length) return '';
   const e = eredmeny.legsulyosabb.ertekeles;
-  return ` <br><span class="muted">Ha viszont ${nevelo(e.limit)} ` +
-    `${e.limit} km/h-s részen külön mérés lenne, ott ${fmtSpeed1(e.mert)} km/h ` +
-    `átlaggal ${fmtForint(e.osszeg)} járna.</span>`;
+  return `<span class="megjegyzes"><strong>Ez nem jelenti, hogy ${nevelo(e.limit)} ` +
+    `${e.limit} km/h-s rész rendben volt:</strong> ott ${fmtSpeed1(e.mert)} km/h ` +
+    `átlaggal mentél, és ha oda külön mérés kerülne, az önmagában ` +
+    `${fmtForint(e.osszeg)} lenne. A szakaszmérés viszont csak a teljes ` +
+    `szakasz átlagát látja, ezért itt nem jár bírság.</span>`;
 }
 
 function jelvenyek(sz) {
@@ -542,16 +544,20 @@ function szakaszSorSzoveg(sor, sz, eredmeny) {
     `<strong>${fmtDistance(sz.tav)}</strong> · ${fmtDuration(sz.ido)}<br>` +
     `<span class="muted">átlag ${fmtSpeed1(e.mert)} km/h</span><br>` +
     `<span class="muted small">${sz.nev ? `${sz.nev}, ` : ''}${sz.cimke}</span> ${jelvenyek(sz)}`;
-  const donto = eredmeny.legsulyosabb === sz;
   const verd = sor.querySelector('.seg-verd');
   verd.className = `seg-verd ${allapot}`;
-  verd.innerHTML = e.birsagos
-    ? (donto
-      ? `${fmtForint(e.osszeg)}<small>ez szabja meg a bírságot</small>`
-      : `+${fmtSpeed1(e.tullepes)}<span class="small"> km/h</span>` +
-        `<small>a határ felett</small>`)
+  verd.innerHTML = szakaszVerdiktSzoveg(e);
+}
+
+/* A soron soha nincs forintösszeg. A bírság a teljes szakasz átlagából
+   jön; ha itt is állna egy szám, az úgy nézne ki, mintha ez a rész külön
+   csekket hozna — épp azt a félreértést szülné, amit a modell kizár. */
+function szakaszVerdiktSzoveg(e) {
+  return e.birsagos
+    ? `+${fmtSpeed1(e.tullepes)}<span class="small"> km/h</span>` +
+      `<small>a részhatár felett</small>`
     : `+${fmtSpeed1(Math.max(0, e.tartalek))}<span class="small"> km/h</span>` +
-      `<small>a bírsághatárig</small>`;
+      `<small>a részhatárig</small>`;
 }
 
 function szakaszLista(node, eredmeny, { szerkesztheto }) {
@@ -581,18 +587,7 @@ function szakaszLista(node, eredmeny, { szerkesztheto }) {
       `<span class="muted">átlag ${fmtSpeed1(e.mert)} km/h</span><br>` +
       `<span class="muted small">${sz.nev ? `${sz.nev}, ` : ''}${sz.cimke}</span> ${jelvenyek(sz)}`);
 
-    /* Bírságos részen csak azon áll forintösszeg, amelyik a szakasz
-       bírságát megszabja: a többinél a túllépés látszik, hogy ne tűnjön
-       úgy, mintha részenként külön csekk jönne.                       */
-    const donto = eredmeny.legsulyosabb === sz;
-    const verd = el('div', `seg-verd ${allapot}`,
-      e.birsagos
-        ? (donto
-          ? `${fmtForint(e.osszeg)}<small>ez szabja meg a bírságot</small>`
-          : `+${fmtSpeed1(e.tullepes)}<span class="small"> km/h</span>` +
-            `<small>a határ felett</small>`)
-        : `+${fmtSpeed1(Math.max(0, e.tartalek))}<span class="small"> km/h</span>` +
-          `<small>a bírsághatárig</small>`);
+    const verd = el('div', `seg-verd ${allapot}`, szakaszVerdiktSzoveg(e));
 
     sor.__szakasz = sz;
     sor.append(limitDoboz, info, verd);
@@ -1161,21 +1156,19 @@ function kalkSzamol() {
   ];
   /* Egy szakasz egy bírság: a tételt a legsúlyosabb rész szabja meg.
      A többi túllépés attól még látszik, csak nem adódik hozzá.        */
+  const teljes = eredmeny.teljes;
+  kv.push([
+    'Becsült bírság (a teljes szakasz átlagából)',
+    teljes?.ertekeles?.birsagos
+      ? `${fmtForint(teljes.ertekeles.osszeg)} (+${fmtSpeed1(teljes.ertekeles.tullepes)} km/h)`
+      : 'nem járna',
+  ]);
   if (eredmeny.birsagosak.length) {
     const l = eredmeny.legsulyosabb;
     kv.push([
-      'Bírság (egy szakasz, egy bírság)',
-      `${fmtForint(l.ertekeles.osszeg)} a ${l.limit} km/h-s rész alapján`,
+      'Ha részenként külön mérés lenne (nem ez az ítélet)',
+      `${fmtForint(l.ertekeles.osszeg)} a ${l.limit} km/h-s részen`,
     ]);
-    const tobbi = eredmeny.birsagosak.filter((x) => x !== l);
-    if (tobbi.length) {
-      kv.push([
-        'További bírságos részek (nem adódnak hozzá)',
-        tobbi
-          .map((x) => `${x.limit} km/h: +${fmtSpeed1(x.ertekeles.tullepes)} km/h`)
-          .join(' · '),
-      ]);
-    }
   }
   if (nyereseg > 0) {
     kv.push(['Időnyereség a szabályoshoz képest', fmtDurationWords(nyereseg)]);

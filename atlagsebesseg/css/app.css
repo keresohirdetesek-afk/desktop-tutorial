@@ -305,6 +305,31 @@ a.btn, a.chip, a.hirdetes { text-decoration: none; }
 /* Az indulás előtti beállítások a fő gomb alatt: itt még áll az autó. */
 .indulas-elott { padding-bottom: 0; }
 
+/* A verdikt alatti pontosítás: ne muted szövegként vesszen el, mert épp
+   azt az ellentmondást oldja fel, amit az olvasó lát („semmibe kerül,
+   de a 30-as részen 50 000 Ft”).                                      */
+.megjegyzes {
+  display: block;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+}
+.lista-fej { margin: 0; }
+.merleg-lbl small {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.75;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 /* ------------------------------------------------------ indító nézet */
 
 .hero {

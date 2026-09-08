@@ -292,6 +292,13 @@ Korábban a bírság a legsúlyosabb szakaszrészből jött. Az a modell többet
 feltételezett a rendszerről, mint amit tud, és a vegyes korlátozású, végig
 szabályos menetre is bírságot hozott ki.
 
+**A felületen ezt következetesen kell vinni**, különben ellentmondásosnak
+látszik: „ennyibe kerülne: semmibe”, mellette egy szakaszrészen „50 000 Ft”.
+Ezért a szakaszsorokban **egyáltalán nincs forintösszeg** — csak az látszik,
+hol mennyivel voltál a részhatár felett vagy alatt. Az egyetlen hely, ahol a
+részenkénti összeg megjelenik, a verdikt alatti keretes megjegyzés, ami ki is
+mondja, miért nem az az ítélet.
+
 ## A bírságtáblázat
 
 Egyetlen helyen, a `js/birsag.js` fájlban van, dátumozva. Ha a rendelet
@@ -311,7 +318,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 297 ellenőrzést futtat végig 28 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 300 ellenőrzést futtat végig 28 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -360,7 +367,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (297 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (300 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
 ├── PUBLIKALAS.md       lépésenkénti kiadási leírás
