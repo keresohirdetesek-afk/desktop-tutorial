@@ -18,7 +18,7 @@
   }
 })();
 </script>
-<meta name="description" content="Nézd meg, hogyan működne nálad az átlagsebesség-mérés, ha Magyarországon a jelenleg egyeztetett rendszer bevezetésre kerül. Nincs regisztráció, nem követünk, csak számolunk.">
+<meta name="description" content="Nézd meg, hogyan működne nálad az átlagsebesség-mérés, ha Magyarországon bevezetnek ilyen rendszert. Nincs regisztráció, nem követünk, csak számolunk.">
 <title>Átlagsebesség.hu</title>
 <link rel="canonical" href="https://atlagsebesseg.hu/">
 <link rel="manifest" href="manifest.webmanifest">
@@ -155,8 +155,9 @@
           </div>
           <p class="muted small">
             Menet közben, kilométerenként lekéri a táblák szerinti határokat
-            az OpenStreetMapből. Kikapcsolva semmilyen adat nem hagyja el a
-            készüléket, és a lenti alapértékkel számolunk.
+            az OpenStreetMapből. Kikapcsolva nem indul több ilyen kérés, és a
+            lenti alapértékkel számolunk. A térkép csempéi ettől függetlenül
+            töltődnek — azokat a Haladó beállításokban lehet kikapcsolni.
           </p>
           <div class="row-between">
             <label for="sel-alap-fo">Ha nincs lekért adat, ezzel számolunk</label>
@@ -610,8 +611,7 @@
           szerepel a szabályozásban, a gyakorlati bevezetéséről pedig 2026
           nyarán indult egyeztetés. <strong>Végleges döntés és konkrét rendszer
           egyelőre nincs</strong>. Ez az oldal azt mutatja meg, hogyan
-          működne nálad a méréstechnika, ha a jelenleg egyeztetett rendszer
-          bevezetésre kerül. Nem hatósági eszköz, és nem előrejelzés arról,
+          működne nálad a méréstechnika, ha ilyen rendszert bevezetnek. Nem hatósági eszköz, és nem előrejelzés arról,
           hogy pontosan milyen szabályok születnek.
         </p>
       </section>
@@ -655,9 +655,9 @@
               <strong>magától fut</strong>, nagyjából kilométerenként, hogy a
               táblán mindig az legyen, ami tényleg ki van téve. Ilyenkor a
               szolgáltató a saját szabályzata szerint látja a kérés IP-címét
-              és a kért terület koordinátáit. A Haladó beállításokban
-              kikapcsolható; kikapcsolva semmilyen adat nem hagyja el a
-              készüléket.</li>
+              és a kért terület koordinátáit. Mindkettőnek külön kapcsolója
+              van a Haladó beállításokban; ha mindkettőt kikapcsolod,
+              semmilyen adat nem hagyja el a készüléket.</li>
         </ul>
         <p class="muted small">
           A részletes, jogi nyelven megírt változat:
@@ -669,7 +669,10 @@
         <h2 class="card-title">Honnan jönnek a sebességhatárok?</h2>
         <p>
           Az útvonal menti korlátozások az <strong>OpenStreetMap</strong>
-          <code>maxspeed</code> adataiból származnak (Overpass API).
+          <code>maxspeed</code> adataiból származnak (Overpass API). Az
+          adatbázis ©
+          <a href="https://www.openstreetmap.org/copyright" rel="noopener" target="_blank">OpenStreetMap</a>
+          közreműködők, az Open Database License (ODbL) feltételeivel.
         </p>
         <p><strong>Mennyire pontos ez?</strong> Rétegenként más:</p>
         <ul class="tick">
@@ -700,22 +703,32 @@
       <section class="card">
         <h2 class="card-title">A bírság</h2>
         <p>
-          <strong>Egy szakasz, egy bírság.</strong> A szakaszellenőrzés a
-          szakasz egészét méri, és egy áthaladás egy szabálysértés. Ha a
-          szakaszon belül több, eltérő korlátozású részen is a határ fölött
-          voltál, a tételek nem adódnak össze: a bírságot a legsúlyosabb rész
-          szabja meg. A többi túllépés a részletes listában látszik, de nem
-          növeli az összeget.
+          <strong>Egy áthaladás, egy bírság.</strong> A szakaszellenőrzés a
+          szakasz egészét méri: a bírságot a <strong>teljes szakasz egyetlen
+          átlaga</strong> adja, nem a szakaszrészek külön-külön. Vegyes
+          korlátozásnál a viszonyítás a szakasz megengedett átlaga — az az
+          érték, ami akkor jönne ki, ha végig pontosan a táblát tartanád.
+          Erről bővebben a <em>Mihez mérünk?</em> szakaszban.
         </p>
         <p id="info-jog" class="muted small"></p>
         <div id="info-tabla"></div>
         <p class="muted small">
           A közigazgatási bírságot objektív felelősség alapján az üzembentartóra
           szabják ki; büntetőpont akkor kerülhet szóba, ha a hatóság a vezetőt is
-          azonosítja. Az itt látható összegek tájékoztatásul szolgálnak, jogi
-          tanácsadásnak nem minősülnek. Az összegek a hatályos gyorshajtási
-          bírságtételek. Arról, hogy egy jövőbeli átlagsebesség-mérés
-          pontosan milyen szankcióval járna, még nincs döntés.
+          azonosítja.
+        </p>
+        <p class="muted small">
+          <strong>Az itt látható összegek tájékoztatásul szolgálnak, és nem
+          minősülnek jogi tanácsadásnak.</strong> A táblázat a fenti rendelet
+          gyorshajtásra vonatkozó tételeit adja vissza a jelzett ellenőrzési
+          dátum szerint; a mindenkori hatályos szöveg a
+          <a href="https://net.jogtar.hu/jogszabaly?docid=a0700410.kor"
+             rel="noopener" target="_blank">Hatályos Jogszabályok
+          Gyűjteményében</a> és a
+          <a href="https://njt.hu" rel="noopener" target="_blank">Nemzeti
+          Jogszabálytárban</a> érhető el — eltérés esetén az az irányadó.
+          Arról, hogy egy jövőbeli átlagsebesség-mérés pontosan milyen
+          szankcióval járna, még nincs döntés.
         </p>
       </section>
 
@@ -741,10 +754,10 @@
           A szakaszrészek külön bontása ettől még hasznos, mert megmutatja,
           hol keletkezett az átlag — de az szigorúbb, mint egyetlen mérés:
           olyan, mintha minden egységes határú részen külön rendszer állna.
-          Ha a kettő eltér, az eredménynél ezt külön kiírjuk. A valóságban
-          ilyen berendezéseket egységes korlátozású szakaszokra telepítenek,
-          épp azért, mert egyetlen átlagból nem lehet visszakövetkeztetni a
-          szakaszon belüli sebességekre.
+          Ha a kettő eltér, az eredménynél ezt külön kiírjuk. Ilyen
+          berendezéseket jellemzően egységes korlátozású szakaszokra
+          telepítenek; egyetlen átlagból ugyanis nem lehet
+          visszakövetkeztetni a szakaszon belüli sebességekre.
         </p>
       </section>
 
@@ -779,8 +792,9 @@
           <li>Alagútban, mély bevágásban a jel elveszhet. Ilyenkor az app a
               két fix közti egyenessel számol.</li>
           <li>Egy hatósági rendszer a szakasz két fix pontja közti időt mérné,
-              és a hivatalos szakaszhosszal számolna; a te méréseddel ez néhány
-              km/h-n belül egyezik.</li>
+              és a hivatalos szakaszhosszal számolna. A te méréseddel ez
+              jellemzően néhány km/h-n belül egyezik, de az egyezés nem
+              garantált: az itt kapott érték becslés.</li>
           <li>A menet közben javasolt tempó a szakasz végéig <strong>légvonalban
               hátralévő távval</strong> számol, mert az útvonalat előre nem
               ismerjük. Kanyargós úton a valódi táv ennél hosszabb, ilyenkor a
@@ -798,9 +812,15 @@
       </a>
       <p class="muted small center">
         <a href="adatvedelem.html">Adatvédelmi tájékoztató</a> ·
-        <a href="adatvedelem.html#impresszum">Impresszum</a>
+        <a href="adatvedelem.html#impresszum">Impresszum</a> ·
+        <a href="adatvedelem.html#forrasok">Források és licencek</a>
       </p>
-      <p class="muted small center">Átlagsebesség.hu · nyílt forrású, szerver nélküli alkalmazás.</p>
+      <p class="muted small center">
+        Térkép- és sebességhatár-adatok: ©
+        <a href="https://www.openstreetmap.org/copyright" rel="noopener" target="_blank">OpenStreetMap</a>
+        közreműködők, ODbL.
+      </p>
+      <p class="muted small center">Átlagsebesség.hu · szerver nélküli alkalmazás.</p>
     </div>
   </section>
 

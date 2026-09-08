@@ -60,7 +60,7 @@
 
     <h2 class="jog-focim">Adatvédelmi tájékoztató</h2>
     <p class="muted small">
-      Hatályos: 2026. szeptember 4. · Ez a tájékoztató az
+      Hatályos: 2026. szeptember 8. · Ez a tájékoztató az
       <strong>atlagsebesseg.hu</strong> weboldalra és a belőle telepíthető
       alkalmazásra (PWA) vonatkozik.
     </p>
@@ -73,10 +73,11 @@
         készülékeden fut, a mérési adatok — helyzet, nyomvonal, sebesség,
         eredmény — a böngésző memóriájában maradnak, és a lap bezárásával
         nyomtalanul eltűnnek. Ezekhez mi soha nem férünk hozzá. A készüléken
-        egyetlen dolog marad meg tartósan: a választott téma (világos vagy
-        sötét). Két külső szolgáltatás felé indul kérés — a térképcsempékért
-        és a sebességhatárokért —, ezek a 4. pontban vannak felsorolva, és a
-        Haladó beállításokban kikapcsolhatók.
+        egyetlen dolog marad meg tartósan: a választott téma és az app saját
+        fájljainak gyorsítótára (hogy net nélkül is elinduljon). Külső
+        szolgáltató felé három ponton indul kérés — a tárhely, a
+        térképcsempék és a sebességhatárok —, ezeket a 4. pont sorolja fel;
+        az utóbbi kettő kikapcsolható.
       </p>
     </section>
 
@@ -134,6 +135,16 @@
         nem is olvassa senki rajtad kívül. <strong>Sütit (cookie-t) az oldal
         nem használ</strong>, és mérési adatot soha nem tárol.
       </p>
+      <h4 class="jog-alcim">Az app saját fájljainak gyorsítótára</h4>
+      <p>
+        Ezen kívül a böngésző <em>service worker</em> gyorsítótárában
+        eltárolódnak az alkalmazás saját fájljai (HTML, stílus, kód, ikonok,
+        betűtípus). Ettől indul el az app internet nélkül is. Ez a
+        gyorsítótár <strong>kizárólag a mi fájljainkat tartalmazza</strong>,
+        nem tárol rólad semmilyen adatot, és a böngészőadatok törlésével
+        vagy az alkalmazás eltávolításával eltűnik. Jogalapja ugyanaz: az
+        általad kifejezetten kért szolgáltatás működéséhez szükséges.
+      </p>
     </section>
 
     <section class="card">
@@ -144,6 +155,10 @@
         nincs ráhatásunk.
       </p>
 
+      <!-- ÉLESÍTÉS ELŐTT EGYEZTETENDŐ: ha az oldal nem GitHub Pages-en,
+           hanem a meglévő magyar tárhelyen fut, ezt a bekezdést és az
+           impresszum „Tárhely” sorát át kell írni a tényleges
+           szolgáltatóra. Lásd PUBLIKALAS.md, 7. gyorslista. -->
       <h4 class="jog-alcim">a) Tárhely — GitHub Pages</h4>
       <p>
         Az oldal fájljait a GitHub, Inc. (88 Colin P. Kelly Jr. Street, San
@@ -181,9 +196,13 @@
         terület koordinátáit.
       </p>
       <p class="figyelem">
-        Mindkettő kikapcsolható: a térkép rétege és a „Sebességhatárok
-        automatikus lekérése” kapcsoló is a Haladó beállítások között van.
-        Kikapcsolva semmilyen adat nem hagyja el a készüléket.
+        A b) és c) pont külön-külön kikapcsolható: a térképcsempék és a
+        „Sebességhatárok automatikus lekérése” kapcsolója is a Haladó
+        beállítások között van. Ha mindkettőt kikapcsolod, a megnyitott
+        oldalról <strong>nem indul több külső kérés</strong> — az a) pont
+        szerinti tárhely felé viszont már az oldal betöltésekor megtörtént a
+        kérés, ez nélkülözhetetlen ahhoz, hogy az oldal egyáltalán
+        betöltsön.
       </p>
     </section>
 
@@ -258,6 +277,51 @@
       </p>
     </section>
 
+    <section class="card" id="forrasok">
+      <h3 class="card-title">Források és licencek</h3>
+
+      <h4 class="jog-alcim">Térkép- és sebességhatár-adatok</h4>
+      <p>
+        Az útvonal menti sebességhatárok és a térkép adatai az
+        <strong>OpenStreetMapből</strong> származnak. Az adatbázis ©
+        <a href="https://www.openstreetmap.org/copyright" rel="noopener" target="_blank">OpenStreetMap</a>
+        közreműködők, és az
+        <a href="https://opendatacommons.org/licenses/odbl/"
+           rel="noopener" target="_blank">Open Database License (ODbL)</a>
+        feltételeivel érhető el. A világos témájú
+        térképcsempéket az OpenStreetMap Foundation, a sötét témájúakat a
+        <a href="https://carto.com/attributions" rel="noopener" target="_blank">CARTO</a>
+        szolgálja ki.
+      </p>
+
+      <h4 class="jog-alcim">Jogszabályok</h4>
+      <p>
+        A bírságtételek forrása a
+        <a href="https://net.jogtar.hu/jogszabaly?docid=a0700410.kor" rel="noopener" target="_blank">410/2007.
+        (XII. 29.) Korm. rendelet</a>. Az átlagsebesség-ellenőrző rendszer
+        fogalmát a 18/2008. (IV. 30.) GKM rendelet ismeri. Az oldalon
+        megjelenő összegek tájékoztató jellegűek; eltérés esetén a hatályos
+        jogszabályszöveg az irányadó.
+      </p>
+
+      <h4 class="jog-alcim">Felhasznált szabad szoftverek</h4>
+      <ul class="tick">
+        <li><strong>Leaflet</strong> (térkép) — BSD 2-Clause licenc,
+            © Volodymyr Agafonkin, CloudMade. A licenc szövege a kiadott
+            fájlok között: <code>vendor/leaflet/LICENSE</code>.</li>
+        <li><strong>JetBrains Mono</strong> (a számok betűtípusa) — SIL Open
+            Font License 1.1, © The JetBrains Mono Project Authors. Licenc:
+            <code>vendor/fonts/LICENSE</code>.</li>
+        <li><strong>Phosphor Icons</strong> (ikonok) — MIT licenc,
+            © Phosphor Icons. Az ikonok az oldal forrásába ágyazva
+            szerepelnek.</li>
+      </ul>
+      <p class="muted small">
+        Az alkalmazás saját kódjára külön licenc nem került meghirdetésre;
+        a felhasznált könyvtárak a fenti feltételekkel érhetők el.
+      </p>
+    </section>
+
     <section class="card" id="impresszum">
       <h3 class="card-title">Impresszum</h3>
       <p class="muted small">
@@ -273,6 +337,7 @@
         <dt>E-mail</dt><dd><a href="mailto:keresohirdetesek@gmail.com">keresohirdetesek@gmail.com</a></dd>
       </dl>
       <dl class="kv szeles">
+        <!-- ÉLESÍTÉS ELŐTT EGYEZTETENDŐ a tényleges tárhelyszolgáltatóval. -->
         <dt>Tárhely</dt><dd>GitHub, Inc. (GitHub Pages), 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, USA</dd>
         <dt>Szolgáltatás</dt><dd>atlagsebesseg.hu — ingyenes, regisztráció nélküli tájékoztató alkalmazás</dd>
       </dl>
@@ -285,6 +350,11 @@
 
     <p class="muted small center">
       <a href="index.html">Vissza az alkalmazáshoz</a>
+    </p>
+    <p class="muted small center">
+      Térkép- és sebességhatár-adatok: ©
+      <a href="https://www.openstreetmap.org/copyright" rel="noopener" target="_blank">OpenStreetMap</a>
+      közreműködők, ODbL.
     </p>
   </div>
 </main>

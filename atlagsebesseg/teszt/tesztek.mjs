@@ -1051,14 +1051,26 @@ async function infoTeszt(b) {
     jog: document.getElementById('info-jog').textContent,
     tabla: document.getElementById('info-tabla').innerText,
     sorok: document.querySelectorAll('#info-tabla tr, #info-tabla .jog-sor').length,
-    egyBirsag: document.body.innerText.includes('Egy szakasz, egy bírság'),
+    egyBirsag: document.body.innerText.includes('Egy áthaladás, egy bírság'),
+    teljesModell: document.body.innerText.includes('teljes szakasz egyetlen átlaga'),
+    osmLicenc: document.body.innerText.includes('Open Database License')
+      || document.body.innerText.includes('ODbL'),
+    jogszabalyLink: !!document.querySelector('a[href*="jogtar.hu"], a[href*="njt.hu"]'),
+    licencLink: !!document.querySelector('a[href="adatvedelem.html#forrasok"]'),
+    nincsNyiltForras: !document.body.innerText.includes('nyílt forrású'),
     muszerfal: document.body.innerText.includes('Miért mutat kevesebbet'),
     tarolas: document.body.innerText.includes('választott téma'),
     feltetel: document.body.innerText.includes('egyelőre nincs'),
   }));
   all('a jogszabály megnevezve', /410\/2007/.test(r.jog), r.jog);
   all('a bírságtáblázat kirajzolódik', r.tabla.length > 50, `${r.tabla.length} karakter`);
-  all('kimondja: egy szakasz, egy bírság', r.egyBirsag);
+  all('kimondja: egy áthaladás, egy bírság', r.egyBirsag);
+  all('a bírságkártya a teljes szakasz modelljét írja le', r.teljesModell);
+  all('fel van tüntetve az OpenStreetMap adatlicence', r.osmLicenc);
+  all('a jogszabály hivatalos forrása linkelve van', r.jogszabalyLink);
+  all('a források és licencek oldal linkelve van', r.licencLink);
+  all('nem állítja magáról, hogy nyílt forrású (nincs licencfájl)',
+      r.nincsNyiltForras);
   all('elmagyarázza a kilométeróra eltérését', r.muszerfal);
   all('kimondja, mit tárol', r.tarolas);
   all('feltételes fogalmazás a bevezetésről', r.feltetel);
@@ -1547,10 +1559,20 @@ async function jogiTeszt(b) {
     for (const kell of ['Tóth András', '4110 Biharkeresztes', '67255829-2-29',
                         '44535361', 'egyéni vállalkozó',
                         'keresohirdetesek@gmail.com', 'NAIH', 'localStorage',
-                        'Overpass', 'GitHub', 'OpenStreetMap', 'CARTO']) {
+                        'Overpass', 'GitHub', 'OpenStreetMap', 'CARTO',
+                        // kiadás előtti jogi minimum
+                        'service worker', 'Open Database License',
+                        '410/2007', 'Leaflet', 'JetBrains Mono',
+                        'Phosphor Icons', 'Források és licencek']) {
       all(`az oldal tartalmazza: ${kell}`, r.szoveg.includes(kell));
     }
     all('van impresszum-horgony', r.impresszum);
+    all('van források-horgony',
+        await j.evaluate(() => !!document.getElementById('forrasok')));
+    /* Az „egyáltalán semmilyen adat” túlígéret volt: a tárhely felé az
+       oldal betöltése maga is kérés. */
+    all('nem ígéri, hogy kikapcsolva semmilyen adat nem megy ki',
+        !/Kikapcsolva semmilyen adat/.test(r.szoveg));
     all('van visszaút az alkalmazásba', r.vissza);
     j.__hibak.length && all('nincs JS hiba (adatvédelem)', false, j.__hibak.join(' | '));
     await j.close();

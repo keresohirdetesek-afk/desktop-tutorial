@@ -346,6 +346,12 @@ EU-ban IAB TCF szerinti hozzájárulás-kezelő (CMP) kell mellé, és az
 ## 7. Gyorslista
 
 - [ ] Eldöntve: „A" (meglévő tárhely) vagy „B" (GitHub Pages)
+- [ ] **Az `adatvedelem.html` tárhelyszolgáltatója a valóságot írja.** Két
+      helyen szerepel — a 4/a pontban és az impresszum „Tárhely” sorában —,
+      mindkettőnél HTML-megjegyzés jelzi. Ma a GitHub, Inc. van bent; ha az
+      „A" utat választod, ezt a tényleges magyar szolgáltatóra kell írni,
+      különben az impresszum valótlant állít.
+- [ ] Az `adatvedelem.html` „Hatályos:” dátuma a kiadás napja
 - [ ] Fájlok kint, `teszt/` nélkül
 - [ ] `CNAME` a domainnel (csak „B" esetén)
 - [ ] DNS a négy GitHub-címre (csak „B" esetén)

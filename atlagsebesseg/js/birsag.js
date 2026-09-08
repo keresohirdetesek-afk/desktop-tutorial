@@ -14,7 +14,7 @@
 
 export const JOGSZABALY = {
   nev: '410/2007. (XII. 29.) Korm. rendelet',
-  ellenorizve: '2026. 08. 10.',
+  ellenorizve: '2026. 08. 10',
 };
 
 export const KATEGORIAK = [
