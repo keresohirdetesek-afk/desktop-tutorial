@@ -15,14 +15,22 @@ amit a mappa tartalmaz, azt kell kitenni egy HTTPS-t adó tárhelyre.
 | --- | --- |
 | A domain regisztrálva van | `atlagsebesseg.hu` → `193.201.189.221` |
 | `www.atlagsebesseg.hu` | ugyanoda mutat |
-| Ez **nem** GitHub Pages IP-cím | tehát ma valamelyik magyar tárhelyre mutat |
+| Névszerverek | `ns1.introdns.hu` (193.201.191.136), `ns2.introdns.hu` (138.68.90.93) |
+| A webkiszolgáló neve | `vtantalum.d3.hu` — megosztott tárhely |
 | A repó | `keresohirdetesek-afk/desktop-tutorial`, az app az `atlagsebesseg/` almappában |
-| Tesztek | 244 ellenőrzés, mind zöld |
+| Tesztek | 314 ellenőrzés, mind zöld |
 
-Két dolog fontos ebből:
+Ebből három dolog következik:
 
-1. **Nem kell domaint regisztrálni**, a név a tiéd, és már működik a DNS.
-2. Az app minden hivatkozása (`og:url`, `canonical`, `sitemap.xml`, a
+1. **Nem kell domaint regisztrálni**, a név a tiéd, és a DNS él.
+2. **A DNS és a webkiszolgáló ugyanannál a szolgáltatónál van.** A
+   névszerverek (`193.201.191.136`) és a webkiszolgáló (`193.201.189.221`)
+   egy IP-tartományban vannak, a kiszolgáló neve pedig `vtantalum.d3.hu`.
+   Ez azt jelenti, hogy a domain mögött **nagy valószínűséggel már van
+   tárhelycsomagod** — a fájlokat csak fel kell tölteni. A szolgáltató
+   nevét a számládon vagy a domain ügyfélkapujában találod; a névszerver
+   alapján `introdns.hu`, ami az INTRONET Kft.-hez köthető.
+3. Az app minden hivatkozása (`og:url`, `canonical`, `sitemap.xml`, a
    megosztható képre írt cím) **a tartomány gyökerét** feltételezi:
    `https://atlagsebesseg.hu/`. Ha almappába kerül, ezek hamis címre
    mutatnak.
@@ -31,7 +39,7 @@ Két dolog fontos ebből:
 
 ## 1. Melyik utat válaszd
 
-### „A” — a meglévő tárhelyre töltöd fel *(a leggyorsabb)*
+### „A” — a meglévő tárhelyre töltöd fel *(neked ez a kézenfekvő)*
 
 Ha az `atlagsebesseg.hu` mögött van fizetett tárhelyed (cPanel, Plesk vagy
 hasonló), akkor **semmit nem kell átállítani**: az `atlagsebesseg/` mappa
@@ -69,28 +77,104 @@ tartalmát felmásolod a webgyökérbe, és kész.
 
 ---
 
-## 2. „A” út — feltöltés meglévő tárhelyre
+## 2. „A” út — feltöltés a meglévő tárhelyre
 
-1. **Derítsd ki, hol van a tárhely.** A domain regisztrátorod
-   ügyfélkapujában látszik, hova mutat a DNS. A `193.201.189.221` egy
-   magyar szolgáltató kiszolgálója.
-2. **Kérj FTP/SFTP-hozzáférést**, ha még nincs.
-3. **Töltsd fel a mappa *tartalmát*** — nem magát a mappát — a webgyökérbe
-   (`public_html`, `www` vagy `htdocs`, szolgáltatófüggő):
-   ```
-   index.html          adatvedelem.html     manifest.webmanifest
-   sw.js               robots.txt           sitemap.xml
-   css/                js/                  icons/               vendor/
-   ```
-   A `teszt/` mappát, a `README.md`-t és ezt a `PUBLIKALAS.md`-t **ne**
-   töltsd fel: nem kell az élesbe, csak felesleges felület.
-4. **Kapcsold be a HTTPS-t** (Let's Encrypt) és a **HTTP → HTTPS
-   átirányítást**. GPS-hez kötelező: a böngésző nem titkosított oldalon
-   nem ad helyzetet.
-5. **Állíts be `www` → gyökér átirányítást** (vagy fordítva), hogy egyetlen
-   kanonikus cím legyen. Az app `canonical`-ja a `www` nélküli alakra
-   mutat.
+Ez a legrövidebb út: **a DNS már jó helyre mutat**, nincs mit átállítani,
+nincs terjedési várakozás. Csak a fájlok hiányoznak.
+
+### 2.1 Mit tölts fel
+
+A feltöltendő állomány a repó `atlagsebesseg/` mappája, **teszt és
+dokumentáció nélkül** — pontosan ez a 34 fájl:
+
+```
+.htaccess           index.html          adatvedelem.html
+manifest.webmanifest  sw.js             robots.txt          sitemap.xml
+css/app.css
+js/  (11 modul)     icons/ (5 fájl)     vendor/ (leaflet + fonts)
+```
+
+Ez a csomag külön ki van gyűjtve, és a teljes tesztkészlet lefut rajta
+önmagában is — tehát ha ezt felmásolod, semmi nem hiányzik.
+
+A `teszt/` mappát, a `README.md`-t és ezt a `PUBLIKALAS.md`-t **ne** töltsd
+fel: az élesben semmit nem csinálnak.
+
+### 2.2 A feltöltés menete
+
+1. **Lépj be a szolgáltató ügyfélkapujába.** A névszerver
+   (`ns1.introdns.hu`) alapján ez az INTRONET Kft. rendszere; a pontos
+   belépési címet a számlád vagy a domainregisztrációs visszaigazoló
+   levél tartalmazza.
+2. **Keresd meg a tárhelycsomagot.** Ha van, tartozik hozzá FTP-fiók vagy
+   fájlkezelő. Ha nincs tárhelycsomagod — csak a domain —, akkor vagy
+   rendelsz egyet, vagy a „B” utat választod (GitHub Pages, ingyenes).
+3. **Töltsd fel a fájlokat a webgyökérbe.** A mappa neve
+   szolgáltatófüggő: `public_html`, `www`, `web` vagy `htdocs`. Fontos,
+   hogy a **mappa tartalma** kerüljön oda, ne maga a mappa — az
+   `index.html`-nek közvetlenül a gyökérben kell lennie.
+4. **A rejtett fájlokat is töltsd fel.** A `.htaccess` ponttal kezdődik,
+   ezért sok FTP-kliens alapból elrejti. FileZillában:
+   *Kiszolgáló → Rejtett fájlok kényszerített megjelenítése*.
+5. **Kapcsold be a HTTPS-t** (Let's Encrypt) a vezérlőpultban. GPS-hez
+   kötelező: titkosítatlan oldalon a böngésző nem ad helyzetet.
 6. Ugorj a **4. fejezetre** (ellenőrzés).
+
+### 2.3 A `.htaccess`
+
+A csomagban van egy `.htaccess`, ami Apache alatt elintézi a következőket:
+
+- **HTTP → HTTPS** átirányítás,
+- **`www` → `www` nélküli** alak (az oldal `canonical`-ja ez),
+- helyes MIME-típus a `.webmanifest` és a `.woff2` fájloknak,
+- **a `sw.js` nem gyorsítótárazódik** — ez a legfontosabb sor: ha a
+  böngésző a régi service workert kapja vissza, az app frissítése hetekre
+  elakadhat,
+- tömörítés, könyvtárlistázás tiltása.
+
+Ha a szolgáltató nem Apache-ot használ (nginx vagy saját konfigurációjú
+LiteSpeed), a fájl hatástalan — akkor ugyanezt a vezérlőpultban vagy a
+támogatásnál kell kérni. **A `sw.js` gyorsítótárazásának tiltását akkor is
+érdemes elintézni.**
+
+### 2.4 Kötelező: a tárhelyszolgáltató neve a tájékoztatóban
+
+Az `adatvedelem.html` **két helyen** a GitHub, Inc.-et nevezi meg
+tárhelyszolgáltatóként (a 4/a pontban és az impresszum „Tárhely” sorában,
+mindkettő HTML-megjegyzéssel megjelölve). Ha a meglévő magyar tárhelyre
+töltesz fel, **ez valótlan állítás lesz** — az Elker tv. szerint a
+tárhelyszolgáltató megnevezése kötelező eleme az impresszumnak.
+
+A 4/a pont helyére ez a szöveg való (a szögletes zárójeles részeket a
+szolgáltatód cégadataira cserélve, amik a számládon szerepelnek):
+
+```html
+<h4 class="jog-alcim">a) Tárhely</h4>
+<p>
+  Az oldal fájljait a [Szolgáltató teljes cégneve] ([székhely címe])
+  szolgálja ki. A kiszolgálás során a szolgáltató naplózhatja a kérés
+  IP-címét, idejét és a böngésző azonosítóját — ez minden weboldalnál így
+  van, üzemeltetési és biztonsági célból.
+  <strong>Ezekhez a naplókhoz mi nem férünk hozzá.</strong> A szolgáltató
+  kiszolgálói Magyarországon vannak, tehát az adatok nem hagyják el az
+  Európai Gazdasági Térséget.
+</p>
+```
+
+Az impresszum „Tárhely” sorába pedig:
+
+```html
+<dt>Tárhely</dt><dd>[Szolgáltató teljes cégneve], [székhely], [e-mail]</dd>
+```
+
+Ha ezt megvan, írd át a tájékoztató tetején a „Hatályos:” dátumot a
+kiadás napjára.
+
+### 2.5 Ha nincs tárhelyed, csak a domain
+
+Ekkor a DNS-t kell a GitHub Pages felé fordítani — a névszerverek
+maradhatnak az `introdns.hu`-nál, csak az **A rekordokat** kell átírni a
+szolgáltató DNS-kezelőjében. A pontos értékek a 3.3 pontban.
 
 ---
 
