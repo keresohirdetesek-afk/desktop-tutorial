@@ -370,7 +370,38 @@ Az `adatvedelem.html` tetején álló „Hatályos: …" dátumot minden olyan
 változásnál át kell írni, ami az adatkezelést érinti — új külső szolgáltatás,
 hirdetés bekötése, új tárolt érték.
 
-### 5.3 Overpass API — ez a legvalószínűbb üzemeltetési gond
+### 5.3 Látogatottság: a kiszolgáló naplójából
+
+Az oldalon **nincs követőszkript és nincs süti**, ezért a látogatószámot a
+tárhely saját hozzáférési naplójából nézzük. A cPanel/Plesk vezérlőpultban
+ez általában **AWStats** vagy **Webalizer** néven van meg, a nyers naplók
+pedig letölthetők.
+
+**Mit ad:** látogatószám, oldalletöltés, honnan érkeztek (hivatkozó
+oldalak), böngésző és eszköz megoszlása, melyik oldal a népszerű.
+
+**Amit tudni kell róla, mert ez az app sajátossága:**
+
+- **A service worker miatt a visszatérő látogatók alig generálnak
+  kérést.** Az app fájljai a böngésző gyorsítótárában vannak. Szerencsére
+  a service worker *hálózat-először* tölt, tehát az induláskor mégis
+  megüti a szervert — de ha valakinek nincs térereje, a látogatása nem
+  látszik a naplóban.
+- **A botok felduzzasztják a számot.** Az AWStats szűri a ismert
+  keresőrobotokat, a nyers napló nem. Ha a szám gyanúsan nagy, ez az oka.
+- **Az „egyedi látogató” IP-alapú becslés.** Mobilhálózaton több
+  felhasználó oszthat egy IP-t, egy felhasználó pedig válthat wifi és
+  mobilnet közt — tehát tájékozódásra jó, pontos főre nem.
+- **A kezdőképernyőről indított app** ugyanúgy látszik, mint a böngészős
+  megnyitás: mindkettő rendes HTTP-kérés.
+
+**GDPR:** az adatvédelmi tájékoztató 4/a pontja kimondja, hogy a naplóból
+készülő összesített statisztikát megtekintjük, és megnevezi a jogalapot
+(jogos érdek). Ha erről a megoldásról később JS-alapú analitikára váltasz,
+**azt a pontot és a főoldal „nincs követőszkript” állítását is át kell
+írni** — különben az oldal valótlant állít magáról.
+
+### 5.4 Overpass API — ez a legvalószínűbb üzemeltetési gond
 
 Mérés közben az app **nagyjából 1200 méterenként** kér egy 1,8 km sugarú
 körre sebességhatárokat. Autópályán ez percenként két-három kérés, egy órányi
@@ -397,7 +428,7 @@ Amire figyelni kell:
   1200-ról feljebb véve (például 2500 m) felezhető a kérésszám, a
   pontosság érdemi romlása nélkül.
 
-### 5.4 Térképcsempék
+### 5.5 Térképcsempék
 
 Sötét témában a csempék a CARTO-tól jönnek, világosban az OpenStreetMap
 csempekiszolgálójától. Az OSM
@@ -406,7 +437,7 @@ tiltja a nagy forgalmú, kereskedelmi felhasználást. Ha az oldal komolyan
 beindul, ez a második dolog, amit ki kell váltani (fizetős csempeszolgáltató
 vagy saját proxy).
 
-### 5.5 Ha jön a hirdetés
+### 5.6 Ha jön a hirdetés
 
 A jelenlegi app **egyetlen sütit sem tesz le**. A hirdetéskód igen, ezért az
 EU-ban IAB TCF szerinti hozzájárulás-kezelő (CMP) kell mellé, és az
