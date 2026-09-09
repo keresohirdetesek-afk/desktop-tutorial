@@ -287,6 +287,26 @@ a GPS-es szimuláció, vagyis az app lényege nem működne.
 
 ## 4. Ellenőrzés publikálás után
 
+### 4.0 Először: a megosztási meta-adatok visszaállítása
+
+Amíg az `atlagsebesseg.hu` nem élt, a link megoszthatósága miatt az
+`index.html` két sora ideiglenesen a GitHub Pages-címre mutat. Ezeket a
+domain élesítésekor **vissza kell írni**, különben minden megosztott link
+és minden előnézeti kép a régi tesztcímre visz:
+
+```html
+<meta property="og:url"   content="https://atlagsebesseg.hu/">
+<meta property="og:image" content="https://atlagsebesseg.hu/icons/og.png">
+```
+
+Mindkét sor felett HTML-megjegyzés jelzi, hogy ideiglenes. A `canonical`
+már most is a végleges domainre mutat, azt nem kell bántani.
+
+Visszaállítás után a Facebook a régi adatokat gyorsítótárazva tartja: a
+<https://developers.facebook.com/tools/debug/> oldalon beillesztve az új
+címet és a **Scrape Again** gombbal lehet frissíttetni. Ugyanez WhatsApp
+és Messenger esetén magától frissül pár nap alatt.
+
 ### 4.1 Parancssorból
 
 ```bash
@@ -466,6 +486,9 @@ EU-ban IAB TCF szerinti hozzájárulás-kezelő (CMP) kell mellé, és az
       mindkettőnél HTML-megjegyzés jelzi. Ma a GitHub, Inc. van bent; ha az
       „A" utat választod, ezt a tényleges magyar szolgáltatóra kell írni,
       különben az impresszum valótlant állít.
+- [ ] **Az `index.html` `og:url` és `og:image` sora visszaáll
+      `https://atlagsebesseg.hu/`-ra** (lásd 4.0), utána Facebook
+      Sharing Debugger → Scrape Again
 - [ ] Az `adatvedelem.html` „Hatályos:” dátuma a kiadás napja
 - [ ] Fájlok kint, `teszt/` nélkül
 - [ ] `CNAME` a domainnel (csak „B" esetén)
