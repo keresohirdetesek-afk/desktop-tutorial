@@ -1058,6 +1058,8 @@ async function infoTeszt(b) {
     jogszabalyLink: !!document.querySelector('a[href*="jogtar.hu"], a[href*="njt.hu"]'),
     licencLink: !!document.querySelector('a[href="adatvedelem.html#forrasok"]'),
     nincsNyiltForras: !document.body.innerText.includes('nyílt forrású'),
+    nincsAnalitika: !document.body.innerText.includes('nincs analitika'),
+    naplo: document.body.innerText.includes('kiszolgáló saját naplójából'),
     muszerfal: document.body.innerText.includes('Miért mutat kevesebbet'),
     tarolas: document.body.innerText.includes('választott téma'),
     feltetel: document.body.innerText.includes('egyelőre nincs'),
@@ -1073,6 +1075,10 @@ async function infoTeszt(b) {
       r.nincsNyiltForras);
   all('elmagyarázza a kilométeróra eltérését', r.muszerfal);
   all('kimondja, mit tárol', r.tarolas);
+  /* A márkaígéret pontosan annyit mondjon, amennyi igaz: nincs
+     követőszkript és nincs süti — de a kiszolgáló naplóját nézzük. */
+  all('a főoldal nem ígér „nincs analitikát”', r.nincsAnalitika);
+  all('a főoldal kimondja a kiszolgálói naplót', r.naplo);
   all('feltételes fogalmazás a bevezetésről', r.feltetel);
   p.__hibak.length && all('nincs JS hiba (info)', false, p.__hibak.join(' | '));
   await p.close();
@@ -1573,6 +1579,16 @@ async function jogiTeszt(b) {
        oldal betöltése maga is kérés. */
     all('nem ígéri, hogy kikapcsolva semmilyen adat nem megy ki',
         !/Kikapcsolva semmilyen adat/.test(r.szoveg));
+    /* A látogatottságot a kiszolgáló naplójából nézzük, ezért az
+       „nincs analitika” és a „nem férünk hozzá a naplókhoz” állítás
+       nem maradhat: mindkettő valótlan lenne. */
+    all('nem állítja, hogy nincs analitika', !/nincs analitika/.test(r.szoveg));
+    all('nem állítja, hogy a naplókhoz nem fér hozzá',
+        !/naplókhoz mi nem férünk hozzá/.test(r.szoveg));
+    all('kimondja, hogy a naplóból nézi a látogatottságot',
+        /naplóból nézzük a látogatottságot/.test(r.szoveg));
+    all('megnevezi a jogalapot a statisztikához',
+        /jogos érdek/.test(r.szoveg));
     all('van visszaút az alkalmazásba', r.vissza);
     j.__hibak.length && all('nincs JS hiba (adatvédelem)', false, j.__hibak.join(' | '));
     await j.close();

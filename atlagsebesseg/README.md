@@ -318,7 +318,7 @@ minden olyan kiadásnál emeljük, ahol a fájllista változik.
 
 ## Tesztek
 
-A `teszt/tesztek.mjs` 314 ellenőrzést futtat végig 28 témában: bírságtáblázat
+A `teszt/tesztek.mjs` 320 ellenőrzést futtat végig 28 témában: bírságtáblázat
 sávonként, kapus és kézi mérés, megállás a végkapuban, GPS-ugrás és
 kiesés, tartható tempó, kalkulátor mindkét megadási módban, sebességprofil
 és nagyítás, megosztható kép, téma, elrendezés négy kijelzőszélességen és
@@ -367,7 +367,7 @@ atlagsebesseg/
 │   ├── limits.js       OSM/Overpass lekérés, maxspeed, szakaszokra bontás
 │   ├── map.js          Leaflet-térkép
 │   └── track.js        GPS-rögzítés, automatikus szakaszhatár-figyelés
-├── teszt/tesztek.mjs   szimulációs tesztkészlet (314 ellenőrzés)
+├── teszt/tesztek.mjs   szimulációs tesztkészlet (320 ellenőrzés)
 ├── vendor/leaflet/     a térképkönyvtár helyben (nem CDN)
 ├── adatvedelem.html    adatvédelmi tájékoztató és impresszum
 ├── PUBLIKALAS.md       lépésenkénti kiadási leírás
@@ -438,6 +438,11 @@ Amit a szövegeknek tartaniuk kell, és amit teszt is véd:
   kérés, és a két kapcsoló külön dolgot old ki.
 - **A service worker gyorsítótára is tárolás**, ezért a tájékoztató 3. pontja
   külön kimondja, mit tárol és miért.
+- **Látogatottság: kiszolgálói napló, nem szkript.** Nincs követőszkript és
+  nincs süti; a látogatószám a tárhely hozzáférési naplójából (AWStats vagy
+  hasonló) jön. Ezért nem szerepel sehol a „nincs analitika” állítás, és a
+  tájékoztató 4/a pontja kimondja a célt és a jogalapot. Ha ez később
+  JS-alapú analitikára változik, ezeket a szövegeket át kell írni.
 - **A tárhelyszolgáltató neve két helyen szerepel** az `adatvedelem.html`-ben,
   HTML-megjegyzéssel megjelölve. Ha nem GitHub Pages lesz a kiszolgáló, ezt
   élesítés előtt át kell írni — lásd `PUBLIKALAS.md` gyorslista.
