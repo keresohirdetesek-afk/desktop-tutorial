@@ -137,38 +137,26 @@ LiteSpeed), a fájl hatástalan — akkor ugyanezt a vezérlőpultban vagy a
 támogatásnál kell kérni. **A `sw.js` gyorsítótárazásának tiltását akkor is
 érdemes elintézni.**
 
-### 2.4 Kötelező: a tárhelyszolgáltató neve a tájékoztatóban
+### 2.4 A tárhelyszolgáltató neve a tájékoztatóban
 
-Az `adatvedelem.html` **két helyen** a GitHub, Inc.-et nevezi meg
-tárhelyszolgáltatóként (a 4/a pontban és az impresszum „Tárhely” sorában,
-mindkettő HTML-megjegyzéssel megjelölve). Ha a meglévő magyar tárhelyre
-töltesz fel, **ez valótlan állítás lesz** — az Elker tv. szerint a
-tárhelyszolgáltató megnevezése kötelező eleme az impresszumnak.
+Az Elker tv. szerint a **tárhelyszolgáltató megnevezése kötelező eleme az
+impresszumnak**, és az adatvédelmi tájékoztatónak is meg kell neveznie, ki
+kezeli a kiszolgálói naplót.
 
-A 4/a pont helyére ez a szöveg való (a szögletes zárójeles részeket a
-szolgáltatód cégadataira cserélve, amik a számládon szerepelnek):
+Az `adatvedelem.html` **két helyen** nevezi meg a szolgáltatót — a 4/a
+pontban és az impresszum „Tárhely” sorában. Mindkettőben az
+**INTRONET Kft. (1032 Budapest, Kenyeres utca 14.)** szerepel, a domain
+névszerverei (`ns1.introdns.hu`, `ns2.introdns.hu`) és a webkiszolgáló
+IP-tartománya alapján.
 
-```html
-<h4 class="jog-alcim">a) Tárhely</h4>
-<p>
-  Az oldal fájljait a [Szolgáltató teljes cégneve] ([székhely címe])
-  szolgálja ki. A kiszolgálás során a szolgáltató naplózhatja a kérés
-  IP-címét, idejét és a böngésző azonosítóját — ez minden weboldalnál így
-  van, üzemeltetési és biztonsági célból.
-  <strong>Ezekhez a naplókhoz mi nem férünk hozzá.</strong> A szolgáltató
-  kiszolgálói Magyarországon vannak, tehát az adatok nem hagyják el az
-  Európai Gazdasági Térséget.
-</p>
-```
+> **Ezt a számládon ellenőrizd.** Ha a tárhelyed más szolgáltatónál van,
+> mindkét helyen a tényleges cégnévre és székhelyre kell javítani — a
+> 4/a pontban HTML-megjegyzés jelzi a helyét. Ugyanitt az az állítás is
+> szerepel, hogy a kiszolgálók Magyarországon vannak: ha a szolgáltatód
+> EGT-n kívül üzemeltet, ezt a mondatot is módosítani kell.
 
-Az impresszum „Tárhely” sorába pedig:
-
-```html
-<dt>Tárhely</dt><dd>[Szolgáltató teljes cégneve], [székhely], [e-mail]</dd>
-```
-
-Ha ezt megvan, írd át a tájékoztató tetején a „Hatályos:” dátumot a
-kiadás napjára.
+Kiadáskor írd át a tájékoztató tetején a „Hatályos:” dátumot a kiadás
+napjára.
 
 ### 2.5 Ha nincs tárhelyed, csak a domain
 
@@ -287,25 +275,20 @@ a GPS-es szimuláció, vagyis az app lényege nem működne.
 
 ## 4. Ellenőrzés publikálás után
 
-### 4.0 Először: a megosztási meta-adatok visszaállítása
+### 4.0 A megosztási meta-adatok
 
-Amíg az `atlagsebesseg.hu` nem élt, a link megoszthatósága miatt az
-`index.html` két sora ideiglenesen a GitHub Pages-címre mutat. Ezeket a
-domain élesítésekor **vissza kell írni**, különben minden megosztott link
-és minden előnézeti kép a régi tesztcímre visz:
+**Elvégezve.** Az `og:url` és az `og:image` a végleges domainre mutat:
 
 ```html
 <meta property="og:url"   content="https://atlagsebesseg.hu/">
 <meta property="og:image" content="https://atlagsebesseg.hu/icons/og.png">
 ```
 
-Mindkét sor felett HTML-megjegyzés jelzi, hogy ideiglenes. A `canonical`
-már most is a végleges domainre mutat, azt nem kell bántani.
-
-Visszaállítás után a Facebook a régi adatokat gyorsítótárazva tartja: a
-<https://developers.facebook.com/tools/debug/> oldalon beillesztve az új
-címet és a **Scrape Again** gombbal lehet frissíttetni. Ugyanez WhatsApp
-és Messenger esetén magától frissül pár nap alatt.
+A Facebook viszont gyorsítótárazza a korábban beolvasott adatokat. Ha a
+linket már megosztottad a régi címmel, a
+<https://developers.facebook.com/tools/debug/> oldalon illeszd be az
+`https://atlagsebesseg.hu/` címet, és nyomd meg a **Scrape Again** gombot.
+Messenger és WhatsApp magától frissül pár nap alatt.
 
 ### 4.1 Parancssorból
 
@@ -480,23 +463,23 @@ EU-ban IAB TCF szerinti hozzájárulás-kezelő (CMP) kell mellé, és az
 
 ## 7. Gyorslista
 
-- [ ] Eldöntve: „A" (meglévő tárhely) vagy „B" (GitHub Pages)
+- [x] Eldöntve: **„A" út** — feltöltés a meglévő tárhelyre. A DNS marad
+      változatlanul, az `MX` (`mxmail.hu`) és az `SPF` sem mozdul, tehát a
+      levelezés nem sérül.
+- [x] Az `index.html` `og:url` és `og:image` sora a végleges domainre mutat
+- [x] Az `adatvedelem.html` „Hatályos:” dátuma a kiadás napja
 - [ ] **Az `adatvedelem.html` tárhelyszolgáltatója a valóságot írja.** Két
-      helyen szerepel — a 4/a pontban és az impresszum „Tárhely” sorában —,
-      mindkettőnél HTML-megjegyzés jelzi. Ma a GitHub, Inc. van bent; ha az
-      „A" utat választod, ezt a tényleges magyar szolgáltatóra kell írni,
-      különben az impresszum valótlant állít.
-- [ ] **Az `index.html` `og:url` és `og:image` sora visszaáll
-      `https://atlagsebesseg.hu/`-ra** (lásd 4.0), utána Facebook
-      Sharing Debugger → Scrape Again
-- [ ] Az `adatvedelem.html` „Hatályos:” dátuma a kiadás napja
+      helyen szerepel — a 4/a pontban és az impresszum „Tárhely” sorában.
+      Jelenleg az INTRONET Kft. van bent a névszerverek alapján;
+      **a számlán ellenőrizendő**, mert az impresszum különben valótlant
+      állít (lásd 2.4).
 - [ ] Fájlok kint, `teszt/` nélkül
-- [ ] `CNAME` a domainnel (csak „B" esetén)
-- [ ] DNS a négy GitHub-címre (csak „B" esetén)
 - [ ] HTTPS él, HTTP átirányít
 - [ ] `www` és a gyökér közül az egyik átirányít a másikra
 - [ ] Mind a nyolc kulcsfájl `200`-at ad
 - [ ] Tesztkészlet lefutott az éles cím ellen
 - [ ] Telefonos kézi próba megvolt (telepítés, mérés, megállás, offline)
 - [ ] Link-előnézet rendben Messengerben
+- [ ] Facebook Sharing Debugger → **Scrape Again** a végleges címre
 - [ ] Search Console tulajdon + sitemap beadva
+- [ ] AWStats/Webalizer bekapcsolva a vezérlőpultban (lásd 5.3)

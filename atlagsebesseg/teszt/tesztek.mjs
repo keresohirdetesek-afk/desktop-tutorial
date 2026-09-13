@@ -1565,7 +1565,7 @@ async function jogiTeszt(b) {
     for (const kell of ['Tóth András', '4110 Biharkeresztes', '67255829-2-29',
                         '44535361', 'egyéni vállalkozó',
                         'keresohirdetesek@gmail.com', 'NAIH', 'localStorage',
-                        'Overpass', 'GitHub', 'OpenStreetMap', 'CARTO',
+                        'Overpass', 'Tárhely', 'OpenStreetMap', 'CARTO',
                         // kiadás előtti jogi minimum
                         'service worker', 'Open Database License',
                         '410/2007', 'Leaflet', 'JetBrains Mono',
@@ -1573,6 +1573,22 @@ async function jogiTeszt(b) {
       all(`az oldal tartalmazza: ${kell}`, r.szoveg.includes(kell));
     }
     all('van impresszum-horgony', r.impresszum);
+    /* Az Elker tv. szerint a tárhelyszolgáltató megnevezése kötelező. A
+       konkrét céget nem rögzítjük ide — az a számlától függ —, de üresen
+       nem maradhat, és a GitHub sem maradhat benne, mert az oldal a saját
+       magyar tárhelyén fut. */
+    {
+      const tarhely = await j.evaluate(() => {
+        const dt = [...document.querySelectorAll('#impresszum dt')]
+          .find((e) => e.textContent.trim() === 'Tárhely');
+        return dt && dt.nextElementSibling
+          ? dt.nextElementSibling.textContent.trim() : '';
+      });
+      all('az impresszum megnevezi a tárhelyszolgáltatót',
+          tarhely.length > 10, tarhely);
+      all('a tárhelyszolgáltató nem a GitHub',
+          !/GitHub/.test(r.szoveg), tarhely);
+    }
     all('van források-horgony',
         await j.evaluate(() => !!document.getElementById('forrasok')));
     /* Az „egyáltalán semmilyen adat” túlígéret volt: a tárhely felé az
