@@ -145,19 +145,15 @@ kezeli a kiszolgálói naplót.
 
 Az `adatvedelem.html` **két helyen** nevezi meg a szolgáltatót — a 4/a
 pontban és az impresszum „Tárhely” sorában. Mindkettőben az
-**Etalon Tárhely (etalontarhely.hu)** szerepel: a cPanel kiszolgálóneve
-`i7.etalontarhely.hu`, tehát a tárhelyet ők adják. A domain névszerverei
-(`ns1.introdns.hu`) ettől független szolgáltatóhoz tartoznak — az
-impresszumba a **tárhelyszolgáltató** való, nem a domainregisztrátor.
+**INTRONET Kft. (1032 Budapest, Kenyeres utca 14.)** szerepel, a
+tulajdonos megerősítése szerint. A cPanel kiszolgálóneve
+(`i7.etalontarhely.hu`) megtévesztő: az csak a gép neve, a szerződéses
+tárhelyszolgáltató az INTRONET.
 
-> **Hiányzik a teljes cégadat.** Az Elker tv. 4. § h) pontja a
-> tárhelyszolgáltató **nevét, székhelyét és e-mail címét** kéri. A
-> szolgáltatás márkaneve nem elég: a tárhelyszámláról vagy az
-> etalontarhely.hu impresszumából ki kell egészíteni a cégnévvel,
-> székhellyel és e-mail címmel. Mindkét helyet HTML-megjegyzés jelzi.
-> Ugyanitt az az állítás is szerepel, hogy a kiszolgálók
-> Magyarországon vannak — ha a szolgáltató EGT-n kívül üzemeltet, ezt a
-> mondatot is módosítani kell.
+> Ha a tárhelyet később másik szolgáltatóhoz viszed, **mindkét helyen**
+> javítani kell — a 4/a pontot HTML-megjegyzés jelöli. Ugyanitt az az
+> állítás is szerepel, hogy a kiszolgálók Magyarországon vannak: ha a
+> szolgáltató EGT-n kívül üzemeltet, ezt a mondatot is módosítani kell.
 
 Kiadáskor írd át a tájékoztató tetején a „Hatályos:” dátumot a kiadás
 napjára.
@@ -472,10 +468,8 @@ EU-ban IAB TCF szerinti hozzájárulás-kezelő (CMP) kell mellé, és az
       levelezés nem sérül.
 - [x] Az `index.html` `og:url` és `og:image` sora a végleges domainre mutat
 - [x] Az `adatvedelem.html` „Hatályos:” dátuma a kiadás napja
-- [ ] **A tárhelyszolgáltató teljes cégadata** (cégnév, székhely, e-mail)
-      bekerül az `adatvedelem.html` két helyére. Ma csak az „Etalon
-      Tárhely" márkanév van bent — az Elker tv. 4. § h) többet kér
-      (lásd 2.4).
+- [x] **A tárhelyszolgáltató** az `adatvedelem.html` két helyén az
+      INTRONET Kft. — a tulajdonos megerősítette (lásd 2.4)
 - [x] Fájlok kint, `teszt/` nélkül
 - [ ] A feltöltött `.zip` törölve a kiszolgálóról
 - [ ] Az `atlagsebesseg.hu` tényleg a feltöltés mappáját szolgálja ki

@@ -1,7 +1,7 @@
 {
   "name": "Átlagsebesség.hu",
   "short_name": "Átlagsebesség",
-  "description": "Nézd meg, hogyan működne nálad az átlagsebesség-mérés, ha Magyarországon a jelenleg egyeztetett rendszer bevezetésre kerül. Nincs regisztráció, nem követünk, csak számolunk.",
+  "description": "Nézd meg, hogyan működne nálad az átlagsebesség-mérés, ha Magyarországon bevezetnek ilyen rendszert. Nincs regisztráció, nem követünk, csak számolunk.",
   "lang": "hu",
   "dir": "ltr",
   "start_url": ".",
