@@ -145,15 +145,19 @@ kezeli a kiszolgálói naplót.
 
 Az `adatvedelem.html` **két helyen** nevezi meg a szolgáltatót — a 4/a
 pontban és az impresszum „Tárhely” sorában. Mindkettőben az
-**INTRONET Kft. (1032 Budapest, Kenyeres utca 14.)** szerepel, a domain
-névszerverei (`ns1.introdns.hu`, `ns2.introdns.hu`) és a webkiszolgáló
-IP-tartománya alapján.
+**Etalon Tárhely (etalontarhely.hu)** szerepel: a cPanel kiszolgálóneve
+`i7.etalontarhely.hu`, tehát a tárhelyet ők adják. A domain névszerverei
+(`ns1.introdns.hu`) ettől független szolgáltatóhoz tartoznak — az
+impresszumba a **tárhelyszolgáltató** való, nem a domainregisztrátor.
 
-> **Ezt a számládon ellenőrizd.** Ha a tárhelyed más szolgáltatónál van,
-> mindkét helyen a tényleges cégnévre és székhelyre kell javítani — a
-> 4/a pontban HTML-megjegyzés jelzi a helyét. Ugyanitt az az állítás is
-> szerepel, hogy a kiszolgálók Magyarországon vannak: ha a szolgáltatód
-> EGT-n kívül üzemeltet, ezt a mondatot is módosítani kell.
+> **Hiányzik a teljes cégadat.** Az Elker tv. 4. § h) pontja a
+> tárhelyszolgáltató **nevét, székhelyét és e-mail címét** kéri. A
+> szolgáltatás márkaneve nem elég: a tárhelyszámláról vagy az
+> etalontarhely.hu impresszumából ki kell egészíteni a cégnévvel,
+> székhellyel és e-mail címmel. Mindkét helyet HTML-megjegyzés jelzi.
+> Ugyanitt az az állítás is szerepel, hogy a kiszolgálók
+> Magyarországon vannak — ha a szolgáltató EGT-n kívül üzemeltet, ezt a
+> mondatot is módosítani kell.
 
 Kiadáskor írd át a tájékoztató tetején a „Hatályos:” dátumot a kiadás
 napjára.
@@ -468,12 +472,14 @@ EU-ban IAB TCF szerinti hozzájárulás-kezelő (CMP) kell mellé, és az
       levelezés nem sérül.
 - [x] Az `index.html` `og:url` és `og:image` sora a végleges domainre mutat
 - [x] Az `adatvedelem.html` „Hatályos:” dátuma a kiadás napja
-- [ ] **Az `adatvedelem.html` tárhelyszolgáltatója a valóságot írja.** Két
-      helyen szerepel — a 4/a pontban és az impresszum „Tárhely” sorában.
-      Jelenleg az INTRONET Kft. van bent a névszerverek alapján;
-      **a számlán ellenőrizendő**, mert az impresszum különben valótlant
-      állít (lásd 2.4).
-- [ ] Fájlok kint, `teszt/` nélkül
+- [ ] **A tárhelyszolgáltató teljes cégadata** (cégnév, székhely, e-mail)
+      bekerül az `adatvedelem.html` két helyére. Ma csak az „Etalon
+      Tárhely" márkanév van bent — az Elker tv. 4. § h) többet kér
+      (lásd 2.4).
+- [x] Fájlok kint, `teszt/` nélkül
+- [ ] A feltöltött `.zip` törölve a kiszolgálóról
+- [ ] Az `atlagsebesseg.hu` tényleg a feltöltés mappáját szolgálja ki
+      (addon domain gyökere), nem almappaként érhető el
 - [ ] HTTPS él, HTTP átirányít
 - [ ] `www` és a gyökér közül az egyik átirányít a másikra
 - [ ] Mind a nyolc kulcsfájl `200`-at ad
