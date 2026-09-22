@@ -999,16 +999,77 @@ async function exportJSON() {
   toast(`Mentés kész (${(blob.size / 1048576).toFixed(1).replace('.', ',')} MB).`);
 }
 
+/**
+ * A visszatöltés hibáit érdemes névre szólóan megmondani: a felhasználó a
+ * terepen nem tud mit kezdeni egy „unterminated string” üzenettel.
+ */
+function describeImportProblem(text, err) {
+  const size = text.length;
+  const head = text.slice(0, 400).trim();
+
+  if (!size) return 'A fájl üres (0 bájt). Valószínűleg nem sikerült a mentés kiírása.';
+  if (head.startsWith('<?xml') || head.startsWith('<gpx')) {
+    return 'Ez egy GPX-fájl, az csak a nyomvonalat tartalmazza. '
+      + 'A visszatöltéshez a „Teljes mentés (JSON)” gombbal készült fájl kell.';
+  }
+  if (/"type"\s*:\s*"FeatureCollection"/.test(head)) {
+    return 'Ez egy GeoJSON-fájl, az csak a vonalakat tartalmazza. '
+      + 'A visszatöltéshez a „Teljes mentés (JSON)” gombbal készült fájl kell.';
+  }
+  if (head.startsWith('<')) return 'Ez nem mentésfájl, hanem egy weboldal vagy XML.';
+
+  const m = /position (\d+)/i.exec(err.message || '');
+  const pos = m ? Number(m[1]) : null;
+  const truncated = /unterminated|unexpected end/i.test(err.message || '');
+
+  if (truncated && head.startsWith('{')) {
+    const amount = size < 1048576
+      ? `${size} karakter`
+      : `${(size / 1048576).toFixed(2).replace('.', ',')} MB`;
+    return `A mentésfájl csonka: ${amount} után véget ér${pos != null ? ` (a ${pos}. karakternél)` : ''}. `
+      + 'A letöltés vagy a másolás/küldés félbeszakadt. Készítsen új mentést azon a készüléken, '
+      + 'ahol az adatok vannak, és várja meg a letöltés végét, mielőtt továbbküldi.';
+  }
+  return 'A fájl nem olvasható mentésként: ' + (err.message || 'ismeretlen hiba');
+}
+
 async function importJSON(file) {
+  let text = '';
   try {
-    const data = JSON.parse(await file.text());
-    if (!data.session) throw new Error('ismeretlen fájlformátum');
-    const oldId = data.session.id;
+    text = await file.text();
+  } catch (err) {
+    toast('A fájl nem olvasható: ' + err.message, 'error');
+    return;
+  }
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (err) {
+    const message = describeImportProblem(text, err);
+    await modal({ title: 'A visszatöltés nem sikerült', text: message, okText: 'Értem' });
+    return;
+  }
+
+  try {
+    if (!data.session) {
+      const isGeo = data.type === 'FeatureCollection';
+      await modal({
+        title: 'A visszatöltés nem sikerült',
+        text: (isGeo
+          ? 'Ez egy GeoJSON-fájl, az csak a vonalakat tartalmazza (fotók és hangjegyzetek nélkül). '
+          : 'A fájl érvényes JSON, de nincs benne bejárás. ')
+          + 'A visszatöltéshez a „Teljes mentés (JSON)” gombbal készült fájl kell.',
+        okText: 'Értem',
+      });
+      return;
+    }
     const session = { ...data.session, id: db.uid(), name: data.session.name + ' (visszatöltve)' };
     await db.saveSession(session);
 
     for (const p of data.points || []) await db.addPoint({ ...p, sessionId: session.id });
 
+    let restored = 0;
     for (const raw of data.items || []) {
       const item = { ...raw, id: db.uid(), sessionId: session.id };
       for (const key of ['photo', 'flat', 'thumb', 'audio']) {
@@ -1017,12 +1078,12 @@ async function importJSON(file) {
         }
       }
       await db.saveItem(item);
+      restored++;
     }
-    void oldId;
-    toast('Mentés visszatöltve.');
+    toast(`Mentés visszatöltve: ${restored} elem, ${(data.points || []).length} nyomvonalpont.`);
     await openSession(session.id);
   } catch (err) {
-    toast('A visszatöltés nem sikerült: ' + err.message, 'error');
+    toast('A visszatöltés félbeszakadt: ' + err.message, 'error');
   }
 }
 
