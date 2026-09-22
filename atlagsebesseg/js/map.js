@@ -6,20 +6,18 @@ import { sotetE, temaFigyel } from './tema.js';
 
 const L = window.L;
 
-/* Két csempekészlet: sötét témában a világos térkép vakító folt lenne a
-   képernyőn, éjszakai vezetésnél pedig egyenesen zavaró. Mindkettő
-   ingyenes és kulcs nélküli.                                          */
+/* Egyetlen csempekészlet, az OpenStreetMapé. Sötét témában nem másik
+   szolgáltatótól kérünk sötét térképet, hanem CSS-szűrővel sötétítjük
+   ugyanezeket a csempéket (lásd `.csempe-ejszaka` az app.css-ben).
+
+   Korábban a CARTO `dark_all` készlete adta a sötét változatot, de az
+   API-kulcshoz kötötté vált, és a térképre „API KEY REQUIRED" felirat
+   került. A szűrős megoldásnak két előnye is van a kulcs beszerzéséhez
+   képest: nem kell kulcsot beégetni egy nyilvános, statikus oldalba, és
+   eggyel kevesebb külső szolgáltató felé indul kérés.                 */
 export const CSEMPE = {
-  vilagos: {
-    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attrib: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> közreműködők',
-  },
-  sotet: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attrib: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> közreműködők, ' +
-            '© <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd',
-  },
+  url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  attrib: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> közreműködők',
   maxZoom: 19,
 };
 
@@ -56,22 +54,22 @@ export class Terkep {
 
   csempekBe() {
     if (this.csempeReteg) return;
-    const keszlet = sotetTema() ? CSEMPE.sotet : CSEMPE.vilagos;
-    this.csempeReteg = L.tileLayer(keszlet.url, {
+    this.csempeReteg = L.tileLayer(CSEMPE.url, {
       maxZoom: CSEMPE.maxZoom,
-      attribution: keszlet.attrib,
-      subdomains: keszlet.subdomains || 'abc',
+      attribution: CSEMPE.attrib,
     }).addTo(this.map);
-    this.csempeSotet = sotetTema();
+    this.ejszakaFrissit();
   }
 
-  /** Témaváltáskor cseréljük a csempekészletet. */
+  /* A sötétítés csak a csempékre vonatkozik: a nyomvonal, a jelölők és a
+     feliratok külön rétegen vannak, azokat a szűrő nem érinti. */
+  ejszakaFrissit() {
+    this.map.getContainer().classList.toggle('csempe-ejszaka', sotetTema());
+  }
+
+  /** Témaváltáskor elég a sötétítést ki-be kapcsolni; a csempék ugyanazok. */
   temaKovetes() {
-    temaFigyel(() => {
-      if (!this.csempeReteg || this.csempeSotet === sotetTema()) return;
-      this.csempekKi();
-      this.csempekBe();
-    });
+    temaFigyel(() => this.ejszakaFrissit());
   }
 
   csempekKi() {

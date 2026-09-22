@@ -104,8 +104,16 @@ async function ujLap(b, { tema = 'sotet', szelesseg = 390, gps = null } = {}) {
     }
   });
   await p.route('**/tile.openstreetmap.org/**', (r) => r.abort());
-  await p.route('**/basemaps.cartocdn.com/**', (r) => r.abort());
   await p.route('**/interpreter**', (r) => r.abort());
+  /* A sötét csempéket korábban a CARTO adta, és kulcskötelessé vált: a
+     térképre „API KEY REQUIRED" felirat került. Most CSS-szűrő sötétít,
+     tehát csempéért SEHOVA nem mehet kérés az OSM-en kívül. Bármilyen
+     idegen csempekérést rögzítünk, hogy a hiba ne térhessen vissza. */
+  p.__idegenCsempe = [];
+  for (const minta of ['**/*.cartocdn.com/**', '**/*.stadiamaps.com/**',
+                       '**/*.arcgisonline.com/**', '**/*.mapbox.com/**']) {
+    await p.route(minta, (r) => { p.__idegenCsempe.push(r.request().url()); r.abort(); });
+  }
   await p.addInitScript((t) => {
     try { localStorage.setItem('atlagsebesseg-tema', t); } catch { /* privát */ }
   }, tema);
@@ -713,6 +721,24 @@ async function elrendezesTeszt(b) {
         return h.scrollWidth > h.clientWidth + 1;
       });
       all(`${sz}px ${tema}: a szóvédjegy nincs levágva`, !fejlec);
+
+      /* Sötét témában a csempéket CSS sötétíti, nem másik szolgáltató.
+         Két dolgot kell látni: a szűrő osztálya a térképen van, és nem
+         indult kérés idegen csempeszolgáltató felé. */
+      if (sz === 390) {
+        await p.click('#tabs .tab[data-scr="scr-meres"]');
+        /* A térkép csak az élő nézet első megjelenítésekor jön létre —
+           addig a Leaflet nulla méretet mérne. */
+        await p.evaluate(() => window.atlagsebesseg.eloNezet(true));
+        await p.waitForSelector('#meres-elo:not([hidden])');
+        await p.waitForTimeout(200);
+        const ejszaka = await p.evaluate(() =>
+          !!document.querySelector('.leaflet-container.csempe-ejszaka'));
+        all(`${tema}: a csempe-sötétítés ${tema === 'sotet' ? 'be' : 'ki'} van kapcsolva`,
+            ejszaka === (tema === 'sotet'));
+        all(`${tema}: nincs kérés idegen csempeszolgáltató felé`,
+            p.__idegenCsempe.length === 0, p.__idegenCsempe.join(','));
+      }
       /* Az élő nézet rejtett elemben ül, a fenti bejárás ezért nem látja.
          A térkép alatti gombsor pont így tudott kilógni a képernyőről. */
       await p.click('#tabs .tab[data-scr="scr-meres"]');
@@ -1565,7 +1591,7 @@ async function jogiTeszt(b) {
     for (const kell of ['Tóth András', '4110 Biharkeresztes', '67255829-2-29',
                         '44535361', 'egyéni vállalkozó',
                         'keresohirdetesek@gmail.com', 'NAIH', 'localStorage',
-                        'Overpass', 'Tárhely', 'OpenStreetMap', 'CARTO',
+                        'Overpass', 'Tárhely', 'OpenStreetMap',
                         // kiadás előtti jogi minimum
                         'service worker', 'Open Database License',
                         '410/2007', 'Leaflet', 'JetBrains Mono',

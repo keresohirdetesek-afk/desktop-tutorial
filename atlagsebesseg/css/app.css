@@ -1120,6 +1120,19 @@ a.hirdetes:hover, a.hirdetes:focus-visible { border-color: var(--accent); }
 .leaflet-container { background: var(--surface-2); font: inherit; }
 .leaflet-control-attribution { font-size: 10px; }
 
+/* Sötét témában ugyanazokat az OpenStreetMap-csempéket sötétítjük, nem
+   másik szolgáltatótól kérünk éjszakai térképet. A szűrő kizárólag a
+   csempepanelre hat: a nyomvonal, a jelölők, a vezérlők és az
+   attribúció külön rétegen vannak, azok érintetlenek.
+
+   A sorrend számít. Az `invert` sötétre fordítja a lapot, de a színeket
+   is a komplementerükre viszi (a kék víz narancs lenne); ezt teszi
+   helyre a `hue-rotate(180deg)`. A maradék három a fényerőt és a
+   telítettséget húzza vissza, hogy éjszakai vezetésnél ne vakítson. */
+.csempe-ejszaka .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.86) contrast(0.92) saturate(0.55);
+}
+
 /* ------------------------------------------- sebességhatár-választó */
 
 /* A táblára koppintva nyílik; ugyanez a lap szolgálja ki a kalkulátor
