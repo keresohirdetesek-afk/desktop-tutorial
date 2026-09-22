@@ -2,7 +2,8 @@
 // A bejárások adatai IndexedDB-ben vannak, azokat a service worker nem érinti.
 
 const PREFIX = 'utvonalbejaras-';
-const CACHE = PREFIX + 'v2';
+const CACHE = PREFIX + 'v3';
+const TILE_CACHE = PREFIX + 'tiles';  // a térképcsempéket az alkalmazás kezeli
 const ASSETS = [
   './',
   'index.html',
@@ -14,6 +15,7 @@ const ASSETS = [
   'js/media.js',
   'js/editor.js',
   'js/trackedit.js',
+  'js/tiles.js',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/icon-192.png',
@@ -38,7 +40,8 @@ self.addEventListener('activate', (e) => {
         // CSAK a saját korábbi verzióink törölhetők: a GitHub Pages-en több
         // alkalmazás osztozik ugyanazon az eredeten, az ő gyorsítótáruk nem
         // a miénk.
-        keys.filter((k) => k.startsWith(PREFIX) && k !== CACHE).map((k) => caches.delete(k))
+        keys.filter((k) => k.startsWith(PREFIX) && k !== CACHE && k !== TILE_CACHE)
+          .map((k) => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );

@@ -1,4 +1,6 @@
-// GPS: nyomvonal rögzítés, számítások, rajzolás, GPX export
+// GPS: nyomvonal rögzítés, számítások, rajzolás, GPX/GeoJSON export
+
+import { getTile, tilesEnabled, TILE_SIZE, ATTRIBUTION } from './tiles.js';
 
 const R = 6371000; // Föld sugara méterben
 
@@ -231,6 +233,76 @@ export function currentPosition(timeout = 8000, maximumAge = 0) {
   });
 }
 
+/* ------------------------------------------------------ Web Mercator */
+
+/** Földrajzi koordináta → [0,1] tartományú világkoordináta. */
+export function mercator(lat, lon) {
+  const clamped = Math.max(-85.05112878, Math.min(85.05112878, lat));
+  const s = Math.sin((clamped * Math.PI) / 180);
+  return {
+    x: (lon + 180) / 360,
+    y: 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI),
+  };
+}
+
+/** Világkoordináta → földrajzi koordináta. */
+export function unmercator(x, y) {
+  return {
+    lon: x * 360 - 180,
+    lat: (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI,
+  };
+}
+
+/**
+ * Térképcsempék kirajzolása a nyomvonal alá. A nagyítás alapján választ
+ * csempeszintet, és csak a látható rácsot kéri le. Ami még nem érkezett
+ * meg (vagy nincs hálózat), egyszerűen kimarad — a nyomvonal attól még
+ * teljes értékűen látszik.
+ */
+function drawTiles(ctx, w, h, px, worldToScreen, screenToWorld) {
+  if (!tilesEnabled() || !isFinite(px) || px <= 0) return;
+
+  const z = Math.max(0, Math.min(19, Math.round(Math.log2(px / TILE_SIZE))));
+  const n = 2 ** z;
+  const tilePx = px / n;
+  if (!isFinite(tilePx) || tilePx < 1) return;
+
+  const topLeft = screenToWorld(0, 0);
+  const bottomRight = screenToWorld(w, h);
+  const x0 = Math.floor(topLeft.x * n);
+  const x1 = Math.ceil(bottomRight.x * n);
+  const y0 = Math.max(0, Math.floor(topLeft.y * n));
+  const y1 = Math.min(n - 1, Math.ceil(bottomRight.y * n));
+  if ((x1 - x0) * (y1 - y0) > 400) return; // ésszerűtlenül sok csempe
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  for (let tx = x0; tx <= x1; tx++) {
+    for (let ty = y0; ty <= y1; ty++) {
+      const img = getTile(z, tx, ty);
+      if (!img) continue;
+      const p = worldToScreen(tx / n, ty / n);
+      // +1 képpont, hogy a csempék között ne maradjon hajszálvékony rés
+      ctx.drawImage(img, Math.floor(p.x), Math.floor(p.y),
+        Math.ceil(tilePx) + 1, Math.ceil(tilePx) + 1);
+    }
+  }
+  ctx.restore();
+}
+
+function drawAttribution(ctx, w, h, color) {
+  ctx.save();
+  ctx.font = '10px system-ui, sans-serif';
+  const text = ATTRIBUTION;
+  const tw = ctx.measureText(text).width;
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillRect(w - tw - 10, h - 15, tw + 10, 15);
+  ctx.fillStyle = '#333';
+  ctx.textAlign = 'right';
+  ctx.fillText(text, w - 5, h - 4);
+  ctx.restore();
+}
+
 /* ------------------------------------------------------- térkép rajzolás */
 
 /**
@@ -271,28 +343,40 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     return { project: null };
   }
 
-  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+  // Web Mercator vetítés: ebben dolgoznak a térképcsempék is, így a
+  // nyomvonal és az alaptérkép pontosan fedésbe kerül.
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const p of all) {
-    minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
-    minLon = Math.min(minLon, p.lon); maxLon = Math.max(maxLon, p.lon);
+    const m = mercator(p.lat, p.lon);
+    minX = Math.min(minX, m.x); maxX = Math.max(maxX, m.x);
+    minY = Math.min(minY, m.y); maxY = Math.max(maxY, m.y);
   }
-  const midLat = (minLat + maxLat) / 2;
-  const kx = Math.cos((midLat * Math.PI) / 180); // hosszúsági fok rövidülése
-
-  // méterben mért kiterjedés
-  let spanX = Math.max((maxLon - minLon) * kx, 1e-6);
-  let spanY = Math.max(maxLat - minLat, 1e-6);
+  const spanX = Math.max(maxX - minX, 1e-9);
+  const spanY = Math.max(maxY - minY, 1e-9);
   const pad = 22;
   const scale = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY);
-  const cx = (minLon + maxLon) / 2;
-  const cy = (minLat + maxLat) / 2;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const midLat = (Math.max(...all.map((p) => p.lat)) + Math.min(...all.map((p) => p.lat))) / 2;
 
   // a nagyítás/mozgatás az illesztett nézetre ül rá
   const view = opts.view || { k: 1, tx: 0, ty: 0 };
-  const project = (lat, lon) => ({
-    x: (w / 2 + (lon - cx) * kx * scale) * view.k + view.tx,
-    y: (h / 2 - (lat - cy) * scale) * view.k + view.ty,
+  const worldToScreen = (wx, wy) => ({
+    x: (w / 2 + (wx - cx) * scale) * view.k + view.tx,
+    y: (h / 2 + (wy - cy) * scale) * view.k + view.ty,
   });
+  const screenToWorld = (sx, sy) => ({
+    x: cx + (((sx - view.tx) / view.k) - w / 2) / scale,
+    y: cy + (((sy - view.ty) / view.k) - h / 2) / scale,
+  });
+  const project = (lat, lon) => {
+    const m = mercator(lat, lon);
+    return worldToScreen(m.x, m.y);
+  };
+
+  // térképcsempék a nyomvonal alá
+  const px = scale * view.k;   // képpont / világegység (a teljes Föld = 1)
+  if (opts.tiles !== false) drawTiles(ctx, w, h, px, worldToScreen, screenToWorld);
 
   const rejectColor = opts.rejectLine || '#ff8a4d';
   const lineW = (opts.lineWidth || 4) * Math.min(2, Math.max(1, view.k * 0.5 + 0.5));
@@ -421,8 +505,11 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 12 });
   });
 
-  drawScaleBar(ctx, w, h, scale * view.k, kx, dim);
-  drawNorth(ctx, w, dim);
+  // alaptérkép fölött sötét, fehér hátterű jelölés kell a világos csempékhez
+  const overMap = opts.tiles !== false && tilesEnabled();
+  drawScaleBar(ctx, w, h, px, midLat, overMap ? '#1b1b1b' : dim, overMap);
+  drawNorth(ctx, w, overMap ? '#1b1b1b' : dim, overMap);
+  if (overMap) drawAttribution(ctx, w, h);
 
   /** A képernyőponthoz legközelebbi nyomvonalpont indexe. */
   const nearest = (x, y) => {
@@ -436,10 +523,10 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   };
 
   /** Képernyőpont vissza földrajzi koordinátává (rajzoláshoz). */
-  const unproject = (x, y) => ({
-    lon: cx + ((x - view.tx) / view.k - w / 2) / (kx * scale),
-    lat: cy - ((y - view.ty) / view.k - h / 2) / scale,
-  });
+  const unproject = (x, y) => {
+    const world = screenToWorld(x, y);
+    return unmercator(world.x, world.y);
+  };
 
   /** A legközelebbi berajzolt szakasz-csúcs (illesztéshez, kijelöléshez). */
   const nearestDrawn = (x, y) => {
@@ -592,9 +679,10 @@ function drawArrowHead(ctx, a, b, size) {
   ctx.restore();
 }
 
-function drawScaleBar(ctx, w, h, scale, kx, color) {
-  // scale: képpont / fok(lat). 1 fok lat ≈ 111320 m
-  const pxPerMeter = scale / 111320;
+function drawScaleBar(ctx, w, h, px, midLat, color, overMap) {
+  // px: képpont / világegység; a Mercator-lépték a szélességtől függ
+  const metersPerWorldUnit = 40075016.686 * Math.cos((midLat * Math.PI) / 180);
+  const pxPerMeter = px / metersPerWorldUnit;
   const targets = [10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000];
   let meters = targets[targets.length - 1];
   for (const t of targets) {
@@ -603,6 +691,10 @@ function drawScaleBar(ctx, w, h, scale, kx, color) {
   const len = meters * pxPerMeter;
   if (!isFinite(len) || len < 10) return;
   const x = 12, y = h - 14;
+  if (overMap) {
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillRect(x - 6, y - 24, len + 14, 30);
+  }
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 2;
@@ -614,9 +706,15 @@ function drawScaleBar(ctx, w, h, scale, kx, color) {
   ctx.fillText(meters >= 1000 ? meters / 1000 + ' km' : meters + ' m', x, y - 8);
 }
 
-function drawNorth(ctx, w, color) {
+function drawNorth(ctx, w, color, overMap) {
   const x = w - 20, y = 22;
   ctx.save();
+  if (overMap) {
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.beginPath();
+    ctx.arc(x, y + 4, 19, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 2;

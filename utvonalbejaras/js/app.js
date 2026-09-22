@@ -9,6 +9,7 @@ import {
 import { AudioRecorder, shrinkImage, makeThumb, readExif } from './media.js';
 import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
+import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
 import { $, $$, el, toast, modal, download, formatDateTime, formatTime } from './ui.js';
 
 const state = {
@@ -303,6 +304,8 @@ function drawTrack() {
   trackHit = renderTrack(canvas, state.points, state.items, {
     drawn: (state.session && state.session.drawn) || [],
   });
+  // a csempék később futnak be; amíg ez a képernyő aktív, újrarajzoljuk
+  onTileLoad(() => { if (state.screen === 'session') drawTrack(); });
 }
 
 /* ------------------------------------------------------- GPS felvétel */
@@ -1214,6 +1217,7 @@ function debounce(fn, ms) {
 
 async function init() {
   bind();
+  try { setTilesEnabled(localStorage.getItem('tiles') !== '0'); } catch (_) {}
   editor = new PhotoEditor($('#editor'));
   await renderSessionList();
   show('list');
