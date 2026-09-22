@@ -55,6 +55,107 @@ export async function makeThumb(blob, maxSide = 360) {
 
 export { canvasToBlob };
 
+/* ------------------------------------------------------------- EXIF
+
+Egy korábban készült, galériából behozott képnél a telefon aktuális helye
+félrevezető lenne. A JPEG EXIF-fejlécéből kiolvasható a felvétel helye és
+ideje — ha van benne, azt használjuk, és jelezzük, hogy onnan származik. */
+
+/** @returns {Promise<{lat?:number, lon?:number, takenAt?:number}|null>} */
+export async function readExif(file) {
+  try {
+    // az EXIF a fájl elején van; néhány száz kB bőven elég hozzá
+    const head = await file.slice(0, 256 * 1024).arrayBuffer();
+    const view = new DataView(head);
+    if (view.byteLength < 4 || view.getUint16(0) !== 0xffd8) return null; // nem JPEG
+
+    let offset = 2;
+    while (offset + 4 < view.byteLength) {
+      if (view.getUint8(offset) !== 0xff) break;
+      const marker = view.getUint8(offset + 1);
+      const size = view.getUint16(offset + 2);
+      if (marker === 0xe1) {
+        const start = offset + 4;
+        // "Exif\0\0"
+        if (view.getUint32(start) !== 0x45786966) return null;
+        return parseTiff(view, start + 6);
+      }
+      if (marker === 0xda) break; // képadat kezdete
+      offset += 2 + size;
+    }
+  } catch (_) { /* sérült vagy szokatlan fejléc: nincs adat */ }
+  return null;
+}
+
+function parseTiff(view, tiff) {
+  if (tiff + 8 > view.byteLength) return null;
+  const le = view.getUint16(tiff) === 0x4949;
+  const u16 = (o) => view.getUint16(o, le);
+  const u32 = (o) => view.getUint32(o, le);
+  if (u16(tiff + 2) !== 0x002a) return null;
+
+  const out = {};
+  let gpsIfd = 0, exifIfd = 0;
+
+  const readEntries = (dirOffset, handler) => {
+    if (dirOffset + 2 > view.byteLength) return;
+    const count = u16(dirOffset);
+    for (let i = 0; i < count; i++) {
+      const e = dirOffset + 2 + i * 12;
+      if (e + 12 > view.byteLength) return;
+      handler(u16(e), u16(e + 2), u32(e + 4), e + 8);
+    }
+  };
+
+  const ratio = (o) => {
+    const num = u32(o), den = u32(o + 4);
+    return den ? num / den : 0;
+  };
+  const dms = (valueOffset) =>
+    ratio(valueOffset) + ratio(valueOffset + 8) / 60 + ratio(valueOffset + 16) / 3600;
+
+  const ascii = (count, valueOffset) => {
+    let s = '';
+    for (let i = 0; i < count - 1; i++) s += String.fromCharCode(view.getUint8(valueOffset + i));
+    return s;
+  };
+
+  readEntries(tiff + u32(tiff + 4), (tag, _type, _count, valOff) => {
+    if (tag === 0x8825) gpsIfd = tiff + u32(valOff);
+    if (tag === 0x8769) exifIfd = tiff + u32(valOff);
+  });
+
+  if (gpsIfd) {
+    let lat = null, lon = null, latRef = 'N', lonRef = 'E';
+    readEntries(gpsIfd, (tag, type, count, valOff) => {
+      const dataOff = type === 5 || count > 4 ? tiff + u32(valOff) : valOff;
+      if (tag === 0x0001) latRef = String.fromCharCode(view.getUint8(valOff));
+      if (tag === 0x0003) lonRef = String.fromCharCode(view.getUint8(valOff));
+      if (tag === 0x0002) lat = dms(dataOff);
+      if (tag === 0x0004) lon = dms(dataOff);
+    });
+    if (lat != null && lon != null && isFinite(lat) && isFinite(lon) && (lat || lon)) {
+      out.lat = latRef === 'S' ? -lat : lat;
+      out.lon = lonRef === 'W' ? -lon : lon;
+    }
+  }
+
+  if (exifIfd) {
+    readEntries(exifIfd, (tag, type, count, valOff) => {
+      if (tag !== 0x9003 || type !== 2 || count < 19) return; // DateTimeOriginal
+      const dataOff = count > 4 ? tiff + u32(valOff) : valOff;
+      const s = ascii(count, dataOff); // "YYYY:MM:DD HH:MM:SS"
+      const m = s.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+      if (m) {
+        const t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+        if (isFinite(t)) out.takenAt = t;
+      }
+    });
+  }
+
+  return Object.keys(out).length ? out : null;
+}
+
 /* ----------------------------------------------------------- hangjegyzet */
 
 function pickAudioType() {

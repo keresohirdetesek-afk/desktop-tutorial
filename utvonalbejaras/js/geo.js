@@ -1,4 +1,6 @@
-// GPS: nyomvonal rögzítés, számítások, rajzolás, GPX export
+// GPS: nyomvonal rögzítés, számítások, rajzolás, GPX/GeoJSON export
+
+import { getTile, tilesEnabled, TILE_SIZE, ATTRIBUTION } from './tiles.js';
 
 const R = 6371000; // Föld sugara méterben
 
@@ -44,23 +46,50 @@ export const REJECTED = 'rejected';
 
 export const isRejected = (p) => !!p && p.status === REJECTED;
 
+/* --------------------------------------------------------- kimaradások
+
+Ha a GPS hosszabb időre elveszti a jelet, vagy a rögzítést leállítják és
+később újraindítják, a két szomszédos pont közé eső szakaszt NEM jártuk be
+igazolhatóan. Az ilyen pontok `gap` jelet kapnak: az odavezető darab nem
+számít bele a bejárt távba, és nem is rajzolódik ki folytonos vonalként —
+különben egy légvonalbeli egyenes hamis útvonalat mutatna.              */
+
+export const GAP_SECONDS = 120;   // ennél hosszabb szünet gyanús,
+export const GAP_METERS = 250;    // ha közben ekkorát is ugrott a pozíció
+
+export const isGap = (p) => !!p && p.gap === true;
+
+/** Kimaradásnak minősül-e a két pont közötti szakasz? */
+export function detectGap(prev, next) {
+  if (!prev || !next) return false;
+  const dt = (next.t - prev.t) / 1000;
+  return dt > GAP_SECONDS && haversine(prev, next) > GAP_METERS;
+}
+
 /** Egybefüggő, azonos állapotú vonaldarabok a rajzoláshoz. */
 export function styledSegments(points) {
   const segs = [];
   for (let i = 1; i < points.length; i++) {
-    const status = isRejected(points[i]) ? REJECTED : 'ok';
+    const status = isGap(points[i]) ? 'gap' : isRejected(points[i]) ? REJECTED : 'ok';
     const last = segs[segs.length - 1];
-    if (last && last.status === status) last.pts.push(points[i]);
+    // a kimaradás mindig önálló darab: nem folytatódhat belőle vonal
+    if (last && last.status === status && status !== 'gap') last.pts.push(points[i]);
     else segs.push({ status, pts: [points[i - 1], points[i]] });
   }
   return segs;
 }
 
-/** Hossz állapotonként: { ok, rejected, total }. */
+/** Hossz állapotonként: { ok, rejected, gap, gaps, total }. */
 export function lengthByStatus(points) {
-  const out = { ok: 0, rejected: 0, total: 0 };
+  const out = { ok: 0, rejected: 0, gap: 0, gaps: 0, total: 0 };
   for (let i = 1; i < points.length; i++) {
     const d = haversine(points[i - 1], points[i]);
+    if (isGap(points[i])) {
+      // ismeretlen szakasz: se az érvényes, se a bejárt távba nem számít
+      out.gap += d;
+      out.gaps += 1;
+      continue;
+    }
     out.total += d;
     if (isRejected(points[i])) out.rejected += d;
     else out.ok += d;
@@ -180,8 +209,13 @@ export class TrackRecorder {
   }
 }
 
-/** Egyszeri pozíciólekérés (fotóhoz, hangjegyzethez). */
-export function currentPosition(timeout = 8000) {
+/**
+ * Egyszeri pozíciólekérés (fotóhoz, hangjegyzethez).
+ * `maximumAge = 0` esetén a böngésző nem adhat vissza tárolt mérést —
+ * dokumentáláshoz ez a helyes, mert különben egy korábbi helyszín
+ * koordinátája kerülhetne a felvételre.
+ */
+export function currentPosition(timeout = 8000, maximumAge = 0) {
   return new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(
@@ -194,9 +228,79 @@ export function currentPosition(timeout = 8000) {
           t: pos.timestamp || Date.now(),
         }),
       () => resolve(null),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout }
+      { enableHighAccuracy: true, maximumAge, timeout }
     );
   });
+}
+
+/* ------------------------------------------------------ Web Mercator */
+
+/** Földrajzi koordináta → [0,1] tartományú világkoordináta. */
+export function mercator(lat, lon) {
+  const clamped = Math.max(-85.05112878, Math.min(85.05112878, lat));
+  const s = Math.sin((clamped * Math.PI) / 180);
+  return {
+    x: (lon + 180) / 360,
+    y: 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI),
+  };
+}
+
+/** Világkoordináta → földrajzi koordináta. */
+export function unmercator(x, y) {
+  return {
+    lon: x * 360 - 180,
+    lat: (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI,
+  };
+}
+
+/**
+ * Térképcsempék kirajzolása a nyomvonal alá. A nagyítás alapján választ
+ * csempeszintet, és csak a látható rácsot kéri le. Ami még nem érkezett
+ * meg (vagy nincs hálózat), egyszerűen kimarad — a nyomvonal attól még
+ * teljes értékűen látszik.
+ */
+function drawTiles(ctx, w, h, px, worldToScreen, screenToWorld) {
+  if (!tilesEnabled() || !isFinite(px) || px <= 0) return;
+
+  const z = Math.max(0, Math.min(19, Math.round(Math.log2(px / TILE_SIZE))));
+  const n = 2 ** z;
+  const tilePx = px / n;
+  if (!isFinite(tilePx) || tilePx < 1) return;
+
+  const topLeft = screenToWorld(0, 0);
+  const bottomRight = screenToWorld(w, h);
+  const x0 = Math.floor(topLeft.x * n);
+  const x1 = Math.ceil(bottomRight.x * n);
+  const y0 = Math.max(0, Math.floor(topLeft.y * n));
+  const y1 = Math.min(n - 1, Math.ceil(bottomRight.y * n));
+  if ((x1 - x0) * (y1 - y0) > 400) return; // ésszerűtlenül sok csempe
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  for (let tx = x0; tx <= x1; tx++) {
+    for (let ty = y0; ty <= y1; ty++) {
+      const img = getTile(z, tx, ty);
+      if (!img) continue;
+      const p = worldToScreen(tx / n, ty / n);
+      // +1 képpont, hogy a csempék között ne maradjon hajszálvékony rés
+      ctx.drawImage(img, Math.floor(p.x), Math.floor(p.y),
+        Math.ceil(tilePx) + 1, Math.ceil(tilePx) + 1);
+    }
+  }
+  ctx.restore();
+}
+
+function drawAttribution(ctx, w, h, color) {
+  ctx.save();
+  ctx.font = '10px system-ui, sans-serif';
+  const text = ATTRIBUTION;
+  const tw = ctx.measureText(text).width;
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillRect(w - tw - 10, h - 15, tw + 10, 15);
+  ctx.fillStyle = '#333';
+  ctx.textAlign = 'right';
+  ctx.fillText(text, w - 5, h - 4);
+  ctx.restore();
 }
 
 /* ------------------------------------------------------- térkép rajzolás */
@@ -239,28 +343,40 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     return { project: null };
   }
 
-  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+  // Web Mercator vetítés: ebben dolgoznak a térképcsempék is, így a
+  // nyomvonal és az alaptérkép pontosan fedésbe kerül.
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const p of all) {
-    minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
-    minLon = Math.min(minLon, p.lon); maxLon = Math.max(maxLon, p.lon);
+    const m = mercator(p.lat, p.lon);
+    minX = Math.min(minX, m.x); maxX = Math.max(maxX, m.x);
+    minY = Math.min(minY, m.y); maxY = Math.max(maxY, m.y);
   }
-  const midLat = (minLat + maxLat) / 2;
-  const kx = Math.cos((midLat * Math.PI) / 180); // hosszúsági fok rövidülése
-
-  // méterben mért kiterjedés
-  let spanX = Math.max((maxLon - minLon) * kx, 1e-6);
-  let spanY = Math.max(maxLat - minLat, 1e-6);
+  const spanX = Math.max(maxX - minX, 1e-9);
+  const spanY = Math.max(maxY - minY, 1e-9);
   const pad = 22;
   const scale = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY);
-  const cx = (minLon + maxLon) / 2;
-  const cy = (minLat + maxLat) / 2;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const midLat = (Math.max(...all.map((p) => p.lat)) + Math.min(...all.map((p) => p.lat))) / 2;
 
   // a nagyítás/mozgatás az illesztett nézetre ül rá
   const view = opts.view || { k: 1, tx: 0, ty: 0 };
-  const project = (lat, lon) => ({
-    x: (w / 2 + (lon - cx) * kx * scale) * view.k + view.tx,
-    y: (h / 2 - (lat - cy) * scale) * view.k + view.ty,
+  const worldToScreen = (wx, wy) => ({
+    x: (w / 2 + (wx - cx) * scale) * view.k + view.tx,
+    y: (h / 2 + (wy - cy) * scale) * view.k + view.ty,
   });
+  const screenToWorld = (sx, sy) => ({
+    x: cx + (((sx - view.tx) / view.k) - w / 2) / scale,
+    y: cy + (((sy - view.ty) / view.k) - h / 2) / scale,
+  });
+  const project = (lat, lon) => {
+    const m = mercator(lat, lon);
+    return worldToScreen(m.x, m.y);
+  };
+
+  // térképcsempék a nyomvonal alá
+  const px = scale * view.k;   // képpont / világegység (a teljes Föld = 1)
+  if (opts.tiles !== false) drawTiles(ctx, w, h, px, worldToScreen, screenToWorld);
 
   const rejectColor = opts.rejectLine || '#ff8a4d';
   const lineW = (opts.lineWidth || 4) * Math.min(2, Math.max(1, view.k * 0.5 + 0.5));
@@ -272,10 +388,13 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
 
     for (const seg of styledSegments(coords)) {
       const rejected = seg.status === REJECTED;
-      ctx.setLineDash(rejected ? [lineW * 2, lineW * 1.6] : []);
-      ctx.strokeStyle = rejected ? rejectColor : line;
-      ctx.globalAlpha = rejected ? 0.85 : 1;
-      ctx.lineWidth = rejected ? lineW * 0.8 : lineW;
+      const gap = seg.status === 'gap';
+      // a kimaradás vékony, pontozott, halvány: látszik, hogy hol nincs adat,
+      // de nem téveszthető össze a ténylegesen bejárt úttal
+      ctx.setLineDash(gap ? [1.5, lineW * 1.8] : rejected ? [lineW * 2, lineW * 1.6] : []);
+      ctx.strokeStyle = gap ? dim : rejected ? rejectColor : line;
+      ctx.globalAlpha = gap ? 0.6 : rejected ? 0.85 : 1;
+      ctx.lineWidth = gap ? Math.max(1.5, lineW * 0.4) : rejected ? lineW * 0.8 : lineW;
       ctx.beginPath();
       seg.pts.forEach((p, i) => {
         const { x, y } = project(p.lat, p.lon);
@@ -290,6 +409,7 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     ctx.globalAlpha = 0.45;
     const every = Math.max(1, Math.floor(coords.length / 8));
     for (let i = every; i < coords.length; i += every) {
+      if (isGap(coords[i])) continue; // kimaradásra nem rajzolunk irányjelet
       const a = project(coords[i - 1].lat, coords[i - 1].lon);
       const b = project(coords[i].lat, coords[i].lon);
       ctx.fillStyle = isRejected(coords[i]) ? rejectColor : line;
@@ -385,8 +505,11 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 12 });
   });
 
-  drawScaleBar(ctx, w, h, scale * view.k, kx, dim);
-  drawNorth(ctx, w, dim);
+  // alaptérkép fölött sötét, fehér hátterű jelölés kell a világos csempékhez
+  const overMap = opts.tiles !== false && tilesEnabled();
+  drawScaleBar(ctx, w, h, px, midLat, overMap ? '#1b1b1b' : dim, overMap);
+  drawNorth(ctx, w, overMap ? '#1b1b1b' : dim, overMap);
+  if (overMap) drawAttribution(ctx, w, h);
 
   /** A képernyőponthoz legközelebbi nyomvonalpont indexe. */
   const nearest = (x, y) => {
@@ -400,10 +523,10 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   };
 
   /** Képernyőpont vissza földrajzi koordinátává (rajzoláshoz). */
-  const unproject = (x, y) => ({
-    lon: cx + ((x - view.tx) / view.k - w / 2) / (kx * scale),
-    lat: cy - ((y - view.ty) / view.k - h / 2) / scale,
-  });
+  const unproject = (x, y) => {
+    const world = screenToWorld(x, y);
+    return unmercator(world.x, world.y);
+  };
 
   /** A legközelebbi berajzolt szakasz-csúcs (illesztéshez, kijelöléshez). */
   const nearestDrawn = (x, y) => {
@@ -419,6 +542,110 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   };
 
   return { project, unproject, hitboxes, nearest, nearestDrawn, coords };
+}
+
+/* ------------------------------------------------------------- GeoJSON
+
+A Google Maps útvonaltervezője csak pontokat kap, és ő maga tervez utat —
+így nem a ténylegesen bejárt vonalat mutatja. A GeoJSON viszont magát a
+vonalat írja le, ezért térképnézőben pontosan az jelenik meg, amerre
+mentünk.                                                                */
+
+/** Douglas–Peucker egyszerűsítés, hogy a vonal elférjen egy hivatkozásban. */
+export function simplify(points, tolerance = 0.00004) {
+  if (points.length < 3) return points.slice();
+  const sqTol = tolerance * tolerance;
+
+  const sqSegDist = (p, a, b) => {
+    let x = a.lon, y = a.lat;
+    let dx = b.lon - x, dy = b.lat - y;
+    if (dx !== 0 || dy !== 0) {
+      const t = ((p.lon - x) * dx + (p.lat - y) * dy) / (dx * dx + dy * dy);
+      if (t > 1) { x = b.lon; y = b.lat; }
+      else if (t > 0) { x += dx * t; y += dy * t; }
+    }
+    dx = p.lon - x; dy = p.lat - y;
+    return dx * dx + dy * dy;
+  };
+
+  const keep = new Array(points.length).fill(false);
+  keep[0] = keep[points.length - 1] = true;
+  const stack = [[0, points.length - 1]];
+  while (stack.length) {
+    const [first, last] = stack.pop();
+    let maxSq = 0, index = -1;
+    for (let i = first + 1; i < last; i++) {
+      const sq = sqSegDist(points[i], points[first], points[last]);
+      if (sq > maxSq) { maxSq = sq; index = i; }
+    }
+    if (maxSq > sqTol && index > 0) {
+      keep[index] = true;
+      stack.push([first, index], [index, last]);
+    }
+  }
+  return points.filter((_, i) => keep[i]);
+}
+
+/** A bejárás teljes tartalma GeoJSON-ként (vonalak + pontok). */
+export function toGeoJSON(session, points, items = [], opts = {}) {
+  const tol = opts.tolerance ?? 0.00004;
+  const features = [];
+  const line = (pts, props) => {
+    const s = simplify(pts.filter((p) => p.lat != null), tol);
+    if (s.length < 2) return;
+    features.push({
+      type: 'Feature',
+      properties: props,
+      geometry: { type: 'LineString', coordinates: s.map((p) => [+p.lon.toFixed(6), +p.lat.toFixed(6)]) },
+    });
+  };
+
+  // érvényes útvonal, kimaradásnál és elvetett szakasznál megszakítva
+  let run = [];
+  const flush = () => { if (run.length > 1) line(run, { nev: 'Érvényes útvonal', tipus: 'ok', stroke: '#1f6feb', 'stroke-width': 5 }); run = []; };
+  for (const p of points) {
+    if (isRejected(p)) { flush(); }
+    else if (isGap(p)) { flush(); run = [p]; }
+    else run.push(p);
+  }
+  flush();
+
+  rejectedSections(points).forEach((sec, i) => {
+    line(points.slice(sec.from, sec.to + 1), {
+      nev: `Elvetett szakasz ${i + 1}`,
+      indoklas: sec.reason || '',
+      tipus: 'elvetett',
+      stroke: '#ff8a4d',
+      'stroke-width': 4,
+    });
+  });
+
+  (session.drawn || []).forEach((seg, i) => {
+    line(seg.pts, {
+      nev: seg.name || `Berajzolt szakasz ${i + 1}`,
+      megjegyzes: seg.note || '',
+      tipus: 'berajzolt',
+      stroke: '#2ea043',
+      'stroke-width': 5,
+    });
+  });
+
+  for (const i of items) {
+    if (i.lat == null || i.lon == null) continue;
+    features.push({
+      type: 'Feature',
+      properties: {
+        nev: i.title || typeLabel(i.type),
+        tipus: i.type,
+        megjegyzes: i.note || '',
+        meretek: (i.dims || []).join('; '),
+        ido: new Date(i.created).toISOString(),
+      },
+      geometry: { type: 'Point', coordinates: [+i.lon.toFixed(6), +i.lat.toFixed(6)] },
+    });
+  }
+
+  return { type: 'FeatureCollection', properties: { nev: session.name }, features };
 }
 
 /** Kézzel berajzolt szakaszok együttes hossza. */
@@ -452,9 +679,10 @@ function drawArrowHead(ctx, a, b, size) {
   ctx.restore();
 }
 
-function drawScaleBar(ctx, w, h, scale, kx, color) {
-  // scale: képpont / fok(lat). 1 fok lat ≈ 111320 m
-  const pxPerMeter = scale / 111320;
+function drawScaleBar(ctx, w, h, px, midLat, color, overMap) {
+  // px: képpont / világegység; a Mercator-lépték a szélességtől függ
+  const metersPerWorldUnit = 40075016.686 * Math.cos((midLat * Math.PI) / 180);
+  const pxPerMeter = px / metersPerWorldUnit;
   const targets = [10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000];
   let meters = targets[targets.length - 1];
   for (const t of targets) {
@@ -463,6 +691,10 @@ function drawScaleBar(ctx, w, h, scale, kx, color) {
   const len = meters * pxPerMeter;
   if (!isFinite(len) || len < 10) return;
   const x = 12, y = h - 14;
+  if (overMap) {
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillRect(x - 6, y - 24, len + 14, 30);
+  }
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 2;
@@ -474,9 +706,15 @@ function drawScaleBar(ctx, w, h, scale, kx, color) {
   ctx.fillText(meters >= 1000 ? meters / 1000 + ' km' : meters + ' m', x, y - 8);
 }
 
-function drawNorth(ctx, w, color) {
+function drawNorth(ctx, w, color, overMap) {
   const x = w - 20, y = 22;
   ctx.save();
+  if (overMap) {
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.beginPath();
+    ctx.arc(x, y + 4, 19, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 2;
@@ -527,6 +765,10 @@ export function toGPX(session, points, items = []) {
     if (isRejected(p)) {
       if (run.length > 1) validSegs.push(run);
       run = [];
+    } else if (isGap(p)) {
+      // kimaradás: itt megszakad a hiteles nyomvonal, új szakasz indul
+      if (run.length > 1) validSegs.push(run);
+      run = [p];
     } else {
       run.push(p);
     }

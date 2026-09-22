@@ -5,8 +5,10 @@ A megadott útvonalon haladva rögzíti a nyomvonalat, fotókat készít, a fot�
 rajzolhat, méreteket írhat be, **halvány útirány-nyilat** húzhat, és
 hangjegyzeteket vehet fel. Minden rögzített elem később visszakereshető.
 
-Nincs szerver, nincs regisztráció, nincs külső szolgáltatás: az adatok a
-készüléken maradnak (IndexedDB), és offline is elérhetők.
+Nincs szerver és nincs regisztráció: az adatok a készüléken maradnak
+(IndexedDB), és offline is elérhetők. Az egyetlen külső forrás a választható
+OpenStreetMap alaptérkép, amelynek csempéi szintén tárolódnak offline
+használatra.
 
 ---
 
@@ -24,7 +26,8 @@ készüléken maradnak (IndexedDB), és offline is elérhetők.
 | **Hangjegyzet** felvétele a helyszínen, önállóan vagy fotóhoz csatolva | *Hangjegyzet* gomb, vagy fotó → *Hangjegyzet* |
 | **Írott jegyzet** és pontjelölés a nyomvonalon | *Jegyzet*, *Pont jelölése* |
 | **Visszakeresés** név, jegyzet, képre írt felirat, beírt méret és koordináta szerint | *Keresés* fül |
-| **Export**: GPX (nyomvonal + waypointok), teljes JSON mentés, egyedi képek | Aktív bejárás alján |
+| **OpenStreetMap alaptérkép** a nyomvonal mögött, offline tárolt csempékkel | Nyomvonal szerkesztése → *Térkép* |
+| **Export**: GPX, GeoJSON, teljes JSON mentés, egyedi képek | Aktív bejárás alján |
 
 ### Az útirány-nyíl (külön kezelve)
 
@@ -78,6 +81,10 @@ Ami ilyenkor a helyére kerül:
   külön sorban szerepel az adatlapon;
 - a bejárás adatlapján felsorolva látszik minden elvetett szakasz az
   indoklásával;
+- a **Pontos nyomvonal térképen** gomb a ténylegesen bejárt vonalat nyitja
+  meg térképnézőben, utcákkal (a Google Maps útvonaltervezője ezzel szemben
+  csak pontokat kap és maga tervez utat — ezért az külön, *közelítő*
+  jelöléssel szerepel);
 - a **GPX** fő nyomvonala csak az érvényes útvonalat tartalmazza (ott, ahol
   elvetett szakasz szakítja meg, új `trkseg` kezdődik), az elvetett részek
   pedig külön, elnevezett nyomvonalként maradnak a fájlban (`<type>rejected</type>`),
@@ -145,6 +152,91 @@ Első használatkor a böngésző kéri a **helymeghatározás**, a **kamera** �
 
 ---
 
+## Alaptérkép (OpenStreetMap)
+
+A nyomvonal mögött **valódi térkép** jelenik meg utcákkal, településekkel —
+OpenStreetMap-csempékből, külső térképkönyvtár nélkül, közvetlenül ugyanarra a
+vászonra rajzolva. Terepen ez dönti el, hogy egy jelölés melyik útra esik.
+
+- **Be/ki kapcsolható** a nyomvonal-szerkesztő fejlécében (*Térkép* ↔ *Vázlat*).
+  A beállítás megjegyződik. Kikapcsolva marad a korábbi, adatforgalom nélküli
+  vázlat méretaránnyal és északjelzéssel.
+- **Ami letöltődött, offline is megmarad**: a csempék külön gyorsítótárba
+  kerülnek, így a már megnézett terület hálózat nélkül is látszik. Ez a
+  gyorsítótár az alkalmazás frissítésekor sem törlődik.
+- **Nagyítás**: két ujjal, egérgörgővel vagy a +/− gombbal; az app a
+  nagyításhoz illő csempeszintet kéri le.
+- A térkép forrása fel van tüntetve a vásznon (*© OpenStreetMap
+  közreműködők*), ahogy a licenc megköveteli.
+
+### Saját csempeszerver (céges használathoz ajánlott)
+
+Alapértelmezés az OSM nyilvános csempeszervere, ami **közösségi erőforrás**:
+alkalmi használatra rendben van, rendszeres céges terheléshez viszont saját
+vagy fizetős szolgáltató való. Átállítani a böngésző konzoljában lehet:
+
+```js
+localStorage.setItem('tileUrl', 'https://sajat-szerver.hu/{z}/{x}/{y}.png');
+```
+
+Ilyenkor a csempekérések oda mennek. Fontos: bekapcsolt térkép esetén a
+csempeszerver látja, melyik területet nézi — a bejárás adatai (fotók, jegyzetek,
+koordináták) viszont **továbbra sem hagyják el a készüléket**.
+
+## Térképes megjelenítés és útvonaltervezés
+
+Ez két különböző dolog, és érdemes szétválasztani:
+
+| Cél | Eszköz | Pontkorlát |
+|---|---|---|
+| A bejárt vonal megnézése az appban | beépített OSM-alaptérkép | nincs |
+| A bejárt vonal megosztása, nagy képernyőn | *Pontos nyomvonal térképen* (GeoJSON) | nincs |
+| Navigáció a bejárt vonal mentén, terepen | **GPX export** → OsmAnd, Organic Maps | nincs |
+| Új útvonal terveztetése | *Útvonalterv Google Maps* | **max. 9 köztes pont**, és újratervez |
+
+A Google Maps hivatkozásos felülete legfeljebb 9 köztes pontot fogad, és a
+megadott pontok között a saját útvonalát tervezi meg — ezért ott *közelítő*
+jelzéssel szerepel. Ha a pontos vonalat kell követni menet közben, a **GPX
+exportot** töltse be egy olyan navigációs alkalmazásba, amely nyomvonalat
+tud követni (OsmAnd, Organic Maps): ezek pontszám-korlát nélkül kezelik a
+nyomvonalat, és offline térképpel is működnek.
+
+## Helyadatok megbízhatósága
+
+A dokumentáció csak akkor ér valamit, ha a koordináta oda tartozik, ahová
+állítja. Ezért:
+
+- **Friss mérés minden elemhez.** Rögzítés közben a nyomvonal utolsó, 10
+  másodpercnél nem régebbi fixe használható; egyébként új mérés indul, tárolt
+  koordináta elfogadása nélkül. Ha csak tárolt fix érhető el, az elem
+  „GPS, tárolt mérés” jelölést kap.
+- **Importált képeknél a felvétel helye számít.** Galériából behozott
+  fotóknál az app kiolvassa a kép EXIF-adatából a készítés helyét és idejét —
+  nem a behozatal pillanatnyi helyét használja. Ha nincs EXIF-adat, az elem
+  helyadat nélkül marad, és ezt jelzi is.
+- **Kézi helymegadás.** Az elem adatlapján a *Hely megadása / javítása*
+  gombbal a koordináta beírható, átvehető friss méréssel, vagy a nyomvonal
+  időben legközelebbi pontjáról.
+- Az adatlapon mindig látszik, **honnan** való a koordináta és mekkora a
+  mérési pontosság.
+
+### GPS-kimaradás
+
+Ha a jel hosszabb időre elveszik (2 percnél tovább, és közben 250 méternél
+nagyobbat ugrik a pozíció), vagy a rögzítést leállítják és később
+újraindítják, a köztes szakaszt nem jártuk be igazolhatóan. Az ilyen rész
+**pontozott, halvány vonalként** jelenik meg, **nem számít bele** a bejárt
+távba, az adatlapon külön sorban szerepel, a GPX-ben és a GeoJSON-ban pedig
+ott megszakad a nyomvonal. Így nem keletkezik légvonalbeli „szellemút”.
+
+## Biztonsági mentés
+
+Az adatok a böngésző helyi adatbázisában vannak — a böngészőadatok törlése
+mindent visz. Ezért a bejárás adatlapján mindig látszik a **mentés állapota**:
+mikor készült utoljára teljes mentés, és változott-e azóta bármi. A sávra
+koppintva azonnal kiírható a JSON mentés; a rögzítés leállításakor az app
+emlékeztet is rá.
+
 ## Adatkezelés
 
 - Minden adat a böngésző **IndexedDB** tárolójában marad, a készüléken.
@@ -152,8 +244,11 @@ Első használatkor a böngésző kéri a **helymeghatározás**, a **kamera** �
   ne törölje a felvételeket helyszűke esetén.
 - A fotók mentés előtt max. 2000 képpontra zsugorodnak (kb. 300–600 kB / kép),
   hogy egy hosszabb bejárás is elférjen.
-- Külső hálózati hívás egyetlen helyen történik, és csak ha Ön kéri:
-  a *Megnyitás térképen* / *Térképen* gombok Google Maps linket nyitnak.
+- Külső hálózati hívás csak akkor történik, ha Ön kéri: a *Pontos nyomvonal
+  térképen* (geojson.io), az *Útvonalterv Google Maps* és az elemek
+  *Térképen* gombja nyit külső oldalt. A geojson.io esetében az adat a
+  hivatkozás horgony részében utazik, amit a böngésző nem küld el a
+  kiszolgálónak — az app előtte rákérdez.
 - A böngészőadatok törlése a bejárásokat is törli — fontos anyagot mentsen ki
   JSON-ba vagy GPX-be.
 
@@ -171,6 +266,7 @@ utvonalbejaras/
     ├── db.js               IndexedDB (sessions / points / items)
     ├── geo.js              GPS-rögzítés, távolság, nyomvonalrajz, GPX
     ├── editor.js           fotó-jelölő (rajz, méret, útirány-nyíl, szöveg)
+    ├── tiles.js            OSM-csempék betöltése és offline tárolása
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés
 ```
@@ -179,8 +275,7 @@ utvonalbejaras/
 
 - A háttérben (más appra váltva, lezárt képernyővel) a böngésző felfüggesztheti
   a GPS-figyelést — ezért érdemes az appot előtérben hagyni.
-- A nyomvonal saját, offline vázlaton jelenik meg (méretaránnyal és
-  északjelzéssel), nem térképszelvényeken; utcaszintű háttérhez használja a
-  *Megnyitás térképen* gombot vagy a GPX exportot.
+- Alaptérkép csak hálózaton tölthető le; offline az marad meg, amit korábban
+  már megnézett (a csempék tárolódnak).
 - Az iOS Safari a hangfelvételt `audio/mp4`, a Chrome `audio/webm` formátumban
   menti — mindkettő lejátszható az appban és exportálható.

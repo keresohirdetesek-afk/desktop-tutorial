@@ -116,14 +116,37 @@ export async function confirmDialog(text, { title = 'Biztos benne?', okText = 'I
   return res != null;
 }
 
+/**
+ * Fájl letöltése.
+ *
+ * A böngésző a blob-hivatkozásból olvassa ki az adatot, és egy nagy mentést
+ * (több tíz MB fotóval) a telefon lassú tárolójára írni sokáig tarthat. Ha a
+ * hivatkozást közben elengedjük, a fájl csonkán marad — ezért csak jóval
+ * később, illetve az oldal elhagyásakor engedjük el.
+ */
+const pendingUrls = new Set();
+
 export function download(blob, filename) {
   const url = URL.createObjectURL(blob);
-  const a = el('a', { href: url, download: filename });
+  pendingUrls.add(url);
+
+  const a = el('a', { href: url, download: filename, rel: 'noopener' });
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+  // nagyobb fájlnál tovább várunk: nagyjából 10 MB-onként egy perc, max. 10 perc
+  const minutes = Math.min(10, Math.max(2, Math.ceil(blob.size / (10 * 1024 * 1024))));
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    pendingUrls.delete(url);
+  }, minutes * 60000);
 }
+
+window.addEventListener('pagehide', () => {
+  for (const url of pendingUrls) URL.revokeObjectURL(url);
+  pendingUrls.clear();
+});
 
 export function formatDateTime(t) {
   if (!t) return '—';

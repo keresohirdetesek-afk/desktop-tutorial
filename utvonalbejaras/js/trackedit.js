@@ -10,6 +10,7 @@ import {
   renderTrack, lengthByStatus, rejectedSections, trackLength, drawnLength,
   formatDistance, formatDuration, REJECTED, isRejected,
 } from './geo.js';
+import { onTileLoad, setTilesEnabled, tilesEnabled, cachedTileCount } from './tiles.js';
 import { $, el, toast, modal } from './ui.js';
 
 const SNAP_PX = 26; // ennél közelebb a meglévő nyomvonalhoz odaillesztjük a csúcsot
@@ -47,11 +48,15 @@ export class TrackEditor {
     this.dirty = false;
     this.root.hidden = false;
     document.body.classList.add('modal-open');
+    this.syncMapButton();
+    // a befutó csempék után újra kell rajzolni
+    onTileLoad(() => { if (!this.root.hidden) this.draw(); });
     requestAnimationFrame(() => { this.draw(); this.renderPanel(); });
     return new Promise((resolve) => { this._resolve = resolve; });
   }
 
   close() {
+    onTileLoad(null);
     this.root.hidden = true;
     document.body.classList.remove('modal-open');
     const r = this._resolve;
@@ -71,6 +76,7 @@ export class TrackEditor {
     c.addEventListener('contextmenu', (e) => e.preventDefault());
 
     $('#trackedit-close', this.root).addEventListener('click', () => this.close());
+    $('#trackedit-map', this.root).addEventListener('click', () => this.toggleMap());
     $('#trackedit-zoom-in', this.root).addEventListener('click', () => this.zoomBy(1.5));
     $('#trackedit-zoom-out', this.root).addEventListener('click', () => this.zoomBy(1 / 1.5));
     $('#trackedit-fit', this.root).addEventListener('click', () => {
@@ -122,6 +128,29 @@ export class TrackEditor {
         requestAnimationFrame(() => { pending = false; this.draw(); });
       }).observe($('#trackedit-stage', this.root));
     }
+  }
+
+  /** Alaptérkép be/ki — offline vagy takarékos használathoz kikapcsolható. */
+  async toggleMap() {
+    const on = !tilesEnabled();
+    setTilesEnabled(on);
+    try { localStorage.setItem('tiles', on ? '1' : '0'); } catch (_) {}
+    this.syncMapButton();
+    this.draw();
+    if (on) {
+      toast('Térkép bekapcsolva — a betöltött csempék offline is megmaradnak.');
+    } else {
+      const n = await cachedTileCount();
+      toast(`Térkép kikapcsolva.${n ? ` ${n} csempe marad tárolva.` : ''}`);
+    }
+  }
+
+  syncMapButton() {
+    const b = $('#trackedit-map', this.root);
+    const on = tilesEnabled();
+    b.textContent = on ? '🗺️ Térkép' : '🗺️ Vázlat';
+    b.classList.toggle('active', on);
+    b.title = on ? 'Alaptérkép kikapcsolása' : 'Alaptérkép bekapcsolása';
   }
 
   /* --------------------------------------------------- nagyítás, mozgatás */

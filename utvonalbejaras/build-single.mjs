@@ -47,10 +47,12 @@ function bundleScript() {
       );
     }
     if (file === 'js/app.js') {
-      // egyetlen fájlban nincs mit gyorsítótárazni
+      // egyetlen fájlban nincs mit gyorsítótárazni — de a felhasználó lássa,
+      // miért nem jelenik meg offline-készenlét visszajelzés
       code = code.replace(
         /\n[ \t]*if \('serviceWorker' in navigator[\s\S]*?\n[ \t]*\}\n/,
-        '\n'
+        "\n  setOfflineStatus('Egyfájlos változat: a teljes alkalmazás ebben a fájlban van, "
+        + "külön offline gyorsítótár nélkül is működik.');\n"
       );
     }
 
