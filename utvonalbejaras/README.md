@@ -23,6 +23,7 @@ használatra.
 | **Rajzolás a képernyőn** a fotóra (szabadkéz, keret, jelölő nyíl) | Fotó → *Jelölés / méretek* |
 | **Méretek beírása**: méretvonal két pont közé + beírt érték (m / cm / t) | Szerkesztő → *Méret* eszköz |
 | **Halvány útirány-nyíl** — külön eszköz, saját beállításokkal | Szerkesztő → *Útirány* eszköz |
+| **Égtáj (iránytű) minden fotón** — merre nézett a kamera | automatikus, Szerkesztő → *Iránytű* |
 | **Hangjegyzet** felvétele a helyszínen, önállóan vagy fotóhoz csatolva | *Hangjegyzet* gomb, vagy fotó → *Hangjegyzet* |
 | **Írott jegyzet** és pontjelölés a nyomvonalon | *Jegyzet*, *Pont jelölése* |
 | **Visszakeresés** név, jegyzet, képre írt felirat, beírt méret és koordináta szerint | *Keresés* fül |
@@ -50,6 +51,37 @@ A rajzelemek a kép **arányos koordinátáin** tárolódnak, ezért a jelölés
 bármekkora kijelzőn és a teljes felbontású exportban is pontosan ugyanoda esik.
 A jelölések utólag szerkeszthetők: a fotó megnyitásakor a korábbi elemek
 visszatöltődnek, egyenként törölhetők (*Törlés* eszköz), vagy visszavonhatók.
+
+### Égtáj minden fotón
+
+Egy terepi fotó sokszor csak akkor értelmezhető, ha tudni lehet, **merre
+nézett a kamera**. Ezért minden képre rákerül egy iránytű-jel, beleégetve a
+mentett képbe — így akkor is látszik, ha a fotót kiexportálva, az appon kívül
+nézik.
+
+- A korong tetején lévő **sárga háromszög a nézetirány**: azt jelöli, amit a
+  képen látunk.
+- A korongon belül a **piros tű az északra** mutat, a betűk (É, K, D, Ny)
+  vele együtt fordulnak. Így egy pillantással látszik, hogy a képen látható
+  dolog melyik égtáj felé esik.
+- Alatta a felirat számmal is idézhető: pl. **DK 135°**.
+
+Az irány forrása, sorrendben: a kép **EXIF-adata** (ha a telefon rögzítette),
+a készülék **iránytűje**, végül menet közben a **haladási irány**. Az adatlapon
+mindig látszik, melyikből származik.
+
+**Ha nincs iránytű-adat** (nincs engedély, vagy a készülék nem ad ilyet), az
+app szól, és az égtáj utólag megadható: Szerkesztő → *Iránytű* → *Irány
+javítása*, ahol fok (`135`) és égtáj (`DK`) is beírható. Ugyanitt a jel a
+képen áthelyezhető, ha eltakarna valamit.
+
+> **iPhone:** az iránytűhöz a rendszer külön engedélyt kér, amit csak
+> koppintásra lehet megadni — ezért az engedélykérés a *Fotó* gomb
+> megnyomásakor jelenik meg. Ha egyszer elutasították, a Safari
+> beállításaiban lehet visszakapcsolni.
+
+Az égtáj a **keresésben** is szerepel: rá lehet keresni arra, hogy
+„délkelet”, „DK” vagy „135”.
 
 ### A nyomvonal utólagos szerkesztése
 
@@ -267,6 +299,7 @@ utvonalbejaras/
     ├── geo.js              GPS-rögzítés, távolság, nyomvonalrajz, GPX
     ├── editor.js           fotó-jelölő (rajz, méret, útirány-nyíl, szöveg)
     ├── tiles.js            OSM-csempék betöltése és offline tárolása
+    ├── compass.js          kameairány a készülék tájolásérzékelőjéből
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés
 ```

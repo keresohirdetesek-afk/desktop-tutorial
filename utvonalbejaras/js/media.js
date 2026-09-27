@@ -133,6 +133,11 @@ function parseTiff(view, tiff) {
       if (tag === 0x0003) lonRef = String.fromCharCode(view.getUint8(valOff));
       if (tag === 0x0002) lat = dms(dataOff);
       if (tag === 0x0004) lon = dms(dataOff);
+      // GPSImgDirection: merre nézett a kamera (sok telefon rögzíti)
+      if (tag === 0x0011 && type === 5) {
+        const dir = ratio(dataOff);
+        if (isFinite(dir)) out.heading = ((dir % 360) + 360) % 360;
+      }
     });
     if (lat != null && lon != null && isFinite(lat) && isFinite(lon) && (lat || lon)) {
       out.lat = latRef === 'S' ? -lat : lat;

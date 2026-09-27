@@ -4,8 +4,9 @@ import * as db from './db.js';
 import {
   TrackRecorder, currentPosition, renderTrack, lengthByStatus, isRejected,
   rejectedSections, drawnLength, detectGap, formatDistance, formatDuration,
-  formatCoord, toGPX, toGeoJSON, typeLabel, describeItem,
+  formatCoord, formatHeading, cardinal, toGPX, toGeoJSON, typeLabel, describeItem,
 } from './geo.js';
+import { startCompass, compassHeading, compassState } from './compass.js';
 import { AudioRecorder, shrinkImage, makeThumb, readExif } from './media.js';
 import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
@@ -486,10 +487,27 @@ async function onPhotoSelected(e) {
   const live = files.length === 1 ? await positionNow() : null;
   let firstId = null;
   let noPos = 0;
+  let noHeading = 0;
 
   for (const file of files) {
     try {
       const exif = await readExif(file);
+
+      // kameairány: a képbe írt érték a legmegbízhatóbb, utána az iránytű,
+      // végül menet közben a haladási irány
+      let heading = null, headingSource = null;
+      if (exif && exif.heading != null) {
+        heading = exif.heading; headingSource = 'exif';
+      } else {
+        const c = compassHeading();
+        if (c != null) { heading = c; headingSource = 'compass'; }
+        else if (state.recording && recorder && recorder.current
+                 && recorder.current.heading != null
+                 && (recorder.current.speed == null || recorder.current.speed > 1)) {
+          heading = recorder.current.heading; headingSource = 'gps';
+        }
+      }
+
       let pos;
       if (exif && exif.lat != null) {
         pos = { lat: exif.lat, lon: exif.lon, acc: null, heading: null, posAt: exif.takenAt || null, posSource: 'exif' };
@@ -499,6 +517,7 @@ async function onPhotoSelected(e) {
         pos = { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none' };
       }
       if (pos.lat == null) noPos++;
+      if (heading == null) noHeading++;
 
       const { blob, width, height } = await shrinkImage(file);
       const thumb = await makeThumb(blob);
@@ -510,6 +529,8 @@ async function onPhotoSelected(e) {
         created: (exif && exif.takenAt) || Date.now(),
         importedAt: exif && exif.takenAt ? Date.now() : undefined,
         ...pos,
+        heading,
+        headingSource,
         title: '',
         note: '',
         dims: [],
@@ -532,6 +553,16 @@ async function onPhotoSelected(e) {
   markUnsaved();
   renderItems();
   drawTrack();
+
+  if (noHeading) {
+    const st = compassState();
+    const why = st.state === 'denied'
+      ? 'Az iránytű engedélye hiányzik.'
+      : st.state === 'unsupported'
+        ? 'Ez a készülék nem ad iránytű-adatot.'
+        : 'Nem érkezett iránytű-adat.';
+    toast(`${why} Az égtájat a szerkesztő Iránytű eszközével adhatja meg.`, 'error');
+  }
 
   if (noPos) {
     toast(
@@ -559,9 +590,14 @@ async function annotate(itemId) {
     imageBlob: item.photo,
     ops: item.ops || [],
     title: item.title || 'Fotó jelölése',
+    heading: item.heading,
   });
   if (!res) return;
 
+  if (res.heading != null && res.heading !== item.heading) {
+    item.heading = res.heading;
+    if (item.headingSource !== 'exif') item.headingSource = 'manual';
+  }
   item.ops = res.ops;
   item.dims = res.dims;
   item.texts = res.texts;
@@ -725,6 +761,7 @@ function itemCard(item, extraSub) {
 
   const tags = [];
   for (const d of item.dims || []) tags.push(el('span', { class: 'tag dim', text: '↔ ' + d }));
+  if (item.heading != null) tags.push(el('span', { class: 'tag', text: '🧭 ' + formatHeading(item.heading) }));
   if (item.audio && item.type === 'photo') tags.push(el('span', { class: 'tag', text: '🎙️ hang' }));
   if ((item.ops || []).some((o) => o.k === 'dir')) tags.push(el('span', { class: 'tag', text: '⇨ útirány' }));
 
@@ -839,6 +876,11 @@ async function openViewer(id) {
     [item.importedAt ? 'Felvétel ideje' : 'Idő', formatDateTime(item.created)],
     ['Pozíció', formatCoord(item.lat, item.lon) + positionNote(item)],
   ];
+  if (item.heading != null) {
+    const c = cardinal(item.heading);
+    const src = { compass: 'iránytű', exif: 'a kép adatából', gps: 'haladási irány', manual: 'kézzel' }[item.headingSource];
+    rows.push(['Kameairány', `${c.name} (${c.short} ${c.deg}°)${src ? ` — ${src}` : ''}`]);
+  }
   if (item.dims && item.dims.length) rows.push(['Méretek', item.dims.join(' · ')]);
   if (item.texts && item.texts.length) rows.push(['Feliratok', item.texts.join(' · ')]);
   if (item.note) rows.push(['Jegyzet', item.note]);
@@ -946,6 +988,7 @@ async function runSearch() {
       i.title, i.note, (i.dims || []).join(' '), (i.texts || []).join(' '),
       s ? s.name : '', s ? s.note : '', s ? vehicleSummary(s.vehicle || {}) : '',
       i.lat != null ? formatCoord(i.lat, i.lon) : '',
+      i.heading != null ? `${cardinal(i.heading).name} ${cardinal(i.heading).short} ${Math.round(i.heading)}°` : '',
     ].join(' ').toLowerCase();
     return hay.includes(q);
   });
@@ -1212,7 +1255,11 @@ function bind() {
   $('#rec-mark').addEventListener('click', markPoint);
   $('#edit-track').addEventListener('click', openTrackEditor);
   $('#reject-summary').addEventListener('click', openTrackEditor);
-  $('#cap-photo').addEventListener('click', () => $('#photo-input').click());
+  $('#cap-photo').addEventListener('click', async () => {
+    // az iránytű engedélyét iOS csak felhasználói koppintásból adja meg
+    await startCompass();
+    $('#photo-input').click();
+  });
   $('#photo-input').addEventListener('change', onPhotoSelected);
   $('#cap-audio').addEventListener('click', () => recordAudio(null));
   $('#cap-note').addEventListener('click', addNote);

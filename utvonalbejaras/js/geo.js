@@ -142,6 +142,33 @@ export function formatCoord(lat, lon) {
   return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
 }
 
+/* --------------------------------------------------------------- égtáj */
+
+const CARDINALS = [
+  { short: 'É',   name: 'észak' },
+  { short: 'ÉK',  name: 'északkelet' },
+  { short: 'K',   name: 'kelet' },
+  { short: 'DK',  name: 'délkelet' },
+  { short: 'D',   name: 'dél' },
+  { short: 'DNy', name: 'délnyugat' },
+  { short: 'Ny',  name: 'nyugat' },
+  { short: 'ÉNy', name: 'északnyugat' },
+];
+
+/** Fokból égtáj: { short: 'ÉK', name: 'északkelet', deg: 42 }. */
+export function cardinal(deg) {
+  if (deg == null || !isFinite(deg)) return null;
+  const d = ((deg % 360) + 360) % 360;
+  const c = CARDINALS[Math.round(d / 45) % 8];
+  return { short: c.short, name: c.name, deg: Math.round(d) };
+}
+
+/** Rövid felirat: „ÉK 42°”. */
+export function formatHeading(deg) {
+  const c = cardinal(deg);
+  return c ? `${c.short} ${c.deg}°` : '—';
+}
+
 /**
  * Folyamatos GPS-rögzítő. A pontokat callbackkel adja tovább,
  * a hibás/pontatlan méréseket kiszűri.

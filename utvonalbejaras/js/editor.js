@@ -16,6 +16,7 @@ export const TOOLS = [
   { id: 'dim',   label: 'Méret',       icon: '↔' },
   { id: 'text',  label: 'Szöveg',      icon: 'T' },
   { id: 'rect',  label: 'Keret',       icon: '▢' },
+  { id: 'compass', label: 'Iránytű',   icon: '🧭' },
   { id: 'erase', label: 'Törlés',      icon: '⌫' },
 ];
 
@@ -45,13 +46,18 @@ export class PhotoEditor {
 
   /* --------------------------------------------------------- megnyitás */
 
-  open({ imageBlob, ops = [], title = 'Fotó jelölése' }) {
+  open({ imageBlob, ops = [], title = 'Fotó jelölése', heading = null }) {
     return new Promise(async (resolve) => {
       this._resolve = resolve;
       this.ops = JSON.parse(JSON.stringify(ops || []));
       this.redoStack = [];
       this.active = null;
       this.drag = null;
+      this.heading = heading;
+      // minden fotón legyen égtáj: ha ismert az irány, magától felkerül
+      if (heading != null && !this.ops.some((o) => o.k === 'compass')) {
+        this.ops.push({ k: 'compass', p: [0.86, 0.14], heading, size: 62 });
+      }
       this.imageBlob = imageBlob;
       $('#editor-title', this.root).textContent = title;
       this.root.hidden = false;
@@ -126,6 +132,25 @@ export class PhotoEditor {
       delete op.mid;
       this.draw();
     });
+    $('#editor-compass-edit', this.root).addEventListener('click', async () => {
+      const op = this.ops.find((o) => o.k === 'compass');
+      const heading = await this.askHeading(op ? op.heading : this.heading);
+      if (heading == null) return;
+      this.heading = heading;
+      if (op) op.heading = heading;
+      else this.commit({ k: 'compass', p: [0.86, 0.14], heading, size: 62 });
+      this._syncToolUI();
+      this.draw();
+    });
+    $('#editor-compass-remove', this.root).addEventListener('click', () => {
+      const i = this.ops.findIndex((o) => o.k === 'compass');
+      if (i < 0) { toast('Ezen a képen nincs iránytű.'); return; }
+      this.ops.splice(i, 1);
+      this.redoStack = [];
+      this._syncToolUI();
+      this.draw();
+      toast('Iránytű levéve. A képre koppintva visszatehető.');
+    });
     $$('[data-quickdir]', this.root).forEach((btn) =>
       btn.addEventListener('click', () => this.quickDirection(btn.dataset.quickdir))
     );
@@ -197,6 +222,11 @@ export class PhotoEditor {
     );
     // az útirány-nyíl saját beállítópanelja csak a saját eszközénél látszik
     $('#editor-dir-panel', this.root).hidden = this.tool !== 'dir';
+    $('#editor-compass-panel', this.root).hidden = this.tool !== 'compass';
+    const compassOp = this.ops.find((o) => o.k === 'compass');
+    const deg = compassOp ? compassOp.heading : this.heading;
+    $('#editor-compass-value', this.root).textContent =
+      deg == null ? 'nincs megadva' : `${cardinalShort(deg)} ${Math.round(deg)}°`;
     $('#editor-width', this.root).value = this.width;
     $('#editor-dir-alpha', this.root).value = Math.round(this.dirAlpha * 100);
     $('#editor-dir-alpha-val', this.root).textContent = Math.round(this.dirAlpha * 100) + '%';
@@ -259,6 +289,11 @@ export class PhotoEditor {
 
     if (this.tool === 'text') {
       this.addText(p);
+      return;
+    }
+
+    if (this.tool === 'compass') {
+      this.placeCompass(p);
       return;
     }
     if (this.tool === 'pen') {
@@ -471,6 +506,56 @@ export class PhotoEditor {
     ctx.restore();
   }
 
+  /**
+   * Iránytű elhelyezése vagy áthelyezése. Ha még nem ismert az irány,
+   * bekéri — így egy régi képhez is megadható az égtáj.
+   */
+  async placeCompass(p) {
+    let op = this.ops.find((o) => o.k === 'compass');
+
+    if (!op) {
+      let heading = this.heading;
+      if (heading == null) {
+        heading = await this.askHeading(null);
+        if (heading == null) return;
+        this.heading = heading;
+      }
+      op = { k: 'compass', p, heading, size: 62 };
+      this.commit(op);
+      return;
+    }
+
+    // ha a meglévő iránytűre koppintott, a fokot lehet javítani
+    const { dw, dh } = this.layout;
+    const near = Math.hypot((op.p[0] - p[0]) * dw, (op.p[1] - p[1]) * dh) < (op.size || 62) * (dw / 1000) * 1.3;
+    if (near) {
+      const heading = await this.askHeading(op.heading);
+      if (heading == null) return;
+      op.heading = heading;
+      this.heading = heading;
+    } else {
+      op.p = p;
+    }
+    this.redoStack = [];
+    this.draw();
+  }
+
+  async askHeading(value) {
+    const res = await modal({
+      title: 'Kameairány',
+      text: 'Merre nézett a kamera? Fokban (0 = észak, 90 = kelet), vagy égtájjal: É, ÉK, K, DK, D, DNy, Ny, ÉNy.',
+      fields: [{
+        name: 'heading',
+        label: 'Irány',
+        value: value == null ? '' : String(Math.round(value)),
+        placeholder: 'pl. 135 vagy DK',
+      }],
+      okText: 'Beállítás',
+    });
+    if (!res || !res.heading) return null;
+    return parseHeading(res.heading);
+  }
+
   /** Kép + jelölések teljes felbontású, lapított exportja. */
   async flatten() {
     const img = this.image || (await loadImage(this.imageBlob));
@@ -491,7 +576,8 @@ export class PhotoEditor {
       const flat = await this.flatten();
       const dims = this.ops.filter((o) => o.k === 'dim' && o.label).map((o) => o.label);
       const texts = this.ops.filter((o) => o.k === 'text' && o.text).map((o) => o.text);
-      this.close({ ops: this.ops, dims, texts, flat });
+      const compass = this.ops.find((o) => o.k === 'compass');
+      this.close({ ops: this.ops, dims, texts, flat, heading: compass ? compass.heading : null });
     } catch (e) {
       toast('A mentés nem sikerült: ' + e.message, 'error');
     } finally {
@@ -508,6 +594,7 @@ const HINTS = {
   dim: 'Húzzon vonalat a két pont közé, majd írja be a méretet.',
   text: 'Koppintson oda, ahová a szöveg kerüljön.',
   rect: 'Húzással keretezhet be egy részletet.',
+  compass: 'Koppintson oda, ahová az iránytű kerüljön. Hosszan nyomva javíthatja a fokot.',
   erase: 'Koppintson egy jelölésre a törléséhez.',
 };
 
@@ -544,6 +631,8 @@ export function drawOp(ctx, op, ox, oy, dw, dh) {
     drawDimension(ctx, X(op.a), Y(op.a), X(op.b), Y(op.b), op, S, bounds);
   } else if (op.k === 'text') {
     drawLabel(ctx, X(op.p), Y(op.p), op.text, Math.max(10, (op.size || 24) * S), op.color, 'left', bounds);
+  } else if (op.k === 'compass') {
+    drawCompass(ctx, op, ox, oy, dw, dh, S);
   }
   ctx.restore();
 }
@@ -676,6 +765,127 @@ function drawLabel(ctx, x, y, text, size, color, align, bounds) {
   ctx.fillStyle = color === '#111111' ? '#ffffff' : color;
   ctx.fillText(text, bx + padX, by + bh / 2);
   ctx.restore();
+}
+
+/* -------------------------------------------------------------- iránytű
+
+Minden fotóra rákerül, hogy merre nézett a kamera. A körben az ÉSZAK-tű a
+valódi északra mutat a felvétel irányához képest, a kör tetején lévő fix
+háromszög pedig magát a nézetirányt jelöli — vagyis azt, amit a képen látunk.
+Alatta az égtáj és a fok, hogy szám szerint is idézhető legyen.           */
+
+function drawCompass(ctx, op, ox, oy, dw, dh, S) {
+  const heading = ((op.heading % 360) + 360) % 360;
+  const r = Math.max(18, (op.size || 62) * S);
+  const label = `${cardinalShort(heading)} ${Math.round(heading)}°`;
+  const font = Math.max(9, r * 0.42);
+
+  // a teljes jel (nézetirány-háromszög fent, felirat lent) maradjon a képen
+  const topRoom = r * 1.4;
+  const bottomRoom = r + font * 1.9;
+  const cx = Math.min(Math.max(ox + op.p[0] * dw, ox + r + 2), ox + dw - r - 2);
+  const cy = Math.min(Math.max(oy + op.p[1] * dh, oy + topRoom + 2), oy + dh - bottomRoom - 2);
+
+  ctx.save();
+  ctx.globalAlpha = op.alpha == null ? 0.92 : op.alpha;
+
+  // háttér: sötét korong, hogy bármilyen képen olvasható legyen
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(12,16,22,0.62)';
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, r * 0.05);
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.stroke();
+
+  // nézetirány: háromszög a korongon KÍVÜL, hogy ne takarja az égtájat
+  ctx.fillStyle = '#ffd60a';
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = Math.max(1, r * 0.03);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r * 1.36);
+  ctx.lineTo(cx - r * 0.23, cy - r * 1.02);
+  ctx.lineTo(cx + r * 0.23, cy - r * 1.02);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // a rózsa elfordul: ha a kamera északra néz, az É felül van
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate((-heading * Math.PI) / 180);
+
+  // északi tű
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.55);
+  ctx.lineTo(-r * 0.15, r * 0.06);
+  ctx.lineTo(r * 0.15, r * 0.06);
+  ctx.closePath();
+  ctx.fillStyle = '#ff3b30';
+  ctx.fill();
+  // déli fél halványabban, hogy egyértelmű legyen, melyik az észak
+  ctx.beginPath();
+  ctx.moveTo(0, r * 0.4);
+  ctx.lineTo(-r * 0.15, r * 0.06);
+  ctx.lineTo(r * 0.15, r * 0.06);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fill();
+
+  // égtáj-betűk a rózsán, mindig talpukon állva
+  ctx.font = `600 ${Math.max(7, r * 0.3)}px system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const [text, angle] of [['É', 0], ['K', 90], ['D', 180], ['Ny', 270]]) {
+    const a = (angle * Math.PI) / 180;
+    ctx.save();
+    ctx.translate(Math.sin(a) * r * 0.74, -Math.cos(a) * r * 0.74);
+    ctx.rotate((heading * Math.PI) / 180);   // a betű ne álljon fejre
+    ctx.fillStyle = text === 'É' ? '#ff6b61' : 'rgba(255,255,255,0.92)';
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // felirat a kör alatt
+  ctx.globalAlpha = 1;
+  ctx.font = `700 ${font}px system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const tw = ctx.measureText(label).width;
+  const bh = font * 1.6;
+  const by = cy + r + bh * 0.62;
+  roundRect(ctx, cx - tw / 2 - font * 0.4, by - bh / 2, tw + font * 0.8, bh, bh * 0.3);
+  ctx.fillStyle = 'rgba(12,16,22,0.72)';
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(label, cx, by);
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
+}
+
+/** „DK”, „135”, „135°” → fok. */
+export function parseHeading(text) {
+  const t = String(text).trim().toUpperCase().replace('°', '').replace(',', '.');
+  const byName = {
+    'É': 0, 'E': 0, 'N': 0,
+    'ÉK': 45, 'EK': 45, 'NE': 45,
+    'K': 90,
+    'DK': 135, 'SE': 135,
+    'D': 180, 'S': 180,
+    'DNY': 225, 'DNy': 225, 'SW': 225,
+    'NY': 270, 'W': 270,
+    'ÉNY': 315, 'ENY': 315, 'NW': 315,
+  };
+  if (Object.prototype.hasOwnProperty.call(byName, t)) return byName[t];
+  const n = Number(t);
+  if (!isFinite(n)) return null;
+  return ((n % 360) + 360) % 360;
+}
+
+function cardinalShort(deg) {
+  const names = ['É', 'ÉK', 'K', 'DK', 'D', 'DNy', 'Ny', 'ÉNy'];
+  return names[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
 }
 
 function roundRect(ctx, x, y, w, h, r) {
