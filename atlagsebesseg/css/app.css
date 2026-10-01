@@ -20,6 +20,11 @@
   --warn: #ffbe4d;
   --radius: 16px;
   --kartya-arnyek: none;
+  /* Az alkalmazássáv szélessége asztali gépen, és a mögötte látszó
+     háttér. A jogi oldal törzse régóta 720 képpont — a felület is
+     ezt veszi át, hogy a két lap egyforma széles legyen. */
+  --app-max: 720px;
+  --bg-lap: #09090b;
   /* a logó pirosa: márkaszín, témától független */
   --marka: #e8332a;
 
@@ -56,6 +61,7 @@
   --warn: #a86400;
 
   --marka: #d5211a;
+  --bg-lap: #e2e5ec;
   --band-ok-bg: #c9f0d4;
   --band-ok-ink: #0d2a17;
   --band-ok-keret: #7ed39a;
@@ -196,6 +202,33 @@ a.btn, a.chip, a.hirdetes { text-decoration: none; }
   border-top: 1px solid var(--border);
   background: var(--surface);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ------------------------------------------- asztali gépen keskeny sáv
+
+   A felület telefonra készült: 390 képpont széles kijelzőn minden
+   elem a helyén van. Asztali monitoron viszont ugyanez teljes
+   szélességben szétfolyik — a „Mérés indítása" gomb méteres lesz, a
+   kártyák sora pedig olvashatatlanul hosszú.
+
+   Ezért széles ablakban az egész alkalmazás egy középre zárt sávba
+   kerül. Nem százalékot használunk, hanem fix felső korlátot: 70%
+   egy 1920 képpontos monitoron még mindig 1340 képpont volna, azaz a
+   gomb továbbra is túl nagy maradna. A korlát a `--app-max`, egyetlen
+   szám átírásával tágítható.                                         */
+@media (min-width: 760px) {
+  html { background: var(--bg-lap); }
+  body {
+    max-width: var(--app-max);
+    margin-inline: auto;
+    border-inline: 1px solid var(--border);
+  }
+  /* A teljes képernyős profilnézet a viewporthoz képest van rögzítve,
+     ezért magától kilógna a sávból. */
+  .profil-lap {
+    max-width: var(--app-max);
+    margin-inline: auto;
+  }
 }
 
 .tab {
@@ -459,7 +492,17 @@ a.btn, a.chip, a.hirdetes { text-decoration: none; }
 
 .ora-kartya { align-items: stretch; gap: 12px; }
 
-.ora-doboz { position: relative; }
+/* Az óra a rendelkezésre álló szélességet tölti ki, de egy ponton túl
+   nem nő tovább: a műszer olvashatóságán 420 képpont fölött már nem
+   javít a méret, viszont asztali gépen az egész képernyőt elfoglalná.
+   Telefonon ez a korlát nem lép életbe (390 képpontos kijelzőn az óra
+   ennél keskenyebb), tehát ott semmi nem változik.                   */
+.ora-doboz {
+  position: relative;
+  max-width: 420px;
+  margin-inline: auto;
+  width: 100%;
+}
 
 /* A műszer színei külön változókban. A minta egy gyári műszeregység:
    sötét csatornában világító gyűrű, középen nagy fehér szám. Világos

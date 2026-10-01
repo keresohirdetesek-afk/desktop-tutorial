@@ -693,7 +693,7 @@ async function temaTeszt(b) {
 
 async function elrendezesTeszt(b) {
   console.log('\n11. Elrendezés minden méreten és témán');
-  for (const sz of [320, 360, 390, 430]) {
+  for (const sz of [320, 360, 390, 430, 1440]) {
     for (const tema of ['vilagos', 'sotet']) {
       const p = await ujLap(b, { tema, szelesseg: sz });
       await p.goto(CIM);
@@ -702,7 +702,13 @@ async function elrendezesTeszt(b) {
         await p.waitForTimeout(180);
         const t = await p.evaluate((id) => {
           const rossz = [...document.querySelectorAll(`#${id} *, #topbar *`)]
-            .filter((e) => e.scrollWidth > e.clientWidth + 1 && e.clientWidth > 0 &&
+            /* Csak HTML-elemekre érvényes a vizsgálat: az SVG-n belüli
+               feliratokat a viewBox pozicionálja, nem a CSS doboz, így
+               ott a scrollWidth/clientWidth páros félrevezet (a gomb- és
+               profilrajz „70", „-40" címkéi tévesen túllógtak). Magát a
+               rajzot tartalmazó HTML-elemet továbbra is nézzük. */
+            .filter((e) => e.namespaceURI === 'http://www.w3.org/1999/xhtml' &&
+                           e.scrollWidth > e.clientWidth + 1 && e.clientWidth > 0 &&
                            getComputedStyle(e).overflowX === 'visible' &&
                            getComputedStyle(e).textOverflow !== 'ellipsis')
             .map((e) => `${e.tagName}.${e.className}#${e.id}`);
@@ -721,6 +727,32 @@ async function elrendezesTeszt(b) {
         return h.scrollWidth > h.clientWidth + 1;
       });
       all(`${sz}px ${tema}: a szóvédjegy nincs levágva`, !fejlec);
+
+      /* Asztali gépen a felület nem folyhat szét: középre zárt sávban
+         ül, a szélessége a `--app-max`. Telefonméreten viszont teljes
+         szélességű marad — ott minden képpont kell. */
+      {
+        const v = await p.evaluate(() => {
+          const r = document.body.getBoundingClientRect();
+          return {
+            body: Math.round(r.width),
+            bal: Math.round(r.left),
+            jobb: Math.round(window.innerWidth - r.right),
+            ablak: window.innerWidth,
+            max: parseInt(getComputedStyle(document.documentElement)
+              .getPropertyValue('--app-max'), 10),
+          };
+        });
+        if (sz >= 760) {
+          all(`${sz}px ${tema}: a felület a sávra korlátozódik`,
+              v.body === v.max, `${v.body} ≠ ${v.max}`);
+          all(`${sz}px ${tema}: a sáv középre zárt`,
+              Math.abs(v.bal - v.jobb) <= 1, `bal ${v.bal} / jobb ${v.jobb}`);
+        } else {
+          all(`${sz}px ${tema}: telefonméreten teljes szélesség`,
+              v.body === v.ablak, `${v.body}/${v.ablak}`);
+        }
+      }
 
       /* Sötét témában a csempéket CSS sötétíti, nem másik szolgáltató.
          Két dolgot kell látni: a szűrő osztálya a térképen van, és nem
