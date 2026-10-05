@@ -28,21 +28,28 @@
 
 # ----------------------------------------------------------- gyorsítótár
 <IfModule mod_headers.c>
-  # A service workert SOHA nem szabad sokáig gyorsítótárazni: ha a böngésző
-  # a régi sw.js-t kapja vissza, az app frissítése heteken át elakadhat.
-  <FilesMatch "^(sw\.js|manifest\.webmanifest)$">
-    Header set Cache-Control "no-cache, max-age=0, must-revalidate"
+  # Ez az oldal fájlnév-verziózás NÉLKÜL frissül: minden kiadásban
+  # ugyanaz az `app.css` és `app.js` kerül felül. Ezért a kódnak és a
+  # HTML-nek minden kérésnél ellenőriznie kell, különben a kiadás után a
+  # látogató a régi felületet látja — akkor is, ha a HTML már az új.
+  #
+  # A `no-cache` nem tiltja a tárolást, csak feltételes kérést ír elő:
+  # ha a fájl nem változott, a kiszolgáló 304-et küld, ami pár bájt.
+  #
+  # Ebben a listában a `sw.js` is benne van, és ez szándékos. Korábban
+  # külön szabály tette kulccsá, de utána egy `\.(css|js|…)$` minta
+  # felülírta az órás értékkel — Apache alatt a később illeszkedő
+  # `Header set` nyer. Egyetlen minta van, nincs mit felülírni.
+  <FilesMatch "\.(html|css|js|webmanifest)$">
+    Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
 
-  # A HTML is mindig ellenőrizzen: az app maga kezeli a verziózást.
-  <FilesMatch "\.html$">
-    Header set Cache-Control "no-cache, max-age=0, must-revalidate"
-  </FilesMatch>
-
-  # A többi állomány neve kiadásonként nem változik, de a service worker
-  # hálózat-először tölti őket, ezért itt is rövid életidő a biztos.
-  <FilesMatch "\.(css|js|svg|png|woff2)$">
-    Header set Cache-Control "public, max-age=3600"
+  # A képek és a betűtípus tartalma gyakorlatilag állandó. Ha mégis
+  # cserélődnek, a service worker telepítéskor `cache: 'reload'`-dal
+  # tölti újra őket, ami megkerüli a böngésző gyorsítótárát — ezért itt
+  # a hosszabb életidő biztonságos.
+  <FilesMatch "\.(svg|png|ico|woff2)$">
+    Header set Cache-Control "public, max-age=604800"
   </FilesMatch>
 </IfModule>
 

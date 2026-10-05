@@ -127,10 +127,24 @@ A csomagban van egy `.htaccess`, ami Apache alatt elintézi a következőket:
 - **HTTP → HTTPS** átirányítás,
 - **`www` → `www` nélküli** alak (az oldal `canonical`-ja ez),
 - helyes MIME-típus a `.webmanifest` és a `.woff2` fájloknak,
-- **a `sw.js` nem gyorsítótárazódik** — ez a legfontosabb sor: ha a
-  böngésző a régi service workert kapja vissza, az app frissítése hetekre
-  elakadhat,
+- **a HTML, a CSS, a JS és a `sw.js` mindig ellenőriz** (`no-cache`) —
+  ez a legfontosabb rész, lásd lejjebb,
+- a képek és a betűtípus egy hétig tárolhatók,
 - tömörítés, könyvtárlistázás tiltása.
+
+**Miért nem elég a rövid életidő a CSS-re és a JS-re?** Ez az oldal
+fájlnév-verziózás nélkül frissül: minden kiadásban ugyanaz az `app.css`
+kerül felül. Ha a böngésző akár egy órára elteszi, akkor a kiadás után a
+látogató egy órán át a **régi felületet** látja — hiába új a HTML, és
+hiába emelted a `sw.js` gyorsítótárnevét. A `no-cache` nem tiltja a
+tárolást, csak feltételes kérést ír elő: ha a fájl nem változott, a
+kiszolgáló 304-et küld, ami pár bájt.
+
+**Egy korábbi hiba ebben a fájlban:** a `sw.js` külön szabállyal kapott
+`no-cache`-t, de egy utána következő `\.(css|js|svg|png|woff2)$` minta
+felülírta egyórás értékkel — Apache alatt a később illeszkedő
+`Header set` nyer. Most egyetlen minta fedi mindkettőt, nincs mit
+felülírni. Ha a fájlt valaha átszerkeszted, erre ügyelj.
 
 Ha a szolgáltató nem Apache-ot használ (nginx vagy saját konfigurációjú
 LiteSpeed), a fájl hatástalan — akkor ugyanezt a vezérlőpultban vagy a
