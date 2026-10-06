@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face {
+    font-family: 'JetBrains Mono';
+    src: url('jetbrains-mono-700.woff2') format('woff2');
+    font-weight: 700;
+  }
+  :root {
+    --bg: #0e0e10;
+    --surface: #17171a;
+    --surface-2: #1f1f24;
+    --border: #2c2c33;
+    --text: #f2f3f5;
+    --muted: #9a9aa4;
+    --accent: #ff6a1f;
+    --marka: #e8332a;
+    --ok: #21c26a;
+    --hatar: #ffab1f;
+    --birsag: #f0342b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1640px;
+    height: 924px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Liberation Sans", Arial, sans-serif;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Lágy narancs fénylés a mérő mögött, és egy hidegebb a bal felsőben:
+     mélységet ad anélkül, hogy bármit elvonna a szövegről. */
+  .feny {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(110px);
+    pointer-events: none;
+  }
+  .feny.jobb { width: 760px; height: 760px; right: -120px; top: 60px;
+               background: rgba(255, 106, 31, 0.20); }
+  .feny.bal  { width: 620px; height: 620px; left: -180px; top: -160px;
+               background: rgba(77, 163, 255, 0.10); }
+
+  /* Az úttest a kép alján: a vágott sávban ül, tehát asztali gépen
+     eltűnik — ezért csak díszítés, információt nem hordoz. */
+  .ut {
+    position: absolute;
+    left: 0; right: 0; bottom: 0; height: 190px;
+    background: linear-gradient(180deg, transparent, #131316 38%, #0b0b0d);
+  }
+  .ut .felezo {
+    position: absolute; left: 0; right: 0; top: 104px; height: 7px;
+    background: repeating-linear-gradient(90deg,
+      rgba(242,243,245,0.16) 0 72px, transparent 72px 136px);
+  }
+
+  /* A biztonságos sáv: a Facebook asztali nézete csak ezt mutatja.
+     Minden lényeges elem ezen belül van. */
+  .sav {
+    position: absolute;
+    left: 0; right: 0; top: 150px; height: 624px;
+    display: flex; align-items: center; gap: 56px;
+    padding: 0 104px;
+  }
+
+  .bal { flex: 1 1 auto; min-width: 0; }
+
+  .fejlec { display: flex; align-items: center; gap: 22px; }
+  .jel { width: 118px; height: 104px; flex: none; color: var(--text); }
+  .szovedjegy {
+    font-size: 74px; font-weight: 700; font-style: italic;
+    letter-spacing: -1.8px; white-space: nowrap; line-height: 1;
+  }
+  .szovedjegy .elso { color: var(--marka); }
+
+  .focim {
+    margin-top: 40px;
+    font-size: 58px; font-weight: 700; line-height: 1.1;
+    letter-spacing: -1px;
+  }
+  .alcim {
+    margin-top: 20px;
+    font-size: 27px; line-height: 1.4; color: var(--muted);
+    max-width: 740px;
+  }
+  .alcim b { color: var(--text); font-weight: 700; }
+
+  .jellemzok { margin-top: 42px; display: flex; gap: 14px; }
+  .jellemzo {
+    flex: 1 1 0; min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 15px 16px 16px;
+  }
+  .jellemzo .cim {
+    font-size: 17px; font-weight: 700; line-height: 1.25;
+    letter-spacing: 0.2px;
+  }
+  .jellemzo .le {
+    margin-top: 6px; font-size: 14px; line-height: 1.35; color: var(--muted);
+  }
+  .jellemzo .pont {
+    display: block; width: 26px; height: 3px; border-radius: 2px;
+    background: var(--accent); margin-bottom: 11px;
+  }
+
+  .jobb { flex: none; width: 470px; display: flex; flex-direction: column;
+          align-items: center; gap: 26px; }
+
+  .igeret {
+    font-size: 19px; font-weight: 700; letter-spacing: 0.3px;
+    color: var(--text); text-align: center; line-height: 1.5;
+  }
+  .igeret span { color: var(--accent); }
+
+  .ora-szam {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700;
+    fill: var(--text);
+  }
+  .ora-cimke {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700;
+    fill: var(--muted); font-size: 24px;
+  }
+</style>
+</head>
+<body>
+
+<div class="feny bal"></div>
+<div class="feny jobb"></div>
+<div class="ut"><div class="felezo"></div></div>
+
+<div class="sav">
+  <div class="bal">
+
+    <div class="fejlec">
+      <!-- Ugyanaz a jelkép, mint az alkalmazás fejlécében. -->
+      <svg class="jel" viewBox="60 118 392 344">
+        <path d="M78 452 C140 392 250 330 322 266 L348 266 C392 330 430 392 428 452 Z" fill="currentColor"/>
+        <g fill="#0e0e10">
+          <path d="M331.0 272 L335.4 272 L329.0 296 L323.1 296 Z"/>
+          <path d="M318.5 310 L325.3 310 L313.9 340 L305.1 340 Z"/>
+          <path d="M297.8 356 L307.6 356 L295.0 392 L282.8 392 Z"/>
+          <path d="M269.0 410 L282.3 410 L261.0 452 L245.0 452 Z"/>
+        </g>
+        <path d="M100 258 A161 161 0 0 1 238.2 141.4" fill="none" stroke="#e8332a" stroke-width="26" stroke-linecap="round"/>
+        <path d="M271.8 141.4 A161 161 0 0 1 410 258" fill="none" stroke="currentColor" stroke-width="26" stroke-dasharray="30 20"/>
+        <g fill="#e8332a">
+          <path d="M71.5 308.8 A42 42 0 1 1 148.5 308.8 L110 397 Z"/>
+          <path d="M361.5 308.8 A42 42 0 1 1 438.5 308.8 L400 397 Z"/>
+        </g>
+      </svg>
+      <div class="szovedjegy"><span class="elso">átlag</span>sebesség.hu</div>
+    </div>
+
+    <div class="focim">Szabályosan érnél célba?</div>
+
+    <div class="alcim">
+      Mi lenne az eredmény, <b>ha Magyarországon bevezetnék az
+      átlagsebesség-mérést?</b> Mérd le a saját utadon, a telefonod
+      böngészőjében.
+    </div>
+
+    <div class="jellemzok">
+      <div class="jellemzo">
+        <span class="pont"></span>
+        <div class="cim">GPS-mérés menet közben</div>
+        <div class="le">Kijelölöd a szakaszt a térképen, és vezetsz.</div>
+      </div>
+      <div class="jellemzo">
+        <span class="pont"></span>
+        <div class="cim">Kalkulátor GPS nélkül</div>
+        <div class="le">Hossz és menetidő — elindulni sem kell.</div>
+      </div>
+      <div class="jellemzo">
+        <span class="pont"></span>
+        <div class="cim">Bírságtáblázat</div>
+        <div class="le">A hatályos rendelet tételei, magyarázattal.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="jobb">
+    <!-- Az alkalmazás műszere, ugyanazzal a felépítéssel: csatorna,
+         zöld–sárga–piros ív, mutató, középen a mért érték. -->
+    <svg width="430" height="360" viewBox="-215 -215 430 360">
+      <!-- A skála 60-tól 120-ig fut a félkörön. Egy érték szöge a
+           függőlegestől: (v - 90) / 30 * 90 fok. -->
+      <path d="M -162 0 A 162 162 0 0 1 162 0" fill="none"
+            stroke="rgba(242,243,245,0.09)" stroke-width="28" stroke-linecap="round"/>
+      <path d="M -162 0 A 162 162 0 0 1 81 -140.3" fill="none"
+            stroke="#21c26a" stroke-width="28" stroke-linecap="round"/>
+      <path d="M 81 -140.3 A 162 162 0 0 1 140.3 -81" fill="none"
+            stroke="#ffab1f" stroke-width="28"/>
+      <path d="M 140.3 -81 A 162 162 0 0 1 162 0" fill="none"
+            stroke="#f0342b" stroke-width="28" stroke-linecap="round"/>
+
+      <!-- A számlapot a skála alá rajzoljuk, hogy a mutató se lógjon rá. -->
+      <circle cx="0" cy="0" r="116" fill="#17171a" stroke="#2c2c33" stroke-width="2"/>
+
+      <!-- A feliratok a skálagyűrűn kívül ülnek, nem rajta. -->
+      <text class="ora-cimke" x="-186" y="42" text-anchor="middle">60</text>
+      <text class="ora-cimke" x="0" y="-190" text-anchor="middle">90</text>
+      <text class="ora-cimke" x="186" y="42" text-anchor="middle">120</text>
+
+      <text class="ora-szam" x="0" y="-18" text-anchor="middle"
+            font-size="74" fill="#f2f3f5">104</text>
+      <text x="0" y="16" text-anchor="middle" font-size="20"
+            fill="#9a9aa4" letter-spacing="3">SZAKASZÁTLAG</text>
+      <text class="ora-cimke" x="0" y="58" text-anchor="middle"
+            font-size="22" fill="#9a9aa4">km/h</text>
+
+      <!-- Mutató a 104 km/h-nál: (104-90)/30*90 = 42 fok. Rövid jel a
+           gyűrűn, nem a számlapon átnyúló tű. -->
+      <g transform="rotate(42)">
+        <path d="M -8 -132 L 0 -178 L 8 -132 Z" fill="#f2f3f5"/>
+      </g>
+    </svg>
+
+    <div class="igeret">
+      Nincs regisztráció.<br>
+      <span>Nem követünk.</span> Csak számolunk.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
