@@ -295,7 +295,7 @@ a GPS-es szimuláció, vagyis az app lényege nem működne.
 
 ```html
 <meta property="og:url"   content="https://atlagsebesseg.hu/">
-<meta property="og:image" content="https://atlagsebesseg.hu/icons/og.png">
+<meta property="og:image" content="https://atlagsebesseg.hu/icons/megosztas.png">
 ```
 
 A Facebook viszont gyorsítótárazza a korábban beolvasott adatokat. Ha a
@@ -316,7 +316,7 @@ curl -sSI https://atlagsebesseg.hu/ | head -20
 
 # a fontos fájlok kint vannak-e
 for u in / adatvedelem.html manifest.webmanifest sw.js robots.txt \
-         sitemap.xml icons/og.png icons/icon-512.png; do
+         sitemap.xml icons/megosztas.png icons/icon-512.png; do
   printf '%-28s %s\n' "$u" "$(curl -s -o /dev/null -w '%{http_code}' https://atlagsebesseg.hu/$u)"
 done
 ```

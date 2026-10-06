@@ -901,7 +901,12 @@ async function eszkozTeszt(b) {
   });
   all('van og:title', !!meta.ogCim, meta.ogCim);
   all('van og:description', !!meta.ogLeiras);
-  all('van og:image', /og\.png$/.test(meta.ogKep), meta.ogKep);
+  /* A link-előnézet képe: abszolút cím a végleges domainen, különben a
+     Facebook nem tölti be. A fájl nevét is ellenőrizzük, mert az og:image
+     átnevezése az egyetlen biztos módja annak, hogy a Facebook ne a
+     korábban gyorsítótárazott képet mutassa. */
+  all('van og:image', /^https:\/\/atlagsebesseg\.hu\/icons\/megosztas\.png$/.test(meta.ogKep),
+      meta.ogKep);
   all('van twitter:card', meta.twitter === 'summary_large_image', meta.twitter);
   all('van canonical URL', !!meta.canonical, meta.canonical);
   all('van mobile-web-app-capable', meta.mobil === 'yes', meta.mobil);
@@ -909,7 +914,8 @@ async function eszkozTeszt(b) {
 
   const kiszolgalt = await p.evaluate(async () => {
     const ki = {};
-    for (const u of ['robots.txt', 'sitemap.xml', 'icons/og.png', 'icons/icon-maskable.png']) {
+    for (const u of ['robots.txt', 'sitemap.xml', 'icons/megosztas.png',
+                     'icons/icon-maskable.png']) {
       ki[u] = (await fetch(u)).status;
     }
     return ki;
@@ -1622,7 +1628,7 @@ async function jogiTeszt(b) {
     if (sz !== 390) { await j.close(); continue; }
     for (const kell of ['Tóth András', '4110 Biharkeresztes', '67255829-2-29',
                         '44535361', 'egyéni vállalkozó',
-                        'keresohirdetesek@gmail.com', 'NAIH', 'localStorage',
+                        'atlagsebesseg@gmail.com', 'NAIH', 'localStorage',
                         'Overpass', 'Tárhely', 'OpenStreetMap',
                         // kiadás előtti jogi minimum
                         'service worker', 'Open Database License',

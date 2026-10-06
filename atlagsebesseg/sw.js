@@ -1,7 +1,7 @@
 // Offline működés: az alkalmazás saját fájljai gyorsítótárba kerülnek.
 // Mérési adat nincs — nincs is mit menteni vagy szinkronizálni.
 
-const CACHE = 'atlagsebesseg-v26';
+const CACHE = 'atlagsebesseg-v27';
 const ASSETS = [
   './',
   'index.html',
@@ -32,7 +32,7 @@ const ASSETS = [
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable.png',
-  'icons/og.png',
+  'icons/megosztas.png',
 ];
 
 self.addEventListener('install', (e) => {
