@@ -319,6 +319,63 @@ mikor készült utoljára teljes mentés, és változott-e azóta bármi. A sáv
 koppintva azonnal kiírható a JSON mentés; a rögzítés leállításakor az app
 emlékeztet is rá.
 
+## Licencelés
+
+Az alkalmazás **szerver nélkül** ellenőrzi a jogosultságot: a licenckulcsot a
+kiadó privát kulcsával aláírják, az app pedig a beágyazott nyilvános kulccsal
+ellenőrzi — offline, a készüléken.
+
+**Őszintén a korlátairól:** mivel a kód a felhasználó készülékén fut, aki ért
+hozzá, ki tudja kerülni. A védelem igazi ereje nem a zár, hanem a **névre
+szólóság**: a licencelt cég neve rákerül a jegyzőkönyvre, licenc nélkül pedig
+nagy „PRÓBAVERZIÓ” vízjelet kap. Egy fuvarozó nem ad be a közútnak olyan
+jegyzőkönyvet, amin más cég neve vagy ez a felirat szerepel.
+
+### Állapotok
+
+| Állapot | Mit tud |
+|---|---|
+| **Nincs beállítva** (`PUBLIC_KEY = null`) | Minden korlátozás nélkül — a licencelés ki van kapcsolva |
+| **Próbaverzió** (nincs kulcs) | 1 bejárás; a jegyzőkönyv „PRÓBAVERZIÓ” vízjelet kap |
+| **Érvényes licenc** | Minden; a jegyzőkönyvön a cég neve és a lejárat |
+| **Lejárt licenc** | Új bejárás nem indítható; a jegyzőkönyv „LEJÁRT LICENC” vízjelet kap |
+
+**Alapelv:** a lejárt licenc **soha nem zárja ki a felhasználót a saját
+adataiból.** Minden korábbi bejárás megnyitható, és a GPX, a GeoJSON meg a
+teljes JSON mentés minden állapotban működik. Csak az *új* munka és a
+hivatalosnak látszó jegyzőkönyv van licenchez kötve.
+
+### Kulcspár készítése (egyszeri)
+
+```bash
+node eszkozok/licenc.mjs kulcspar
+```
+
+A **privát** kulcs a tárolón kívülre kerül (`licenc-privat.json`, a
+`.gitignore` kizárja), a **nyilvános** kulcs pedig beíródik a
+`js/licenc-kulcs.js` fájlba. A privát kulcsot őrizd meg: ha elveszik, a már
+kiadott licencek érvényben maradnak, de újat csak új kulcspárral tudsz
+kiadni — ami viszont a régieket érvényteleníti.
+
+### Licenc kiadása ügyfélnek
+
+```bash
+node eszkozok/licenc.mjs kiad --ceg "Példa Fuvar Kft." --lejarat 2027-12-31
+node eszkozok/licenc.mjs ellenoriz "UB1.…"      # mit tartalmaz, érvényes-e
+```
+
+A kapott szöveget az ügyfél az alkalmazásban illeszti be: **Bejárások →
+a licencsáv → Licenckulcs**. Internet nem kell hozzá, és a készüléken marad.
+
+### Mire figyelj, ha eladod
+
+- A **tároló legyen privát**, és a fizetős változat ne legyen elérhető
+  nyilvános címen. Publikus tárolóból bárki elviheti az egészet.
+- Ügyfelenként érdemes **saját példányt** átadni (`node build-single.mjs`),
+  nem közös linket.
+- A **térképcsempék** forrása ma az OSM közösségi szervere, ami üzleti
+  terhelésre nem való — fizetős terméknél saját vagy vásárolt szolgáltató kell.
+
 ## Adatkezelés
 
 - Minden adat a böngésző **IndexedDB** tárolójában marad, a készüléken.

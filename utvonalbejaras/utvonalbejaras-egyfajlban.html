@@ -252,6 +252,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .empty p { margin: 4px 0; }
 
+.licence-status {
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.licence-status.warn {
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+}
+.licence-status.bad {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
 .footer-note { margin-top: 6px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .muted { color: var(--muted); }
 .small { font-size: 12.5px; }
@@ -681,6 +701,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
         <p><strong>Még nincs bejárás.</strong></p>
         <p>Indítson újat, és rögzítse a nyomvonalat, a fotókat, a méreteket és a hangjegyzeteket.</p>
       </div>
+      <button id="licence-status" class="licence-status" hidden></button>
+
       <div class="footer-note">
         <button id="import-btn" class="btn ghost small">Mentés visszatöltése (JSON)</button>
         <input id="import-file" type="file" accept="application/json" hidden>
@@ -2692,6 +2714,188 @@ function compassState() {
   return { state: permissionState, listening, heading: compassHeading() };
 }
 
+/* ===== js/licenc-kulcs.js ===== */
+// Az alkalmazás ezzel a nyilvános kulccsal ellenőrzi a licenckulcsokat.
+// Nem titok: ebből licencet kiadni nem lehet, csak ellenőrizni.
+// Készült: 2026-10-11 — eszkozok/licenc.mjs
+
+const PUBLIC_KEY = {
+  "kty": "EC",
+  "crv": "P-256",
+  "x": "1qPGLD9sA97BEcwgZFtlqDiH-yUQ8n2wOXagVMk2tfk",
+  "y": "fwMa_R3Eh1mR_p8IVqmTj5thwrgKu9y9f3ssIWRuNeU"
+};
+
+/* ===== js/licenc.js ===== */
+// Licencellenőrzés — szerver nélkül.
+//
+// A kulcsot a kiadó privát kulcsával írták alá; itt csak a nyilvános
+// kulccsal ellenőrizzük. Ez offline működik, viszont — mivel a kód a
+// felhasználó készülékén fut — nem feltörhetetlen. A védelem igazi ereje
+// nem a zár, hanem a névre szólóság: a licencelt cég neve rákerül a
+// jegyzőkönyvre, licenc nélkül pedig „PRÓBAVERZIÓ” vízjelet kap.
+//
+// Alapelv: a lejárt licenc SOHA nem zárja ki a felhasználót a saját
+// adataiból. Új bejárást nem indíthat, a riport vízjeles lesz, de minden
+// korábbi munkája megmarad, megnyitható és kimenthető.
+
+
+const STORAGE_KEY = 'licenc';
+const PREFIX = 'UB1.';
+
+/** Próbaverzióban ennyi bejárás hozható létre. */
+const TRIAL_SESSIONS = 1;
+
+let cached = null;   // { status, company, expiry, issued, note, raw }
+
+const fromB64url = (s) => {
+  const pad = s.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(pad + '==='.slice((pad.length + 3) % 4));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+};
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+/** Be van-e egyáltalán állítva licencelés ebben a példányban? */
+function licencingConfigured() {
+  return !!(PUBLIC_KEY && PUBLIC_KEY.x && PUBLIC_KEY.y);
+}
+
+/**
+ * Kulcs ellenőrzése.
+ * @returns {Promise<{ok:boolean, reason?:string, data?:object}>}
+ */
+async function verifyLicence(text) {
+  const raw = String(text || '').trim().replace(/\s+/g, '');
+  if (!raw.startsWith(PREFIX)) return { ok: false, reason: 'Ez nem licenckulcs.' };
+  if (!licencingConfigured()) return { ok: false, reason: 'Ebben a példányban nincs licencelés beállítva.' };
+
+  const [, payload, sig] = raw.split('.');
+  if (!payload || !sig) return { ok: false, reason: 'A kulcs hiányos — valószínűleg nem másolódott be teljesen.' };
+
+  try {
+    const key = await crypto.subtle.importKey(
+      'jwk',
+      { kty: 'EC', crv: 'P-256', x: PUBLIC_KEY.x, y: PUBLIC_KEY.y, ext: true },
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['verify']
+    );
+    const valid = await crypto.subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      key,
+      fromB64url(sig),
+      fromB64url(payload)
+    );
+    if (!valid) return { ok: false, reason: 'A kulcs aláírása érvénytelen.' };
+
+    const data = JSON.parse(new TextDecoder().decode(fromB64url(payload)));
+    if (!data.c || !data.e) return { ok: false, reason: 'A kulcs tartalma hiányos.' };
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, reason: 'A kulcs nem olvasható: ' + err.message };
+  }
+}
+
+/** Kulcs mentése a készülékre, ha érvényes. */
+async function saveLicence(text) {
+  const res = await verifyLicence(text);
+  if (!res.ok) return res;
+  try {
+    localStorage.setItem(STORAGE_KEY, String(text).trim().replace(/\s+/g, ''));
+  } catch (_) { /* privát ablakban nem baj, csak a munkamenetre él */ }
+  cached = null;
+  await licence();
+  return res;
+}
+
+function clearLicence() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+  cached = null;
+}
+
+/**
+ * A példány licencállapota.
+ * @returns {Promise<{status:'unconfigured'|'none'|'valid'|'expired',
+ *                    company?:string, expiry?:string, daysLeft?:number}>}
+ */
+async function licence() {
+  if (cached) return cached;
+
+  if (!licencingConfigured()) {
+    cached = { status: 'unconfigured' };
+    return cached;
+  }
+
+  let stored = null;
+  try { stored = localStorage.getItem(STORAGE_KEY); } catch (_) {}
+  if (!stored) {
+    cached = { status: 'none' };
+    return cached;
+  }
+
+  const res = await verifyLicence(stored);
+  if (!res.ok) {
+    cached = { status: 'none', problem: res.reason };
+    return cached;
+  }
+
+  const expiry = res.data.e;
+  const expired = expiry < today();
+  const daysLeft = Math.round((new Date(expiry) - new Date(today())) / 86400000);
+  cached = {
+    status: expired ? 'expired' : 'valid',
+    company: res.data.c,
+    expiry,
+    issued: res.data.k,
+    note: res.data.m,
+    daysLeft,
+  };
+  return cached;
+}
+
+/** Indítható-e új bejárás? */
+async function canCreateSession(existingCount) {
+  const l = await licence();
+  if (l.status === 'unconfigured' || l.status === 'valid') return { ok: true };
+  if (l.status === 'expired') {
+    return {
+      ok: false,
+      title: 'Lejárt licenc',
+      message: `A(z) ${l.company} licence ${l.expiry}-án lejárt, ezért új bejárás nem indítható. `
+        + 'A meglévő bejárások továbbra is megnyithatók és kimenthetők. '
+        + 'A megújításhoz kérjen új licenckulcsot.',
+    };
+  }
+  if (existingCount >= TRIAL_SESSIONS) {
+    return {
+      ok: false,
+      title: 'Próbaverzió',
+      message: `Licenc nélkül ${TRIAL_SESSIONS} bejárás hozható létre, és a jegyzőkönyv `
+        + '„PRÓBAVERZIÓ” vízjelet kap. A meglévő bejárás továbbra is használható. '
+        + 'A teljes változathoz licenckulcs kell.',
+    };
+  }
+  return { ok: true };
+}
+
+/** A jegyzőkönyv fejléce és vízjele a licencállapot szerint. */
+async function reportLicence() {
+  const l = await licence();
+  if (l.status === 'valid') {
+    return { watermark: null, line: `Kiadva: ${l.company} — licenc érvényes ${l.expiry}-ig` };
+  }
+  if (l.status === 'expired') {
+    return { watermark: 'LEJÁRT LICENC', line: `${l.company} — a licenc ${l.expiry}-án lejárt` };
+  }
+  if (l.status === 'none') {
+    return { watermark: 'PRÓBAVERZIÓ', line: 'Próbaverzióval készült — nem hivatalos példány' };
+  }
+  return { watermark: null, line: null };
+}
+
 /* ===== js/report.js ===== */
 // Önálló HTML-riport a bejárásról.
 //
@@ -2748,6 +2952,7 @@ async function mapImage(session, points, items, width = 1100, height = 740) {
  */
 async function buildReport(session, points, items, opts = {}, progress = () => {}) {
   const include = { photos: true, audio: true, video: false, ...opts };
+  const lic = opts.licence || { watermark: null, line: null };
   const len = lengthByStatus(points);
   const rejected = rejectedSections(points);
   const drawn = session.drawn || [];
@@ -2911,6 +3116,16 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   .maplink { font-size:13px; }
   footer { margin-top:34px; padding-top:12px; border-top:1px solid var(--line);
            color:var(--muted); font-size:13px; }
+  .licence { margin:-10px 0 18px; font-size:13px; color:var(--muted); }
+  .licence.invalid { color:var(--bad); font-weight:600; }
+  /* a próbaverzió vízjele átlósan ismétlődik, nyomtatásban is megmarad */
+  .watermark {
+    position:fixed; inset:0; z-index:9999; pointer-events:none;
+    display:flex; align-items:center; justify-content:center;
+    font-size:min(13vw,120px); font-weight:800; letter-spacing:.08em;
+    color:rgba(179,38,30,.16); transform:rotate(-30deg);
+    white-space:nowrap; -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
   @media print {
     body { background:#fff; }
     .page { box-shadow:none; max-width:none; padding:0; }
@@ -2921,8 +3136,10 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
 </head>
 <body>
 <div class="page">
+  ${lic.watermark ? `<div class="watermark" aria-hidden="true">${rEsc(lic.watermark)}</div>` : ''}
   <h1>Útvonalbejárási jegyzőkönyv</h1>
   <p class="sub">${rEsc(session.name)} · bejárás ideje: ${dt(session.created)} · készült: ${dt(Date.now())}</p>
+  ${lic.line ? `<p class="licence${lic.watermark ? ' invalid' : ''}">${rEsc(lic.line)}</p>` : ''}
 
   ${vehicleRows.length ? `<h2>Szerelvény adatai</h2>
   <table class="grid"><tbody>${vehicleRows.map(([k, val]) =>
@@ -2955,6 +3172,7 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   ${itemBlocks || '<p class="muted">Nincs rögzített elem.</p>'}
 
   <footer>
+    ${lic.line ? rEsc(lic.line) + '<br>' : ''}
     Készítette az Útvonalbejárás alkalmazás. A jegyzőkönyv önálló fájl:
     a képek, hangfelvételek${include.video ? ' és videók' : ''} benne vannak,
     külön melléklet nélkül megnyitható.
@@ -4631,6 +4849,7 @@ async function renderSessionList() {
     list.appendChild(card);
   }
   updateStorageInfo();
+  renderLicenceStatus();
 }
 
 async function itemCounts() {
@@ -4674,6 +4893,12 @@ const vehicleFields = (v = {}) => [
 ];
 
 async function newSession() {
+  const allowed = await canCreateSession((await db.listSessions()).length);
+  if (!allowed.ok) {
+    await modal({ title: allowed.title, text: allowed.message, okText: 'Értem' });
+    await renderLicenceStatus();
+    return;
+  }
   const res = await modal({
     title: 'Új bejárás',
     fields: vehicleFields({ name: defaultSessionName() }),
@@ -5882,6 +6107,65 @@ async function importJSON(file) {
   }
 }
 
+/* -------------------------------------------------------------- licenc */
+
+async function renderLicenceStatus() {
+  const box = $('#licence-status');
+  if (!box) return;
+  const l = await licence();
+
+  if (l.status === 'unconfigured') { box.hidden = true; return; }
+  box.hidden = false;
+  box.classList.remove('warn', 'bad');
+
+  if (l.status === 'valid') {
+    const soon = l.daysLeft != null && l.daysLeft <= 30;
+    if (soon) box.classList.add('warn');
+    box.textContent = soon
+      ? `⚠️ ${l.company} — a licenc ${l.daysLeft} nap múlva lejár (${l.expiry}). Megújítás`
+      : `✓ Licencelve: ${l.company} (érvényes ${l.expiry}-ig)`;
+    return;
+  }
+  if (l.status === 'expired') {
+    box.classList.add('bad');
+    box.textContent = `⚠️ ${l.company} — a licenc ${l.expiry}-án lejárt. `
+      + 'Új bejárás nem indítható, a meglévők megmaradnak. Kulcs megadása';
+    return;
+  }
+  box.classList.add('warn');
+  box.textContent = '⚠️ Próbaverzió — egy bejárás, a jegyzőkönyv vízjelet kap. Licenc megadása';
+}
+
+async function enterLicence() {
+  const l = await licence();
+  const res = await modal({
+    title: 'Licenckulcs',
+    text: l.status === 'valid'
+      ? `Jelenleg licencelve: ${l.company}, érvényes ${l.expiry}-ig. Új kulccsal felülírható.`
+      : 'Illessze be a kapott licenckulcsot. Internetkapcsolat nem kell hozzá, '
+        + 'az ellenőrzés a készüléken történik.',
+    fields: [{
+      name: 'key', label: 'Licenckulcs', type: 'textarea', rows: 4,
+      placeholder: 'UB1.…',
+    }],
+    okText: 'Aktiválás',
+    cancelText: l.status === 'valid' ? 'Mégse' : 'Most nem',
+  });
+  if (!res) return;
+  if (!res.key) return;
+
+  const out = await saveLicence(res.key);
+  if (!out.ok) {
+    await modal({ title: 'A kulcs nem fogadható el', text: out.reason, okText: 'Értem' });
+    return;
+  }
+  await renderLicenceStatus();
+  const now = await licence();
+  toast(now.status === 'expired'
+    ? `A kulcs érvényes, de ${now.expiry}-án lejárt.`
+    : `Aktiválva: ${now.company}, érvényes ${now.expiry}-ig.`);
+}
+
 /* ------------------------------------------------- biztonsági mentés */
 
 /** A bejárás változott a legutóbbi kimentés óta? */
@@ -5987,7 +6271,12 @@ async function exportHTML() {
   try {
     const html = await buildReport(
       state.session, state.points, state.items,
-      { photos: res.photos === 'full', audio: res.audio === 'yes', video: res.video === 'yes' },
+      {
+        photos: res.photos === 'full',
+        audio: res.audio === 'yes',
+        video: res.video === 'yes',
+        licence: await reportLicence(),
+      },
       (msg) => toast(msg)
     );
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -6098,6 +6387,7 @@ function bind() {
   $('#backup-status').addEventListener('click', exportJSON);
   $('#delete-session').addEventListener('click', deleteSession);
 
+  $('#licence-status').addEventListener('click', enterLicence);
   $('#import-btn').addEventListener('click', () => $('#import-file').click());
   $('#import-file').addEventListener('change', (e) => {
     const f = e.target.files[0];

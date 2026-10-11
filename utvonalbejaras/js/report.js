@@ -58,6 +58,7 @@ async function mapImage(session, points, items, width = 1100, height = 740) {
  */
 export async function buildReport(session, points, items, opts = {}, progress = () => {}) {
   const include = { photos: true, audio: true, video: false, ...opts };
+  const lic = opts.licence || { watermark: null, line: null };
   const len = lengthByStatus(points);
   const rejected = rejectedSections(points);
   const drawn = session.drawn || [];
@@ -221,6 +222,16 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   .maplink { font-size:13px; }
   footer { margin-top:34px; padding-top:12px; border-top:1px solid var(--line);
            color:var(--muted); font-size:13px; }
+  .licence { margin:-10px 0 18px; font-size:13px; color:var(--muted); }
+  .licence.invalid { color:var(--bad); font-weight:600; }
+  /* a próbaverzió vízjele átlósan ismétlődik, nyomtatásban is megmarad */
+  .watermark {
+    position:fixed; inset:0; z-index:9999; pointer-events:none;
+    display:flex; align-items:center; justify-content:center;
+    font-size:min(13vw,120px); font-weight:800; letter-spacing:.08em;
+    color:rgba(179,38,30,.16); transform:rotate(-30deg);
+    white-space:nowrap; -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
   @media print {
     body { background:#fff; }
     .page { box-shadow:none; max-width:none; padding:0; }
@@ -231,8 +242,10 @@ export async function buildReport(session, points, items, opts = {}, progress = 
 </head>
 <body>
 <div class="page">
+  ${lic.watermark ? `<div class="watermark" aria-hidden="true">${rEsc(lic.watermark)}</div>` : ''}
   <h1>Útvonalbejárási jegyzőkönyv</h1>
   <p class="sub">${rEsc(session.name)} · bejárás ideje: ${dt(session.created)} · készült: ${dt(Date.now())}</p>
+  ${lic.line ? `<p class="licence${lic.watermark ? ' invalid' : ''}">${rEsc(lic.line)}</p>` : ''}
 
   ${vehicleRows.length ? `<h2>Szerelvény adatai</h2>
   <table class="grid"><tbody>${vehicleRows.map(([k, val]) =>
@@ -265,6 +278,7 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   ${itemBlocks || '<p class="muted">Nincs rögzített elem.</p>'}
 
   <footer>
+    ${lic.line ? rEsc(lic.line) + '<br>' : ''}
     Készítette az Útvonalbejárás alkalmazás. A jegyzőkönyv önálló fájl:
     a képek, hangfelvételek${include.video ? ' és videók' : ''} benne vannak,
     külön melléklet nélkül megnyitható.

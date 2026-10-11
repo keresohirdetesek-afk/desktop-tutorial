@@ -18,6 +18,8 @@ const ASSETS = [
   'js/tiles.js',
   'js/compass.js',
   'js/report.js',
+  'js/licenc.js',
+  'js/licenc-kulcs.js',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/icon-192.png',

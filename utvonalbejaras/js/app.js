@@ -14,6 +14,9 @@ import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
 import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
 import { buildReport } from './report.js';
+import {
+  licence, licencingConfigured, saveLicence, clearLicence, canCreateSession, reportLicence,
+} from './licenc.js';
 import { $, $$, el, toast, modal, download, formatDateTime, formatTime } from './ui.js';
 
 const state = {
@@ -128,6 +131,7 @@ async function renderSessionList() {
     list.appendChild(card);
   }
   updateStorageInfo();
+  renderLicenceStatus();
 }
 
 async function itemCounts() {
@@ -171,6 +175,12 @@ const vehicleFields = (v = {}) => [
 ];
 
 async function newSession() {
+  const allowed = await canCreateSession((await db.listSessions()).length);
+  if (!allowed.ok) {
+    await modal({ title: allowed.title, text: allowed.message, okText: 'Értem' });
+    await renderLicenceStatus();
+    return;
+  }
   const res = await modal({
     title: 'Új bejárás',
     fields: vehicleFields({ name: defaultSessionName() }),
@@ -1379,6 +1389,65 @@ async function importJSON(file) {
   }
 }
 
+/* -------------------------------------------------------------- licenc */
+
+async function renderLicenceStatus() {
+  const box = $('#licence-status');
+  if (!box) return;
+  const l = await licence();
+
+  if (l.status === 'unconfigured') { box.hidden = true; return; }
+  box.hidden = false;
+  box.classList.remove('warn', 'bad');
+
+  if (l.status === 'valid') {
+    const soon = l.daysLeft != null && l.daysLeft <= 30;
+    if (soon) box.classList.add('warn');
+    box.textContent = soon
+      ? `⚠️ ${l.company} — a licenc ${l.daysLeft} nap múlva lejár (${l.expiry}). Megújítás`
+      : `✓ Licencelve: ${l.company} (érvényes ${l.expiry}-ig)`;
+    return;
+  }
+  if (l.status === 'expired') {
+    box.classList.add('bad');
+    box.textContent = `⚠️ ${l.company} — a licenc ${l.expiry}-án lejárt. `
+      + 'Új bejárás nem indítható, a meglévők megmaradnak. Kulcs megadása';
+    return;
+  }
+  box.classList.add('warn');
+  box.textContent = '⚠️ Próbaverzió — egy bejárás, a jegyzőkönyv vízjelet kap. Licenc megadása';
+}
+
+async function enterLicence() {
+  const l = await licence();
+  const res = await modal({
+    title: 'Licenckulcs',
+    text: l.status === 'valid'
+      ? `Jelenleg licencelve: ${l.company}, érvényes ${l.expiry}-ig. Új kulccsal felülírható.`
+      : 'Illessze be a kapott licenckulcsot. Internetkapcsolat nem kell hozzá, '
+        + 'az ellenőrzés a készüléken történik.',
+    fields: [{
+      name: 'key', label: 'Licenckulcs', type: 'textarea', rows: 4,
+      placeholder: 'UB1.…',
+    }],
+    okText: 'Aktiválás',
+    cancelText: l.status === 'valid' ? 'Mégse' : 'Most nem',
+  });
+  if (!res) return;
+  if (!res.key) return;
+
+  const out = await saveLicence(res.key);
+  if (!out.ok) {
+    await modal({ title: 'A kulcs nem fogadható el', text: out.reason, okText: 'Értem' });
+    return;
+  }
+  await renderLicenceStatus();
+  const now = await licence();
+  toast(now.status === 'expired'
+    ? `A kulcs érvényes, de ${now.expiry}-án lejárt.`
+    : `Aktiválva: ${now.company}, érvényes ${now.expiry}-ig.`);
+}
+
 /* ------------------------------------------------- biztonsági mentés */
 
 /** A bejárás változott a legutóbbi kimentés óta? */
@@ -1484,7 +1553,12 @@ async function exportHTML() {
   try {
     const html = await buildReport(
       state.session, state.points, state.items,
-      { photos: res.photos === 'full', audio: res.audio === 'yes', video: res.video === 'yes' },
+      {
+        photos: res.photos === 'full',
+        audio: res.audio === 'yes',
+        video: res.video === 'yes',
+        licence: await reportLicence(),
+      },
       (msg) => toast(msg)
     );
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -1595,6 +1669,7 @@ function bind() {
   $('#backup-status').addEventListener('click', exportJSON);
   $('#delete-session').addEventListener('click', deleteSession);
 
+  $('#licence-status').addEventListener('click', enterLicence);
   $('#import-btn').addEventListener('click', () => $('#import-file').click());
   $('#import-file').addEventListener('change', (e) => {
     const f = e.target.files[0];
