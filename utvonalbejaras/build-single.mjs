@@ -17,7 +17,7 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(dir, p), 'utf8');
 
 // a betöltési sorrend számít: az app.js indítja el a többit
-const MODULES = ['js/ui.js', 'js/db.js', 'js/geo.js', 'js/media.js', 'js/compass.js', 'js/licenc-kulcs.js', 'js/licenc.js', 'js/report.js', 'js/editor.js', 'js/trackedit.js', 'js/app.js'];
+const MODULES = ['js/ui.js', 'js/db.js', 'js/tiles.js', 'js/geo.js', 'js/media.js', 'js/compass.js', 'js/licenc-kulcs.js', 'js/licenc.js', 'js/report.js', 'js/kiseres.js', 'js/editor.js', 'js/trackedit.js', 'js/app.js'];
 
 // az app.js `db.valami()` alakban hivatkozik a tárolóra, ezért a modulok
 // összefűzése után össze kell raknunk neki ezt a névteret
@@ -27,6 +27,24 @@ const DB_EXPORTS = [
   'saveItem', 'getItem', 'getItems', 'allItems', 'deleteItem', 'storageEstimate',
 ];
 
+/**
+ * Minden modul benne van-e? Ha egy fájl hivatkozik egy másikra, de az kimarad
+ * a listából, az egyfájlos változat futás közben esik szét („… is not
+ * defined”), amit a böngészőben már csak a felhasználó látna.
+ */
+function checkModuleList() {
+  const missing = new Set();
+  for (const file of MODULES) {
+    for (const m of read(file).matchAll(/from\s*'\.\/([\w.-]+\.js)'/g)) {
+      if (!MODULES.includes('js/' + m[1])) missing.add(`${m[1]} (kell ide: ${file})`);
+    }
+  }
+  if (missing.size) {
+    console.error('Hiányzó modulok a listából:\n  ' + [...missing].join('\n  '));
+    process.exit(1);
+  }
+}
+
 function stripModuleSyntax(src) {
   return src
     .replace(/^import[\s\S]*?from\s*'[^']*';[ \t]*\n/gm, '')   // import ... from '...'
@@ -35,6 +53,7 @@ function stripModuleSyntax(src) {
 }
 
 function bundleScript() {
+  checkModuleList();
   const chunks = [];
   for (const file of MODULES) {
     let code = stripModuleSyntax(read(file));

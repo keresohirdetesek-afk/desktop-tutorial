@@ -592,6 +592,29 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   drawNorth(ctx, w, overMap ? '#1b1b1b' : dim, overMap);
   if (overMap) drawAttribution(ctx, w, h);
 
+  // saját pozíció (élő kísérésnél): irányjelző kúp + pont
+  if (opts.here && opts.here.lat != null) {
+    const p = project(opts.here.lat, opts.here.lon);
+    if (opts.here.heading != null && isFinite(opts.here.heading)) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate((opts.here.heading * Math.PI) / 180);
+      ctx.beginPath();
+      ctx.moveTo(0, -22);
+      ctx.lineTo(-9, 8);
+      ctx.lineTo(0, 3);
+      ctx.lineTo(9, 8);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(77,163,255,0.85)';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+    dot(ctx, p, 7, '#4da3ff', '#ffffff');
+  }
+
   /** A képernyőponthoz legközelebbi nyomvonalpont indexe. */
   const nearest = (x, y) => {
     let best = -1, bestD = Infinity;

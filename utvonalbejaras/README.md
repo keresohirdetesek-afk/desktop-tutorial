@@ -28,6 +28,7 @@ használatra.
 | **Videós megjegyzés** a telefon kamerájával, bélyegképpel | *Videó* gomb |
 | **Állapot- és táblarögzítés** kategóriával, állapottal, minősítéssel | *Állapot / tábla* gomb |
 | **HTML-jegyzőkönyv** önálló fájlban, a közút felé átadható | *Riport (HTML)* gomb |
+| **Élő kísérés a szállítás során**: közeledéskor szól, lejátssza a hangjegyzetet, előhozza a fotót/videót | *Élő kísérés* gomb |
 | **Írott jegyzet** és pontjelölés a nyomvonalon | *Jegyzet*, *Pont jelölése* |
 | **Visszakeresés** név, jegyzet, képre írt felirat, beírt méret és koordináta szerint | *Keresés* fül |
 | **OpenStreetMap alaptérkép** a nyomvonal mögött, offline tárolt csempékkel | Nyomvonal szerkesztése → *Térkép* |
@@ -126,6 +127,40 @@ nyomtatható**.
 Készítéskor választható, mi kerüljön bele: teljes méretű fotók vagy csak
 kisképek, hangjegyzetek igen/nem, videók igen/nem (ez utóbbi dönti el a
 fájlméretet).
+
+### Élő kísérés a valós szállítás során
+
+A kész bejárás nem csak jegyzőkönyv: a szállítás napján **navigációs
+segédként** használható. A bejárás képernyőjén az *🚚 Élő kísérés* gombbal
+indul, és utána magától dolgozik — nem kell kézzel keresgélni, hol mit
+rögzítettünk.
+
+Amit a kísérés közben mutat:
+
+- **Térkép a saját pozícióval**: a nyomvonal, a figyelt pontok és egy kék
+  jelölő, amely a haladási irányba fordul.
+- **„Következő 4 pont”** távolsággal, 🎙️/🎬 jelzéssel — bármelyikre
+  koppintva azonnal előjön az ott rögzített anyag.
+- **Riasztás közeledéskor**: a beállított hatótávon (150 / 300 / 500 m)
+  belülre érve rezeg, rövid hangjelzést ad, és felugrik az adatlap — a
+  **hangjegyzet magától elindul**, mellette a fotó, a videó, a beírt méretek
+  és a kameairány. Egy pont csak egyszer szól, hogy ne zavarjon.
+- **Csak kritikus pontok** jelölővel szűkíthető a figyelt kör (a mérettel
+  rögzített helyekre és a *figyelendő* / *kritikus* állapotokra).
+- **Letérés jelzése**: ha 200 m-nél messzebbre kerülünk a jóváhagyott
+  nyomvonaltól, figyelmeztet, és kiírja, mennyire tértünk le.
+
+Menet közbeni rögzítés: az alsó sor négy gombjával (*Fotó*, *Videó*,
+*Hangjegyzet*, *Állapot / tábla*) ugyanúgy felvehető új észrevétel — ha
+például egy kritikus fordulóban azóta megsérült a tábla. Ezek az elemek
+**„szállítás közben rögzítve”** megjelölést kapnak, így a jegyzőkönyvben és a
+listában elkülönülnek a bejáráskori anyagtól. Amit most rögzítünk, arra a
+kísérés nem riaszt vissza.
+
+> A kísérés friss GPS-mérést kér (nem fogadja el a böngésző gyorsítótárából
+> az előző helyszín koordinátáját), ezért indításkor nem riaszt olyan pontra,
+> amit már elhagytunk. A képernyőt ébren tartja; a térkép a bejáráskor
+> letöltött csempékből offline is kirajzolódik.
 
 ### A nyomvonal utólagos szerkesztése
 
@@ -231,6 +266,9 @@ Első használatkor a böngésző kéri a **helymeghatározás**, a **kamera** �
 6. **Export**: GPX (bármely térképprogramba betölthető) vagy teljes JSON mentés,
    amely a fotókat és a hangfelvételeket is tartalmazza, és a
    *Mentés visszatöltése* gombbal másik készüléken is megnyitható.
+7. **A szállítás napján**: *🚚 Élő kísérés* — ugyanazt a bejárást használva az
+   app szól a kritikus helyek előtt, lejátssza a hangjegyzetet, és menet közben
+   új észrevétel is rögzíthető.
 
 ---
 
@@ -408,6 +446,7 @@ utvonalbejaras/
     ├── tiles.js            OSM-csempék betöltése és offline tárolása
     ├── compass.js          kameairány a készülék tájolásérzékelőjéből
     ├── report.js           önálló HTML-jegyzőkönyv összeállítása
+    ├── kiseres.js          élő kísérés a szállítás során (közelségi riasztás)
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés
 ```
@@ -421,6 +460,9 @@ utvonalbejaras/
   elsötétítése** gombot — ilyenkor a kijelző szinte fekete (sokkal kevesebbet
   fogyaszt), a mérés viszont fut tovább, és a táv folyamatosan látszik.
   Valódi háttérrögzítéshez az appot natív alkalmazásba kellene csomagolni.
+  Ugyanez igaz az **élő kísérésre**: a riasztásokhoz az appnak előtérben kell
+  lennie (a képernyőt ébren tartja), ezért kísérés közben érdemes a telefont
+  töltőre/tartóra tenni.
 - Alaptérkép csak hálózaton tölthető le; offline az marad meg, amit korábban
   már megnézett (a csempék tárolódnak).
 - Az iOS Safari a hangfelvételt `audio/mp4`, a Chrome `audio/webm` formátumban

@@ -63,6 +63,7 @@
       <button id="edit-track" class="btn ghost small block">🗺️ Nyomvonal szerkesztése</button>
       <button id="reject-summary" class="reject-summary" hidden></button>
       <button id="dim-screen" class="btn ghost small block" hidden>🌙 Képernyő elsötétítése (rögzítés fut tovább)</button>
+      <button id="start-escort" class="btn primary small block">▶️ Élő kísérés a szállításhoz</button>
       <p id="gps-status" class="muted small"></p>
     </div>
 
@@ -217,6 +218,57 @@
       <button id="editor-redo" class="btn ghost tiny">↷ Újra</button>
       <button id="editor-clear" class="btn ghost tiny">Összes törlése</button>
     </div>
+  </div>
+</div>
+
+<!-- ============================================== élő kísérés -->
+<div id="escort" class="overlay" hidden>
+  <header class="overlay-bar">
+    <button id="escort-close" class="icon-btn" aria-label="Kilépés">✕</button>
+    <h2>Élő kísérés</h2>
+    <span id="escort-gps" class="muted small">GPS…</span>
+  </header>
+
+  <p id="escort-headline" class="escort-headline">Helymeghatározás indul…</p>
+  <p id="escort-offroute" class="escort-offroute" hidden></p>
+
+  <div id="escort-stage"><canvas id="escort-canvas"></canvas></div>
+
+  <div class="escort-panel">
+    <div id="escort-next" class="escort-list"></div>
+
+    <div class="escort-add">
+      <span class="muted small">Új észrevétel:</span>
+      <button id="escort-add-photo" class="btn ghost tiny">📷 Fotó</button>
+      <button id="escort-add-video" class="btn ghost tiny">🎬 Videó</button>
+      <button id="escort-add-audio" class="btn ghost tiny">🎙️ Hang</button>
+      <button id="escort-add-condition" class="btn ghost tiny">⚠️ Állapot</button>
+    </div>
+
+    <div class="editor-row">
+      <label class="slider-row compact">
+        <span>Jelzés</span>
+        <select id="escort-radius">
+          <option value="150">150 m-nél</option>
+          <option value="300">300 m-nél</option>
+          <option value="500">500 m-nél</option>
+        </select>
+      </label>
+      <label class="check-row"><input id="escort-critical" type="checkbox"><span>Csak kritikus</span></label>
+      <label class="check-row"><input id="escort-sound" type="checkbox" checked><span>Hang</span></label>
+    </div>
+    <p id="escort-count" class="muted small"></p>
+  </div>
+
+  <div id="escort-alert" class="escort-alert" hidden>
+    <header class="escort-alert-head">
+      <div>
+        <h3 id="escort-alert-title">—</h3>
+        <p id="escort-alert-dist" class="escort-sub">—</p>
+      </div>
+      <button id="escort-alert-close" class="btn primary small">Rendben</button>
+    </header>
+    <div id="escort-alert-body" class="escort-alert-body"></div>
   </div>
 </div>
 

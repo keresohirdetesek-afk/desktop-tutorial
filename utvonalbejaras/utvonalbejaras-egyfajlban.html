@@ -640,6 +640,91 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .dark-hint { margin: 14px 0 6px; font-size: 12px; line-height: 1.6; color: #3c4857; }
 .dark-mode .btn { color: #6d8095; border-color: #243040; }
 
+/* --------------------------------------------------------- élő kísérés */
+
+#escort { background: var(--bg); }
+.escort-headline {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 17px;
+  font-weight: 650;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.escort-offroute {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+}
+#escort-stage { flex: 1; min-height: 34vh; background: var(--map-bg); overflow: hidden; }
+#escort-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+
+.escort-panel {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 10px 12px calc(10px + var(--safe-b));
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.escort-list { display: flex; flex-direction: column; gap: 6px; }
+.escort-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: inherit;
+  cursor: pointer;
+}
+.escort-row.near { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--surface-2)); }
+.escort-row.done { opacity: .55; }
+.escort-dist {
+  flex: none;
+  min-width: 62px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.escort-body { min-width: 0; display: flex; flex-direction: column; }
+.escort-title { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.escort-sub { font-size: 12px; color: var(--muted); }
+.escort-icon { flex: none; font-size: 15px; }
+.escort-add { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.escort-panel select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 5px 8px;
+}
+
+.escort-alert {
+  position: absolute;
+  inset: auto 10px 10px;
+  z-index: 5;
+  background: var(--surface);
+  border: 2px solid var(--warn);
+  border-radius: 14px;
+  padding: 12px 14px calc(12px + var(--safe-b));
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, .45);
+  max-height: 78vh;
+  overflow-y: auto;
+}
+.escort-alert-head { display: flex; align-items: flex-start; gap: 10px; }
+.escort-alert-head h3 { margin: 0 0 2px; font-size: 16px; }
+.escort-alert-head .btn { flex: none; }
+.escort-alert-body { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.escort-shot { width: 100%; border-radius: 10px; background: #000; }
+.escort-audio { width: 100%; }
+.escort-note { margin: 0; font-size: 14px; }
+.escort-dims { margin: 0; font-size: 14px; font-weight: 600; color: var(--warn); }
+
 /* ------------------------------------------------------- hangfelvétel */
 
 .rec-card {
@@ -729,6 +814,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <button id="edit-track" class="btn ghost small block">🗺️ Nyomvonal szerkesztése</button>
       <button id="reject-summary" class="reject-summary" hidden></button>
       <button id="dim-screen" class="btn ghost small block" hidden>🌙 Képernyő elsötétítése (rögzítés fut tovább)</button>
+      <button id="start-escort" class="btn primary small block">▶️ Élő kísérés a szállításhoz</button>
       <p id="gps-status" class="muted small"></p>
     </div>
 
@@ -883,6 +969,57 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <button id="editor-redo" class="btn ghost tiny">↷ Újra</button>
       <button id="editor-clear" class="btn ghost tiny">Összes törlése</button>
     </div>
+  </div>
+</div>
+
+<!-- ============================================== élő kísérés -->
+<div id="escort" class="overlay" hidden>
+  <header class="overlay-bar">
+    <button id="escort-close" class="icon-btn" aria-label="Kilépés">✕</button>
+    <h2>Élő kísérés</h2>
+    <span id="escort-gps" class="muted small">GPS…</span>
+  </header>
+
+  <p id="escort-headline" class="escort-headline">Helymeghatározás indul…</p>
+  <p id="escort-offroute" class="escort-offroute" hidden></p>
+
+  <div id="escort-stage"><canvas id="escort-canvas"></canvas></div>
+
+  <div class="escort-panel">
+    <div id="escort-next" class="escort-list"></div>
+
+    <div class="escort-add">
+      <span class="muted small">Új észrevétel:</span>
+      <button id="escort-add-photo" class="btn ghost tiny">📷 Fotó</button>
+      <button id="escort-add-video" class="btn ghost tiny">🎬 Videó</button>
+      <button id="escort-add-audio" class="btn ghost tiny">🎙️ Hang</button>
+      <button id="escort-add-condition" class="btn ghost tiny">⚠️ Állapot</button>
+    </div>
+
+    <div class="editor-row">
+      <label class="slider-row compact">
+        <span>Jelzés</span>
+        <select id="escort-radius">
+          <option value="150">150 m-nél</option>
+          <option value="300">300 m-nél</option>
+          <option value="500">500 m-nél</option>
+        </select>
+      </label>
+      <label class="check-row"><input id="escort-critical" type="checkbox"><span>Csak kritikus</span></label>
+      <label class="check-row"><input id="escort-sound" type="checkbox" checked><span>Hang</span></label>
+    </div>
+    <p id="escort-count" class="muted small"></p>
+  </div>
+
+  <div id="escort-alert" class="escort-alert" hidden>
+    <header class="escort-alert-head">
+      <div>
+        <h3 id="escort-alert-title">—</h3>
+        <p id="escort-alert-dist" class="escort-sub">—</p>
+      </div>
+      <button id="escort-alert-close" class="btn primary small">Rendben</button>
+    </header>
+    <div id="escort-alert-body" class="escort-alert-body"></div>
   </div>
 </div>
 
@@ -1344,6 +1481,163 @@ async function storageEstimate() {
 }
 return { uid, createSession, saveSession, getSession, listSessions, deleteSession, addPoint, addPoints, updatePoints, deletePoints, getPoints, saveItem, getItem, getItems, allItems, deleteItem, storageEstimate };
 })();
+
+/* ===== js/tiles.js ===== */
+// OpenStreetMap csempék betöltése és gyorsítótárazása.
+//
+// Külső térképkönyvtár nélkül: a csempéket közvetlenül a nyomvonal vásznára
+// rajzoljuk. Ami már egyszer letöltődött, offline is megmarad (Cache API),
+// így a bejárt terület terepen, hálózat nélkül is látszik.
+
+const TILE_CACHE = 'utvonalbejaras-tiles';
+const MAX_MEMORY_TILES = 400;
+const MAX_PARALLEL = 6;
+
+const TILE_SIZE = 256;
+const ATTRIBUTION = '© OpenStreetMap közreműködők';
+
+/**
+ * Alapértelmezetten az OSM nyilvános csempeszervere. Saját vagy fizetős
+ * szolgáltató a localStorage `tileUrl` kulcsával adható meg — céges,
+ * nagy forgalmú használathoz ez az ajánlott (az OSM szervere közösségi
+ * erőforrás, tömeges letöltésre nem való).
+ */
+const DEFAULT_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+function tileUrlTemplate() {
+  try {
+    return localStorage.getItem('tileUrl') || DEFAULT_URL;
+  } catch (_) {
+    return DEFAULT_URL;
+  }
+}
+
+const memory = new Map();      // "z/x/y" -> ImageBitmap | 'loading' | 'error'
+const queue = [];
+let active = 0;
+let listener = () => {};
+let enabled = true;
+
+function setTilesEnabled(on) {
+  enabled = !!on;
+  if (!enabled) { queue.length = 0; }
+}
+
+function tilesEnabled() {
+  return enabled;
+}
+
+/** A vászon újrarajzolása, amint befut egy csempe. */
+function onTileLoad(fn) {
+  listener = fn || (() => {});
+}
+
+/**
+ * Egy csempe képe, ha már megvan. Ha még nincs, elindítja a letöltést és
+ * null-lal tér vissza — a hívó addig csempe nélkül rajzol.
+ */
+function getTile(z, x, y) {
+  if (!enabled) return null;
+  const n = 2 ** z;
+  if (y < 0 || y >= n) return null;
+  const wrapped = ((x % n) + n) % n;         // dátumvonalon át is működjön
+  const key = `${z}/${wrapped}/${y}`;
+
+  const hit = memory.get(key);
+  if (hit && hit !== 'loading' && hit !== 'error') {
+    // legutóbb használt elem a sor végére
+    memory.delete(key);
+    memory.set(key, hit);
+    return hit;
+  }
+  if (hit) return null;                       // épp tölt, vagy hibás
+
+  memory.set(key, 'loading');
+  queue.push({ key, z, x: wrapped, y });
+  pump();
+  return null;
+}
+
+function pump() {
+  while (active < MAX_PARALLEL && queue.length) {
+    const job = queue.shift();
+    active++;
+    load(job).finally(() => { active--; pump(); });
+  }
+}
+
+async function load({ key, z, x, y }) {
+  const url = tileUrlTemplate()
+    .replace('{z}', z).replace('{x}', x).replace('{y}', y);
+  try {
+    let res = null;
+    let fromCache = false;
+    try {
+      const cache = await caches.open(TILE_CACHE);
+      res = await cache.match(url);
+      fromCache = !!res;
+      if (!res) {
+        res = await fetch(url, { mode: 'cors' });
+        if (res.ok) cache.put(url, res.clone()).catch(() => {});
+      }
+    } catch (_) {
+      // nincs Cache API (pl. nem biztonságos kapcsolat): sima letöltés
+      res = await fetch(url, { mode: 'cors' });
+    }
+    if (!res || !res.ok) throw new Error('HTTP ' + (res ? res.status : '?'));
+
+    const blob = await res.blob();
+    const img = typeof createImageBitmap === 'function'
+      ? await createImageBitmap(blob)
+      : await blobToImage(blob);
+
+    memory.set(key, img);
+    trimMemory();
+    listener(fromCache);
+  } catch (_) {
+    memory.set(key, 'error');
+  }
+}
+
+function blobToImage(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => { resolve(img); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('kép')); };
+    img.src = url;
+  });
+}
+
+function trimMemory() {
+  while (memory.size > MAX_MEMORY_TILES) {
+    const oldest = memory.keys().next().value;
+    const val = memory.get(oldest);
+    if (val && val.close) val.close();
+    memory.delete(oldest);
+  }
+}
+
+/** Hány csempe van letöltve offline használatra. */
+async function cachedTileCount() {
+  try {
+    const cache = await caches.open(TILE_CACHE);
+    return (await cache.keys()).length;
+  } catch (_) {
+    return 0;
+  }
+}
+
+async function clearTileCache() {
+  try {
+    await caches.delete(TILE_CACHE);
+    for (const [, v] of memory) if (v && v.close) v.close();
+    memory.clear();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
 
 /* ===== js/geo.js ===== */
 // GPS: nyomvonal rögzítés, számítások, rajzolás, GPX/GeoJSON export
@@ -1938,6 +2232,29 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
   drawScaleBar(ctx, w, h, px, midLat, overMap ? '#1b1b1b' : dim, overMap);
   drawNorth(ctx, w, overMap ? '#1b1b1b' : dim, overMap);
   if (overMap) drawAttribution(ctx, w, h);
+
+  // saját pozíció (élő kísérésnél): irányjelző kúp + pont
+  if (opts.here && opts.here.lat != null) {
+    const p = project(opts.here.lat, opts.here.lon);
+    if (opts.here.heading != null && isFinite(opts.here.heading)) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate((opts.here.heading * Math.PI) / 180);
+      ctx.beginPath();
+      ctx.moveTo(0, -22);
+      ctx.lineTo(-9, 8);
+      ctx.lineTo(0, 3);
+      ctx.lineTo(9, 8);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(77,163,255,0.85)';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+    dot(ctx, p, 7, '#4da3ff', '#ffffff');
+  }
 
   /** A képernyőponthoz legközelebbi nyomvonalpont indexe. */
   const nearest = (x, y) => {
@@ -3182,6 +3499,388 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
 </div>
 </body>
 </html>`;
+}
+
+/* ===== js/kiseres.js ===== */
+// Élő kísérés: a kész bejárás használata a valódi szállítás közben.
+//
+// A kísérőautó/vezető elindítja, az app figyeli a pozíciót, és ahogy
+// közeledünk egy korábban rögzített helyhez, előhozza, amit ott találtunk:
+// lejátssza a hangjegyzetet, megmutatja a fotót és a videót. Menet közben
+// új észrevétel is rögzíthető — ha például egy tábla azóta megsérült.
+//
+// Minden a készüléken marad, és offline is működik: az adat már letöltve
+// van, a térképcsempék pedig a bejáráskor gyorsítótárba kerültek.
+
+
+/** Ennyire megközelítve szól (méter). */
+const RADII = [150, 300, 500];
+const OFF_ROUTE_METERS = 200;   // ennél messzebb már letértünk az útvonalról
+
+class EscortMode {
+  constructor(root) {
+    this.root = root;
+    this.canvas = $('#escort-canvas', root);
+    this.items = [];
+    this.points = [];
+    this.here = null;
+    this.watchId = null;
+    this.triggered = new Set();
+    this.radius = 300;
+    this.onlyCritical = false;
+    this.sound = true;
+    this.alertItem = null;
+    this.urls = new Set();
+    this.offRoute = false;
+    this._bind();
+  }
+
+  /* ----------------------------------------------------------- életciklus */
+
+  async open({ session, points, items, capture, onClose }) {
+    this.session = session;
+    this.points = points;
+    this.items = items;           // ugyanaz a tömb, amit az app használ
+    this.capture = capture || {};
+    this.onClose = onClose;
+    this.triggered = new Set();
+    this.here = null;
+    this.alertItem = null;
+    this.startedAt = Date.now();
+
+    try {
+      this.radius = Number(localStorage.getItem('escortRadius')) || 300;
+      this.onlyCritical = localStorage.getItem('escortCritical') === '1';
+      this.sound = localStorage.getItem('escortSound') !== '0';
+    } catch (_) { /* alapértékekkel megyünk */ }
+
+    this.root.hidden = false;
+    document.body.classList.add('modal-open');
+    this._syncSettings();
+    this._unlockSound();
+    onTileLoad(() => { if (!this.root.hidden) this.draw(); });
+
+    this.start();
+    this.refresh();
+    requestAnimationFrame(() => this.draw());
+  }
+
+  close() {
+    this.stop();
+    onTileLoad(null);
+    this.releaseUrls();
+    this.root.hidden = true;
+    document.body.classList.remove('modal-open');
+    if (this.onClose) this.onClose();
+  }
+
+  start() {
+    if (!navigator.geolocation) {
+      toast('A böngésző nem támogatja a helymeghatározást.', 'error');
+      return;
+    }
+    if (this.watchId != null) return;
+    this.watchId = navigator.geolocation.watchPosition(
+      (pos) => this.onPosition(pos),
+      (err) => {
+        $('#escort-gps', this.root).textContent =
+          err.code === 1 ? 'Nincs helymeghatározási engedély' : 'Nincs GPS-jel';
+      },
+      // maximumAge: 0 — a böngésző gyorsítótárában ott lehet az a fix, ahol
+      // néhány perccel korábban álltunk (pl. ahol az utolsó pontot rögzítettük).
+      // Azzal a kísérés rögtön „0 m”-rel riasztana egy olyan helyre, amit már
+      // elhagytunk, ezért mindig friss mérést kérünk.
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+    );
+    this.keepAwake(true);
+  }
+
+  stop() {
+    if (this.watchId != null) {
+      navigator.geolocation.clearWatch(this.watchId);
+      this.watchId = null;
+    }
+    this.keepAwake(false);
+    if (this.player) { this.player.pause(); this.player = null; }
+  }
+
+  async keepAwake(on) {
+    try {
+      if (on && 'wakeLock' in navigator) this.wakeLock = await navigator.wakeLock.request('screen');
+      else if (!on && this.wakeLock) { await this.wakeLock.release(); this.wakeLock = null; }
+    } catch (_) { /* nem kritikus */ }
+  }
+
+  /* ---------------------------------------------------------- vezérlés */
+
+  _bind() {
+    $('#escort-close', this.root).addEventListener('click', () => this.close());
+    $('#escort-alert-close', this.root).addEventListener('click', () => this.dismissAlert());
+
+    $('#escort-radius', this.root).addEventListener('change', (e) => {
+      this.radius = Number(e.target.value);
+      try { localStorage.setItem('escortRadius', String(this.radius)); } catch (_) {}
+      this.refresh();
+    });
+    $('#escort-critical', this.root).addEventListener('change', (e) => {
+      this.onlyCritical = e.target.checked;
+      try { localStorage.setItem('escortCritical', this.onlyCritical ? '1' : '0'); } catch (_) {}
+      this.refresh();
+    });
+    $('#escort-sound', this.root).addEventListener('change', (e) => {
+      this.sound = e.target.checked;
+      try { localStorage.setItem('escortSound', this.sound ? '1' : '0'); } catch (_) {}
+    });
+
+    for (const [id, kind] of [
+      ['#escort-add-photo', 'photo'], ['#escort-add-video', 'video'],
+      ['#escort-add-audio', 'audio'], ['#escort-add-condition', 'condition'],
+    ]) {
+      $(id, this.root).addEventListener('click', () => {
+        if (this.capture[kind]) this.capture[kind]();
+      });
+    }
+  }
+
+  _syncSettings() {
+    $('#escort-radius', this.root).value = String(this.radius);
+    $('#escort-critical', this.root).checked = this.onlyCritical;
+    $('#escort-sound', this.root).checked = this.sound;
+  }
+
+  /** A böngésző csak felhasználói koppintás után enged hangot indítani. */
+  _unlockSound() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) {
+        this.audioCtx = this.audioCtx || new Ctx();
+        if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+      }
+    } catch (_) {}
+    try {
+      const a = new Audio();
+      a.muted = true;
+      const p = a.play();
+      if (p && p.catch) p.catch(() => {});
+    } catch (_) {}
+  }
+
+  beep() {
+    if (!this.sound || !this.audioCtx) return;
+    try {
+      const ctx = this.audioCtx;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.45);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (_) {}
+  }
+
+  /* -------------------------------------------------------- pozíció */
+
+  onPosition(pos) {
+    const c = pos.coords;
+    this.here = {
+      lat: c.latitude,
+      lon: c.longitude,
+      acc: c.accuracy == null ? null : Math.round(c.accuracy),
+      heading: c.heading,
+      speed: c.speed,
+      t: pos.timestamp || Date.now(),
+    };
+    $('#escort-gps', this.root).textContent =
+      `GPS ±${this.here.acc ?? '?'} m` + (c.speed != null ? ` · ${Math.round(c.speed * 3.6)} km/h` : '');
+
+    this.checkOffRoute();
+    this.refresh();
+    this.draw();
+  }
+
+  /** Figyelmeztetés, ha letértünk a jóváhagyott útvonalról. */
+  checkOffRoute() {
+    const valid = this.points.filter((p) => !isRejected(p) && p.lat != null);
+    if (!valid.length || !this.here) return;
+    let min = Infinity;
+    for (const p of valid) {
+      const d = haversine(this.here, p);
+      if (d < min) min = d;
+    }
+    const off = min > OFF_ROUTE_METERS;
+    const box = $('#escort-offroute', this.root);
+    box.hidden = !off;
+    if (off) box.textContent = `⚠️ Letértünk az útvonalról — ${formatDistance(min)} a bejárt nyomvonaltól`;
+    if (off && !this.offRoute) this.beep();
+    this.offRoute = off;
+  }
+
+  /* ----------------------------------------------------- közelség */
+
+  relevant() {
+    return this.items.filter((i) => {
+      if (i.lat == null) return false;
+      if (!this.onlyCritical) return true;
+      if (i.type === 'condition') return i.severity && i.severity !== 'megfelelo';
+      return (i.dims || []).length > 0;
+    });
+  }
+
+  refresh() {
+    const list = $('#escort-next', this.root);
+    list.innerHTML = '';
+
+    const items = this.relevant();
+
+    // amit most, a kísérés alatt rögzítettünk, arra ne riasszon: a vezető
+    // épp az imént dokumentálta, fölösleges visszaszólni neki
+    for (const i of items) {
+      if (i.created >= this.startedAt) this.triggered.add(i.id);
+    }
+    $('#escort-count', this.root).textContent =
+      `${items.length} figyelt pont · ${this.triggered.size} érintve`;
+
+    if (!this.here) {
+      list.appendChild(el('p', { class: 'hint', text: 'Helymeghatározás indul…' }));
+      return;
+    }
+
+    const withDist = items
+      .map((i) => ({ item: i, d: haversine(this.here, i) }))
+      .sort((a, b) => a.d - b.d);
+
+    // riasztás a legközelebbire, ha hatótávon belül van és még nem szólt
+    const hit = withDist.find((x) => x.d <= this.radius && !this.triggered.has(x.item.id));
+    if (hit && !this.alertItem) this.showAlert(hit.item, hit.d);
+
+    // a nyitva lévő riasztás távolsága kövesse a mozgást
+    if (this.alertItem) {
+      const open = withDist.find((x) => x.item.id === this.alertItem.id);
+      if (open) this.setAlertDistance(open.d);
+    }
+
+    for (const { item, d } of withDist.slice(0, 4)) {
+      const done = this.triggered.has(item.id);
+      list.appendChild(el('button', {
+        class: 'escort-row' + (d <= this.radius ? ' near' : '') + (done ? ' done' : ''),
+        type: 'button',
+        onclick: () => this.showAlert(item, d, true),
+      }, [
+        el('span', { class: 'escort-dist', text: formatDistance(d) }),
+        el('span', { class: 'escort-body' }, [
+          el('span', { class: 'escort-title', text: item.title || typeLabel(item.type) }),
+          el('span', { class: 'escort-sub', text: this.describe(item) }),
+        ]),
+        item.audio ? el('span', { class: 'escort-icon', text: '🎙️' }) : null,
+        item.video ? el('span', { class: 'escort-icon', text: '🎬' }) : null,
+      ]));
+    }
+
+    const next = withDist[0];
+    $('#escort-headline', this.root).textContent = next
+      ? `${formatDistance(next.d)} — ${next.item.title || typeLabel(next.item.type)}`
+      : 'Nincs figyelt pont a közelben';
+  }
+
+  describe(item) {
+    const bits = [];
+    if (item.type === 'condition') {
+      bits.push(categoryLabel(item.category));
+      if (item.severity) bits.push(severityLabel(item.severity));
+    } else {
+      bits.push(typeLabel(item.type));
+    }
+    if ((item.dims || []).length) bits.push(item.dims.join(' · '));
+    if (item.phase === 'transport') bits.push('szállítás közben rögzítve');
+    return bits.join(' · ');
+  }
+
+  /* ------------------------------------------------------- riasztás */
+
+  objectUrl(blob) {
+    const u = URL.createObjectURL(blob);
+    this.urls.add(u);
+    return u;
+  }
+
+  releaseUrls() {
+    for (const u of this.urls) URL.revokeObjectURL(u);
+    this.urls.clear();
+  }
+
+  setAlertDistance(distance) {
+    if (!this.alertItem) return;
+    $('#escort-alert-dist', this.root).textContent =
+      (this.alertManual ? '' : '⚠️ ') + formatDistance(distance) + ' · ' + this.describe(this.alertItem);
+  }
+
+  showAlert(item, distance, manual = false) {
+    this.alertItem = item;
+    this.alertManual = manual;
+    this.triggered.add(item.id);
+
+    const card = $('#escort-alert', this.root);
+    const body = $('#escort-alert-body', this.root);
+    body.innerHTML = '';
+
+    $('#escort-alert-title', this.root).textContent = item.title || typeLabel(item.type);
+    this.setAlertDistance(distance);
+
+    const picture = item.flat || item.photo;
+    if (picture) body.appendChild(el('img', { class: 'escort-shot', src: this.objectUrl(picture), alt: '' }));
+    if (item.video) {
+      body.appendChild(el('video', {
+        class: 'escort-shot', controls: true, playsinline: true,
+        poster: item.thumb ? this.objectUrl(item.thumb) : null,
+        src: this.objectUrl(item.video),
+      }));
+    }
+    if (item.note) body.appendChild(el('p', { class: 'escort-note', text: item.note }));
+    if ((item.dims || []).length) {
+      body.appendChild(el('p', { class: 'escort-dims', text: '↔ ' + item.dims.join(' · ') }));
+    }
+    if (item.heading != null) {
+      body.appendChild(el('p', { class: 'escort-sub', text: '🧭 kameairány: ' + formatHeading(item.heading) }));
+    }
+
+    if (item.audio) {
+      const player = el('audio', { class: 'escort-audio', controls: true, src: this.objectUrl(item.audio) });
+      body.appendChild(player);
+      // a hangjegyzet magától induljon: ezért kellett a koppintásos feloldás
+      if (this.sound) {
+        const p = player.play();
+        if (p && p.catch) p.catch(() => toast('A hangjegyzet lejátszásához koppintson a ▶ gombra.'));
+      }
+      this.player = player;
+    }
+
+    card.hidden = false;
+    if (!manual) {
+      this.beep();
+      if (navigator.vibrate) { try { navigator.vibrate([180, 90, 180]); } catch (_) {} }
+    }
+    this.refresh();
+  }
+
+  dismissAlert() {
+    if (this.player) { this.player.pause(); this.player = null; }
+    this.alertItem = null;
+    $('#escort-alert', this.root).hidden = true;
+  }
+
+  /* --------------------------------------------------------- kirajz */
+
+  draw() {
+    if (this.root.hidden || !this.canvas.clientWidth) return;
+    renderTrack(this.canvas, this.points, this.relevant(), {
+      drawn: (this.session && this.session.drawn) || [],
+      here: this.here,
+      lineWidth: 4,
+    });
+  }
 }
 
 /* ===== js/editor.js ===== */
@@ -4758,6 +5457,9 @@ let recorder = null;
 let audioRec = null;
 let editor = null;
 let trackEditor = null;
+let escort = null;
+// a kísérés közben rögzített elemek külön jelölést kapnak
+let capturePhase = 'survey';
 let tickTimer = null;
 let trackHit = null;
 let firstPointAfterStart = false;
@@ -5289,6 +5991,7 @@ async function onPhotoSelected(e) {
         id: db.uid(),
         sessionId: state.session.id,
         type: 'photo',
+    phase: capturePhase,
         // importált képnél a felvétel ideje a mérvadó, nem a behozatalé
         created: (exif && exif.takenAt) || Date.now(),
         importedAt: exif && exif.takenAt ? Date.now() : undefined,
@@ -5423,6 +6126,7 @@ async function recordAudio(attachToItemId = null) {
       id: db.uid(),
       sessionId: state.session.id,
       type: 'audio',
+    phase: capturePhase,
       created: Date.now(),
       ...pos,
       title: '',
@@ -5479,6 +6183,7 @@ async function onVideoSelected(e) {
     id: db.uid(),
     sessionId: state.session.id,
     type: 'video',
+    phase: capturePhase,
     created: Date.now(),
     ...pos,
     heading,
@@ -5534,6 +6239,7 @@ async function addCondition() {
     id: db.uid(),
     sessionId: state.session.id,
     type: 'condition',
+    phase: capturePhase,
     created: Date.now(),
     ...pos,
     heading,
@@ -5629,6 +6335,7 @@ async function addNote() {
     id: db.uid(),
     sessionId: state.session.id,
     type: 'note',
+    phase: capturePhase,
     created: Date.now(),
     ...pos,
     title: res.title,
@@ -5654,7 +6361,7 @@ async function markPoint() {
   });
   if (!res) return;
   const item = {
-    id: db.uid(), sessionId: state.session.id, type: 'note', created: Date.now(),
+    id: db.uid(), sessionId: state.session.id, type: 'note', created: Date.now(), phase: capturePhase,
     ...pos, title: res.title || 'Jelölt pont', note: '', dims: [],
   };
   await db.saveItem(item);
@@ -6109,6 +6816,55 @@ async function importJSON(file) {
   }
 }
 
+/* --------------------------------------------------------- élő kísérés
+
+A kész bejárás használata a valódi szállításkor: a rögzített helyekhez
+közeledve előhozza, amit ott találtunk, és menet közben is lehet újat
+rögzíteni — az ilyen elemek „szállítás közben” jelölést kapnak.          */
+
+async function startEscort() {
+  if (!state.session) return;
+  if (!state.items.some((i) => i.lat != null)) {
+    toast('Ehhez a bejáráshoz nincs helyhez kötött elem, amire figyelmeztetni lehetne.', 'error');
+    return;
+  }
+  if (state.recording) {
+    const ok = await modal({
+      title: 'Rögzítés fut',
+      text: 'A kísérés indításához le kell állítani a nyomvonal rögzítését. Leállítsuk?',
+      okText: 'Leállítás és indítás',
+    });
+    if (!ok) return;
+    await stopRecording(true);
+  }
+
+  if (!escort) escort = new EscortMode($('#escort'));
+  capturePhase = 'transport';
+
+  await escort.open({
+    session: state.session,
+    points: state.points,
+    items: state.items,
+    capture: {
+      photo: () => $('#photo-input').click(),
+      video: () => $('#video-input').click(),
+      audio: () => recordAudio(null),
+      condition: () => addCondition(),
+    },
+    onClose: () => {
+      capturePhase = 'survey';
+      renderItems();
+      drawTrack();
+    },
+  });
+  toast('Élő kísérés elindult. A telefont tartsa ébren.');
+}
+
+/** A kísérés alatt rögzített elem után frissüljön a figyelt lista is. */
+function escortRefresh() {
+  if (escort && !$('#escort').hidden) { escort.refresh(); escort.draw(); }
+}
+
 /* -------------------------------------------------------------- licenc */
 
 async function renderLicenceStatus() {
@@ -6177,6 +6933,7 @@ function backupStale(s) {
 }
 
 function markUnsaved() {
+  escortRefresh();
   if (!state.session) return;
   db.saveSession(state.session).catch(() => {}); // az `updated` azonnal frissül
   renderBackupStatus();
@@ -6346,6 +7103,7 @@ function bind() {
 
   $('#rec-toggle').addEventListener('click', () => (state.recording ? stopRecording() : startRecording()));
   $('#rec-mark').addEventListener('click', markPoint);
+  $('#start-escort').addEventListener('click', startEscort);
   $('#dim-screen').addEventListener('click', () => setDarkMode(true));
   $('#dark-exit').addEventListener('click', () => setDarkMode(false));
   $('#edit-track').addEventListener('click', openTrackEditor);

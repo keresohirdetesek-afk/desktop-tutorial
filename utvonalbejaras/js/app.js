@@ -14,6 +14,7 @@ import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
 import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
 import { buildReport } from './report.js';
+import { EscortMode } from './kiseres.js';
 import {
   licence, licencingConfigured, saveLicence, clearLicence, canCreateSession, reportLicence,
 } from './licenc.js';
@@ -38,6 +39,9 @@ let recorder = null;
 let audioRec = null;
 let editor = null;
 let trackEditor = null;
+let escort = null;
+// a kísérés közben rögzített elemek külön jelölést kapnak
+let capturePhase = 'survey';
 let tickTimer = null;
 let trackHit = null;
 let firstPointAfterStart = false;
@@ -569,6 +573,7 @@ async function onPhotoSelected(e) {
         id: db.uid(),
         sessionId: state.session.id,
         type: 'photo',
+    phase: capturePhase,
         // importált képnél a felvétel ideje a mérvadó, nem a behozatalé
         created: (exif && exif.takenAt) || Date.now(),
         importedAt: exif && exif.takenAt ? Date.now() : undefined,
@@ -703,6 +708,7 @@ async function recordAudio(attachToItemId = null) {
       id: db.uid(),
       sessionId: state.session.id,
       type: 'audio',
+    phase: capturePhase,
       created: Date.now(),
       ...pos,
       title: '',
@@ -759,6 +765,7 @@ async function onVideoSelected(e) {
     id: db.uid(),
     sessionId: state.session.id,
     type: 'video',
+    phase: capturePhase,
     created: Date.now(),
     ...pos,
     heading,
@@ -814,6 +821,7 @@ async function addCondition() {
     id: db.uid(),
     sessionId: state.session.id,
     type: 'condition',
+    phase: capturePhase,
     created: Date.now(),
     ...pos,
     heading,
@@ -909,6 +917,7 @@ async function addNote() {
     id: db.uid(),
     sessionId: state.session.id,
     type: 'note',
+    phase: capturePhase,
     created: Date.now(),
     ...pos,
     title: res.title,
@@ -934,7 +943,7 @@ async function markPoint() {
   });
   if (!res) return;
   const item = {
-    id: db.uid(), sessionId: state.session.id, type: 'note', created: Date.now(),
+    id: db.uid(), sessionId: state.session.id, type: 'note', created: Date.now(), phase: capturePhase,
     ...pos, title: res.title || 'Jelölt pont', note: '', dims: [],
   };
   await db.saveItem(item);
@@ -1389,6 +1398,55 @@ async function importJSON(file) {
   }
 }
 
+/* --------------------------------------------------------- élő kísérés
+
+A kész bejárás használata a valódi szállításkor: a rögzített helyekhez
+közeledve előhozza, amit ott találtunk, és menet közben is lehet újat
+rögzíteni — az ilyen elemek „szállítás közben” jelölést kapnak.          */
+
+async function startEscort() {
+  if (!state.session) return;
+  if (!state.items.some((i) => i.lat != null)) {
+    toast('Ehhez a bejáráshoz nincs helyhez kötött elem, amire figyelmeztetni lehetne.', 'error');
+    return;
+  }
+  if (state.recording) {
+    const ok = await modal({
+      title: 'Rögzítés fut',
+      text: 'A kísérés indításához le kell állítani a nyomvonal rögzítését. Leállítsuk?',
+      okText: 'Leállítás és indítás',
+    });
+    if (!ok) return;
+    await stopRecording(true);
+  }
+
+  if (!escort) escort = new EscortMode($('#escort'));
+  capturePhase = 'transport';
+
+  await escort.open({
+    session: state.session,
+    points: state.points,
+    items: state.items,
+    capture: {
+      photo: () => $('#photo-input').click(),
+      video: () => $('#video-input').click(),
+      audio: () => recordAudio(null),
+      condition: () => addCondition(),
+    },
+    onClose: () => {
+      capturePhase = 'survey';
+      renderItems();
+      drawTrack();
+    },
+  });
+  toast('Élő kísérés elindult. A telefont tartsa ébren.');
+}
+
+/** A kísérés alatt rögzített elem után frissüljön a figyelt lista is. */
+function escortRefresh() {
+  if (escort && !$('#escort').hidden) { escort.refresh(); escort.draw(); }
+}
+
 /* -------------------------------------------------------------- licenc */
 
 async function renderLicenceStatus() {
@@ -1457,6 +1515,7 @@ function backupStale(s) {
 }
 
 function markUnsaved() {
+  escortRefresh();
   if (!state.session) return;
   db.saveSession(state.session).catch(() => {}); // az `updated` azonnal frissül
   renderBackupStatus();
@@ -1626,6 +1685,7 @@ function bind() {
 
   $('#rec-toggle').addEventListener('click', () => (state.recording ? stopRecording() : startRecording()));
   $('#rec-mark').addEventListener('click', markPoint);
+  $('#start-escort').addEventListener('click', startEscort);
   $('#dim-screen').addEventListener('click', () => setDarkMode(true));
   $('#dark-exit').addEventListener('click', () => setDarkMode(false));
   $('#edit-track').addEventListener('click', openTrackEditor);

@@ -20,6 +20,7 @@ const ASSETS = [
   'js/report.js',
   'js/licenc.js',
   'js/licenc-kulcs.js',
+  'js/kiseres.js',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/icon-192.png',
