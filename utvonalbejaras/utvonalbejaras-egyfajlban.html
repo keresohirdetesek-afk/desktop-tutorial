@@ -2716,15 +2716,17 @@ function compassState() {
 
 /* ===== js/licenc-kulcs.js ===== */
 // Az alkalmazás ezzel a nyilvános kulccsal ellenőrzi a licenckulcsokat.
-// Nem titok: ebből licencet kiadni nem lehet, csak ellenőrizni.
-// Készült: 2026-10-11 — eszkozok/licenc.mjs
+//
+// Amíg itt null áll, a LICENCELÉS KI VAN KAPCSOLVA: az alkalmazás
+// korlátozás és vízjel nélkül működik, és a licencsáv meg sem jelenik.
+//
+// Bekapcsolás, ha majd aktuális lesz:
+//   node eszkozok/licenc.mjs kulcspar
+// Ez ide beírja a nyilvános kulcsot, a privát kulcsot pedig a tárolón
+// kívülre menti. (A korábban használt nyilvános kulcs a tároló
+// előzményeiben megvan, így a már kiadott licencek visszahozhatók.)
 
-const PUBLIC_KEY = {
-  "kty": "EC",
-  "crv": "P-256",
-  "x": "1qPGLD9sA97BEcwgZFtlqDiH-yUQ8n2wOXagVMk2tfk",
-  "y": "fwMa_R3Eh1mR_p8IVqmTj5thwrgKu9y9f3ssIWRuNeU"
-};
+const PUBLIC_KEY = null;
 
 /* ===== js/licenc.js ===== */
 // Licencellenőrzés — szerver nélkül.
