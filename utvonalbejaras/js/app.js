@@ -1569,16 +1569,31 @@ async function openTrackOnMap() {
     return;
   }
 
-  const html = buildMapPage(state.session, state.points, state.items);
+  // A lapot még a koppintás „hatókörén belül” kell megnyitni, különben a
+  // böngésző felugró ablaknak veszi és letiltja — a tartalmát utólag töltjük.
+  const win = window.open('', '_blank');
+  if (win) {
+    win.document.write('<!doctype html><meta charset="utf-8"><title>Térkép készül…</title>'
+      + '<body style="font:16px system-ui;padding:24px">Térkép összeállítása, az alaptérképpel együtt…');
+  }
+
+  toast('Térkép összeállítása…');
+  let html;
+  try {
+    html = await buildMapPage(state.session, state.points, state.items, (msg) => toast(msg));
+  } catch (err) {
+    if (win) win.close();
+    toast('A térkép nem készült el: ' + err.message, 'error');
+    return;
+  }
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const name = `${slug(state.session.name)}-terkep.html`;
-
-  // új lapon nyitjuk; ha a böngésző nem engedi (felugró ablak tiltás), mentjük
   const url = URL.createObjectURL(blob);
-  const win = window.open(url, '_blank');
-  if (win) {
-    toast('Térkép megnyitva új lapon. A fájl a „Letöltés” gombbal is elmenthető.');
-    setTimeout(() => URL.revokeObjectURL(url), 120000);
+
+  if (win && !win.closed) {
+    win.location.replace(url);
+    toast('Térkép megnyitva új lapon — a fájl elmenthető és elküldhető.');
+    setTimeout(() => URL.revokeObjectURL(url), 180000);
     return;
   }
   URL.revokeObjectURL(url);

@@ -144,8 +144,17 @@ településekkel, nagyítható és mozgatható, a rögzített elemek számozott
 pöttyként — koppintásra kiírja, mi van ott, és merre nézett a kamera.
 
 A fájl elküldhető (e-mailben, pendrive-on), és bármelyik böngészőben
-megnyílik. Az adat nem megy át idegen kiszolgálón: csak a térképcsempék
-töltődnek le, ugyanonnan, ahonnan az appban is.
+megnyílik. **Az alaptérkép bele van csomagolva**, ezért hálózat nélkül is
+látszik, és a fájl semmit nem kér a térképszolgáltatótól. (Ez nem kényelmi
+kérdés: a saját gépről megnyitott fájl kéréseit az OpenStreetMap nyilvános
+csempeszervere elutasítja — *„Access blocked: App is not following the tile
+usage policy”* —, mert ott már nincs hivatkozó oldal. A csempéket ezért az
+app gyűjti be a fájl készítésekor.)
+
+A csomag az egész útvonalat lefedi áttekintő szinteken, a rögzített elemek
+körül pedig utcaszinten is; amire nem jutott csempe, ott a fölöttes szint
+nagyítódik ki (elmosódottan, de a tájékozódáshoz elég). Egy 140 km-es,
+20 elemes bejárásnál ez nagyjából 180–190 csempe, néhány MB.
 
 > Korábban ez a gomb a geojson.io oldalra vitte át az adatot a hivatkozásban.
 > Az külső oldal: hosszabb nyomvonalnál elvágta az adatot
@@ -488,8 +497,8 @@ a licencsáv → Licenckulcs**. Internet nem kell hozzá, és a készüléken ma
   hogy egy hosszabb bejárás is elférjen.
 - Külső oldalt csak az *Útvonalterv Google Maps* és az elemek *Térképen*
   gombja nyit — ezek koordinátákat adnak át a Google-nek. A *Pontos nyomvonal
-  térképen* saját fájlt készít, az adat nem hagyja el a készüléket; onnan
-  csak a térképcsempék töltődnek le (ugyanonnan, ahonnan az appban is).
+  térképen* saját fájlt készít: a bejárás adata nem hagyja el a készüléket, és
+  a kész fájl sem kér semmit a hálózattól (az alaptérkép bele van csomagolva).
 - A böngészőadatok törlése a bejárásokat is törli — fontos anyagot mentsen ki
   JSON-ba vagy GPX-be.
 

@@ -138,6 +138,45 @@ function trimMemory() {
   }
 }
 
+/**
+ * Egy csempe képe data: URI-ként — a tárolóból, vagy letöltve.
+ *
+ * Az önálló térképfájlhoz kell: az exportált fájl a csempéket magában hordja,
+ * mert a saját gépről (fájlként vagy blob-címről) megnyitva a nyilvános
+ * csempeszerver elutasítaná a kérést („Access blocked”), és offline sem
+ * lenne alaptérkép.
+ */
+export async function tileDataURL(z, x, y) {
+  const n = 2 ** z;
+  if (y < 0 || y >= n) return null;
+  const wrapped = ((x % n) + n) % n;
+  const url = tileUrlTemplate()
+    .replace('{z}', z).replace('{x}', wrapped).replace('{y}', y);
+  try {
+    let res = null;
+    try {
+      const cache = await caches.open(TILE_CACHE);
+      res = await cache.match(url);
+      if (!res) {
+        res = await fetch(url, { mode: 'cors' });
+        if (res.ok) cache.put(url, res.clone()).catch(() => {});
+      }
+    } catch (_) {
+      res = await fetch(url, { mode: 'cors' });
+    }
+    if (!res || !res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.onerror = () => resolve(null);
+      fr.readAsDataURL(blob);
+    });
+  } catch (_) {
+    return null;
+  }
+}
+
 /** Hány csempe van letöltve offline használatra. */
 export async function cachedTileCount() {
   try {

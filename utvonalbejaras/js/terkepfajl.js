@@ -9,8 +9,12 @@
 // OpenStreetMap-alaptérkép. Nagyítható, mozgatható, bármelyik böngészőben
 // megnyitható, és elküldhető — az adat nem megy át idegen kiszolgálón.
 
-import { trackLength, formatDistance, typeLabel, isRejected, REJECTED } from './geo.js';
-import { tileUrlTemplate, ATTRIBUTION } from './tiles.js';
+import { trackLength, formatDistance, typeLabel, isRejected, REJECTED, mercator } from './geo.js';
+import { ATTRIBUTION, tileDataURL } from './tiles.js';
+
+const TILE_PX = 256;
+const MAX_TILES = 240;          // ennél többet nem ágyazunk be
+const MAX_BYTES = 14 * 1048576; // és ennél nagyobbra sem hizlaljuk a fájlt
 
 const mapEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -34,11 +38,96 @@ function segments(points) {
   return out.filter((s) => s.pts.length > 1);
 }
 
-export function buildMapPage(session, points, items) {
+/** Melyik csempék kellenek: áttekintés az egész útvonalról + részletek az elemek körül. */
+function neededTiles(points, items, drawn) {
+  const all = points.filter((p) => p.lat != null)
+    .concat(items.filter((i) => i.lat != null))
+    .concat(drawn.flatMap((d) => (d.pts || []).filter((p) => p.lat != null)));
+  if (!all.length) return [];
+
+  let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
+  for (const p of all) {
+    const m = mercator(p.lat, p.lon);
+    x0 = Math.min(x0, m.x); x1 = Math.max(x1, m.x);
+    y0 = Math.min(y0, m.y); y1 = Math.max(y1, m.y);
+  }
+  // Az a nagyítás, amelyen az egész útvonal kifér. Telefonon kisebb, nagy
+  // képernyőn nagyobb az ablak, ezért a szűk képernyőtől a széles ablakig
+  // minden szintet beszedünk — különben a megnyitáskor épp a kellő szint
+  // hiányozna, és üres maradna a térkép.
+  const span = Math.max(x1 - x0, y1 - y0, 1e-9);
+  const zFit = (w) => Math.max(0, Math.min(17, Math.round(Math.log2(w / span / TILE_PX))));
+  const base = zFit(300);
+  const top = Math.min(17, zFit(1600) + 2);
+
+  const want = [];
+  const seen = new Set();
+  const add = (z, x, y) => {
+    const n = 2 ** z;
+    if (y < 0 || y >= n) return;
+    const key = `${z}/${((x % n) + n) % n}/${y}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    want.push({ z, x: ((x % n) + n) % n, y, key });
+  };
+
+  // 1. áttekintő szintek az egész útvonalra
+  for (let z = base; z <= top; z++) {
+    const n = 2 ** z;
+    const tx0 = Math.floor(x0 * n) - 1, tx1 = Math.ceil(x1 * n) + 1;
+    const ty0 = Math.floor(y0 * n) - 1, ty1 = Math.ceil(y1 * n) + 1;
+    if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) > 120) continue;   // túl sok lenne
+    for (let x = tx0; x <= tx1; x++) for (let y = ty0; y <= ty1; y++) add(z, x, y);
+  }
+
+  // 2. utcaszintű részlet a rögzített elemek körül — oda szokás belenagyítani.
+  //    Köztes szint (13) + utcaszint (16), hogy a kettő között se tűnjön el
+  //    az alaptérkép. Elemenként 5 csempe, hogy sok elemre is jusson.
+  for (const it of items.filter((i) => i.lat != null)) {
+    const m = mercator(it.lat, it.lon);
+    for (const z of [13, 16]) {
+      if (z <= top || z > 18) continue;
+      const n = 2 ** z;
+      if (z === 13) {
+        add(z, Math.floor(m.x * n), Math.floor(m.y * n));
+        continue;
+      }
+      // 2×2 úgy, hogy a pont a négyes közepe táján legyen
+      const bx = Math.floor(m.x * n - 0.5), by = Math.floor(m.y * n - 0.5);
+      for (let dx = 0; dx <= 1; dx++) for (let dy = 0; dy <= 1; dy++) add(z, bx + dx, by + dy);
+    }
+  }
+  return want;
+}
+
+/** A csempék letöltése (a tárolóból, ha már megvan) és beágyazása. */
+async function collectTiles(points, items, drawn, progress) {
+  const want = neededTiles(points, items, drawn);
+  const out = {};
+  let bytes = 0;
+  let done = 0;
+  const list = want.slice(0, MAX_TILES);
+
+  // kisebb adagokban, hogy a felület közben se álljon meg
+  for (let i = 0; i < list.length; i += 6) {
+    const batch = list.slice(i, i + 6);
+    const urls = await Promise.all(batch.map((t) => tileDataURL(t.z, t.x, t.y)));
+    urls.forEach((u, k) => {
+      done += 1;
+      if (!u || bytes + u.length > MAX_BYTES) return;
+      out[batch[k].key] = u;
+      bytes += u.length;
+    });
+    progress(`Alaptérkép csomagolása… (${done}/${list.length})`);
+    if (bytes > MAX_BYTES) break;
+  }
+  return out;
+}
+
+export async function buildMapPage(session, points, items, progress = () => {}) {
   const data = {
     nev: session.name || 'Bejárás',
     hossz: formatDistance(trackLength(points.filter((p) => !isRejected(p)))),
-    csempe: tileUrlTemplate(),
     kozeplat: (function () {
       const ls = points.filter((p) => p.lat != null).map((p) => p.lat);
       return ls.length ? Number((ls.reduce((a, b) => a + b, 0) / ls.length).toFixed(4)) : 47.5;
@@ -59,6 +148,11 @@ export function buildMapPage(session, points, items) {
       irany: i.heading == null ? null : Math.round(i.heading),
     })),
   };
+
+  // az alaptérkép a fájlba kerül: a nyilvános csempeszerver a saját gépről
+  // megnyitott fájl kéréseit elutasítja, offline pedig semmi nem töltődne
+  data.csempek = await collectTiles(points, items, session.drawn || [], progress);
+  data.csempeszam = Object.keys(data.csempek).length;
 
   return `<!DOCTYPE html>
 <html lang="hu">
@@ -101,7 +195,11 @@ export function buildMapPage(session, points, items) {
     <div id="info"><button id="x" aria-label="Bezárás">✕</button><b></b><small></small></div>
   </div>
   <p class="legend">Kék: érvényes útvonal · narancs szaggatott: elvetett szakasz ·
-     zöld: térképen megadott szakasz · pont: rögzített elem (koppintásra megnyílik). Térkép: ${mapEsc(data.forras)}</p>
+     zöld: térképen megadott szakasz · pont: rögzített elem (koppintásra megnyílik).<br>
+     ${data.csempeszam
+       ? `Az alaptérkép ebbe a fájlba van beágyazva (${data.csempeszam} csempe), ezért hálózat nélkül is látszik — `
+         + `nagy nagyításban elmosódhat. Térkép: ${mapEsc(data.forras)}`
+       : 'Alaptérkép nélkül készült (nem volt hálózat) — a nyomvonal és a jelölések így is pontosak.'}</p>
 </div>
 <script>
 var D = ${JSON.stringify(data)};
@@ -152,31 +250,22 @@ function s2w(x, y) {
 }
 function pr(lat, lon) { var m = merc(lat, lon); return w2s(m.x, m.y); }
 
+/* A csempék a fájlban vannak (data: URI). Ami hiányzik, azt a fölöttes
+   szint megfelelő darabjából nagyítjuk ki — így mélyebb nagyításban is
+   marad alaptérkép, csak elmosódik. */
 function tile(z, x, y) {
   var n = Math.pow(2, z);
   if (y < 0 || y >= n) return null;
-  var wx = ((x % n) + n) % n, key = z + '/' + wx + '/' + y, t = tiles[key];
+  var wx = ((x % n) + n) % n, key = z + '/' + wx + '/' + y;
+  if (!D.csempek[key]) return null;
+  var t = tiles[key];
   if (t) return t.ok ? t.img : null;
-  var url = D.csempe.replace('{z}', z).replace('{x}', wx).replace('{y}', y);
   var img = new Image();
   tiles[key] = { img: img, ok: false };
   pending++;
   img.onload = function () { tiles[key].ok = true; pending--; draw(); };
-  // CORS-szal kérjük (így a vászon nem szennyeződik), de ha a csempeszerver
-  // nem küld CORS-fejlécet, egyszer megpróbáljuk anélkül is
-  img.onerror = function () {
-    pending--;
-    if (img.crossOrigin) {
-      var plain = new Image();
-      tiles[key] = { img: plain, ok: false };
-      pending++;
-      plain.onload = function () { tiles[key].ok = true; pending--; draw(); };
-      plain.onerror = function () { pending--; };
-      plain.src = url;
-    }
-  };
-  img.crossOrigin = 'anonymous';
-  img.src = url;
+  img.onerror = function () { pending--; };
+  img.src = D.csempek[key];
   return null;
 }
 function paintTiles(px) {
@@ -189,10 +278,19 @@ function paintTiles(px) {
   if ((x1 - x0) * (y1 - y0) > 400) return;
   for (var x = x0; x <= x1; x++) {
     for (var y = y0; y <= y1; y++) {
-      var img = tile(z, x, y);
-      if (!img) continue;
-      var p = w2s(x / n, y / n);
-      g.drawImage(img, Math.floor(p.x), Math.floor(p.y), Math.ceil(tp) + 1, Math.ceil(tp) + 1);
+      var p = w2s(x / n, y / n), w = Math.ceil(tp) + 1;
+      for (var up = 0; up <= 6; up++) {
+        var zz = z - up;
+        if (zz < 0) break;
+        var f = Math.pow(2, up);
+        var px2 = Math.floor(x / f), py2 = Math.floor(y / f);
+        var img = tile(zz, px2, py2);
+        if (!img) continue;
+        var ss = TS / f;
+        var sx = (x - px2 * f) * ss, sy = (y - py2 * f) * ss;
+        g.drawImage(img, sx, sy, ss, ss, Math.floor(p.x), Math.floor(p.y), w, w);
+        break;
+      }
     }
   }
 }
