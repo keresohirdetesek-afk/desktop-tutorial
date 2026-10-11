@@ -16,6 +16,7 @@ import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './
 import { MapView } from './terkepnezet.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
+import { KozutDocs } from './kozut.js';
 import { EscortMode } from './kiseres.js';
 import {
   licence, licencingConfigured, saveLicence, clearLicence, canCreateSession, reportLicence,
@@ -42,9 +43,13 @@ let audioRec = null;
 let editor = null;
 let trackEditor = null;
 let escort = null;
+let kozut = null;
 // a kísérés közben rögzített elemek külön jelölést kapnak
 let capturePhase = 'survey';
 let tickTimer = null;
+/** A mentésbe és vissza: minden elemhez tartozó felvétel. */
+const MEDIA_KEYS = ['photo', 'flat', 'thumb', 'audio', 'video'];
+
 let trackHit = null;
 let trackView = null;           // nagyítás/mozgatás a bejárás térképén
 let firstPointAfterStart = false;
@@ -1303,16 +1308,28 @@ async function exportJSON() {
   const items = [];
   for (const i of state.items) {
     const copy = { ...i };
-    for (const key of ['photo', 'flat', 'thumb', 'audio']) {
+    for (const key of MEDIA_KEYS) {
       if (i[key] instanceof Blob) copy[key] = await blobToDataURL(i[key]);
       else delete copy[key];
     }
     items.push(copy);
   }
+
+  // a Közúttól kapott Word-űrlapok is a bejáráshoz tartoznak
+  const session = { ...state.session };
+  if (session.docs) {
+    session.docs = [];
+    for (const d of state.session.docs || []) {
+      if (d && d.blob instanceof Blob) {
+        session.docs.push({ name: d.name, type: d.type, data: await blobToDataURL(d.blob) });
+      }
+    }
+  }
+
   const data = {
     format: 'utvonalbejaras/1',
     exportedAt: new Date().toISOString(),
-    session: state.session,
+    session,
     points: state.points.map(({ id, ...p }) => p),
     items,
   };
@@ -1391,6 +1408,16 @@ async function importJSON(file) {
       return;
     }
     const session = { ...data.session, id: db.uid(), name: data.session.name + ' (visszatöltve)' };
+    // a mentésben a Word-űrlapok data: URI-ként vannak
+    if (Array.isArray(session.docs)) {
+      const docs = [];
+      for (const d of session.docs) {
+        if (d && typeof d.data === 'string' && d.data.startsWith('data:')) {
+          docs.push({ name: d.name, type: d.type, blob: await dataURLToBlob(d.data) });
+        }
+      }
+      session.docs = docs;
+    }
     await db.saveSession(session);
 
     for (const p of data.points || []) await db.addPoint({ ...p, sessionId: session.id });
@@ -1398,7 +1425,7 @@ async function importJSON(file) {
     let restored = 0;
     for (const raw of data.items || []) {
       const item = { ...raw, id: db.uid(), sessionId: session.id };
-      for (const key of ['photo', 'flat', 'thumb', 'audio']) {
+      for (const key of MEDIA_KEYS) {
         if (typeof raw[key] === 'string' && raw[key].startsWith('data:')) {
           item[key] = await dataURLToBlob(raw[key]);
         }
@@ -1418,6 +1445,22 @@ async function importJSON(file) {
 A kész bejárás használata a valódi szállításkor: a rögzített helyekhez
 közeledve előhozza, amit ott találtunk, és menet közben is lehet újat
 rögzíteni — az ilyen elemek „szállítás közben” jelölést kapnak.          */
+
+/** A Közúttól kapott Word-űrlapok kitöltése a bejárás adataiból. */
+async function openKozut() {
+  if (!state.session) return;
+  if (!kozut) kozut = new KozutDocs($('#kozut'));
+  await kozut.open({
+    session: state.session,
+    points: state.points,
+    items: state.items,
+    onSave: async () => {
+      await db.saveSession(state.session);
+      for (const it of state.items) if (it.kozut) await db.saveItem(it);
+      markUnsaved();
+    },
+  });
+}
 
 async function startEscort() {
   if (!state.session) return;
@@ -1759,6 +1802,7 @@ function bind() {
   $('#export-gpx').addEventListener('click', exportGPX);
   $('#export-geojson').addEventListener('click', exportGeoJSON);
   $('#export-html').addEventListener('click', exportHTML);
+  $('#kozut-open').addEventListener('click', openKozut);
   $('#export-json').addEventListener('click', exportJSON);
   $('#open-track-map').addEventListener('click', openTrackOnMap);
   $('#open-maps').addEventListener('click', openInMaps);

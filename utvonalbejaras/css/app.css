@@ -784,3 +784,30 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: inline-flex;
   align-items: center;
 }
+
+/* ------------------------------------------- Közút dokumentumok */
+
+.kozut-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+.kozut-foot { padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); background: var(--surface); }
+.section-head { margin: 12px 0 2px; font-size: 14px; font-weight: 650; }
+
+.kozut-list { display: flex; flex-direction: column; gap: 8px; }
+.kozut-doc {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 9px 12px;
+}
+.block { display: block; }
+
+.kozut-fields { display: flex; flex-direction: column; gap: 10px; }
+.kozut-fields .field span { font-size: 12.5px; color: var(--muted); }
+
+.kozut-rows { display: flex; flex-direction: column; gap: 10px; }
+.kozut-row {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.kozut-row-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.kozut-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field.tiny span { font-size: 11.5px; color: var(--muted); }
+.field.tiny input { padding: 8px 10px; font-size: 14px; }

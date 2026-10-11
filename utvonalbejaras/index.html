@@ -122,6 +122,7 @@
         <button id="export-gpx" class="btn ghost small">GPX export</button>
         <button id="export-geojson" class="btn ghost small">GeoJSON export</button>
         <button id="export-html" class="btn primary small">📄 Riport (HTML) a közút felé</button>
+        <button id="kozut-open" class="btn primary small">📋 Közút dokumentumok kitöltése</button>
         <button id="export-json" class="btn ghost small">Teljes mentés (JSON)</button>
         <button id="open-maps" class="btn ghost small">Útvonalterv Google Maps (közelítő)</button>
         <button id="delete-session" class="btn danger small">Bejárás törlése</button>
@@ -225,6 +226,41 @@
       <button id="editor-redo" class="btn ghost tiny">↷ Újra</button>
       <button id="editor-clear" class="btn ghost tiny">Összes törlése</button>
     </div>
+  </div>
+</div>
+
+<!-- =================================== Közút dokumentumok kitöltése -->
+<div id="kozut" class="overlay" hidden>
+  <header class="overlay-bar">
+    <button id="kozut-close" class="icon-btn" aria-label="Bezárás">✕</button>
+    <h2>Közút dokumentumok</h2>
+  </header>
+
+  <div class="kozut-body">
+    <p class="hint">
+      Töltse be a Magyar Közúttól kapott Word-űrlapokat. Az app felismeri,
+      melyik melyik, és kitölti őket a bejárás adataival — a dokumentum többi
+      része (fejléc, iktatószám, szerelvény adatai, útvonal) változatlan marad.
+    </p>
+
+    <h3 class="section-head">1. A Közúttól kapott fájlok</h3>
+    <div id="kozut-list" class="kozut-list"></div>
+    <input id="kozut-file" type="file" accept=".docx" multiple hidden>
+    <button id="kozut-add" class="btn ghost small block">📎 .docx fájlok betöltése</button>
+
+    <h3 class="section-head">2. Közös adatok</h3>
+    <div id="kozut-form" class="kozut-fields"></div>
+
+    <h3 class="section-head">3. Helyszínek (a jegyzékhez és a részletezőhöz)</h3>
+    <p class="hint">
+      A település, az útszám és a km szelvény nem derül ki a GPS-ből — ezeket
+      itt lehet megadni. A beírt értékek megmaradnak a következő kitöltéshez.
+    </p>
+    <div id="kozut-rows" class="kozut-rows"></div>
+  </div>
+
+  <div class="kozut-foot">
+    <button id="kozut-fill" class="btn primary block">📥 Kitöltés és letöltés</button>
   </div>
 </div>
 

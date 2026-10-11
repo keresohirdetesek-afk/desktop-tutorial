@@ -1,0 +1,420 @@
+// A Magyar Közút bejárási dokumentumainak kitöltése a bejárás adataiból.
+//
+// A Közút az adott engedélyre kiállított Word-űrlapokat küld (bejárás,
+// részletező, itiner, jegyzék, rendkívüli jegyzék). Ezek a sajátjai: a
+// fejléc, az iktatószám, a szerelvény adatai és az útvonal már benne van.
+// Az app nem írja át őket — csak kitölti azt, amit a bejárás során
+// rögzítettünk, a hiányzó mezőket pedig itt lehet kézzel megadni.
+//
+// A kitöltött fájl ugyanaz a Word-dokumentum marad: nyomtatható, és a
+// Közút felé beadható.
+
+import {
+  unzip, zipFiles, parseDocumentXml, serializeDocumentXml,
+  textOf, tablesOf, fillTable, findLeafParagraphs, addParagraphAfter, fillDotsNear,
+} from './docx.js';
+import { formatCoord, formatDistance, typeLabel, categoryLabel, conditionLabel, severityLabel, isRejected, trackLength } from './geo.js';
+import { $, el, toast, modal, download, formatDateTime } from './ui.js';
+
+/** A felismert dokumentumtípusok — a sorrend számít (az első találat nyer). */
+const TYPES = [
+  { id: 'rendkivuli', nev: 'Rendkívüli jegyzék', test: (t) => /rendkívüli/i.test(t) },
+  { id: 'itiner', nev: 'Itiner', test: (t) => /\bitiner\b/i.test(t) },
+  { id: 'reszletezo', nev: 'Útvonal bejárási részletező', test: (t) => t.includes('Elvégzendő munka megnevezése') },
+  { id: 'jegyzek', nev: 'Jegyzék', test: (t) => t.includes('Elbontandó jelzőtábla') },
+  { id: 'bejaras', nev: 'Útvonal bejárás (alapdokumentum)', test: (t) => t.includes('A bejárást végző') },
+];
+
+const typeName = (id) => (TYPES.find((t) => t.id === id) || {}).nev || 'Ismeretlen dokumentum';
+
+const dateHu = (t) => {
+  const d = t ? new Date(t) : new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}. ${p(d.getMonth() + 1)}. ${p(d.getDate())}.`;
+};
+const timeHu = (t) => {
+  if (!t) return '';
+  const d = new Date(t);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${dateHu(t)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+/** Egy elem leírása a dokumentumokba. */
+function describeForDoc(it) {
+  const bits = [];
+  if (it.type === 'condition') {
+    bits.push(categoryLabel(it.category));
+    if (it.what) bits.push(it.what);
+    if (it.condition) bits.push(conditionLabel(it.condition));
+    if (it.severity) bits.push(severityLabel(it.severity));
+  } else {
+    if (it.title) bits.push(it.title);
+    else bits.push(typeLabel(it.type));
+  }
+  if ((it.dims || []).length) bits.push(it.dims.join(' · '));
+  if (it.note) bits.push(it.note);
+  return bits.filter(Boolean).join(' – ');
+}
+
+export class KozutDocs {
+  constructor(root) {
+    this.root = root;
+    this.docs = [];      // { name, type, blob }
+    this.bind();
+  }
+
+  bind() {
+    $('#kozut-close', this.root).addEventListener('click', () => this.close());
+    $('#kozut-add', this.root).addEventListener('click', () => $('#kozut-file', this.root).click());
+    $('#kozut-file', this.root).addEventListener('change', (e) => {
+      const files = Array.from(e.target.files || []);
+      e.target.value = '';
+      this.addFiles(files);
+    });
+    $('#kozut-fill', this.root).addEventListener('click', () => this.fillAll());
+  }
+
+  async open({ session, points, items, onSave }) {
+    this.session = session;
+    this.points = points;
+    this.items = items;
+    this.onSave = onSave;
+    this.form = Object.assign({
+      nevek: '',
+      datum: dateHu(session.created),
+      feltetelek: '',
+      kritikus: '',
+      kiindulo: '',
+      indulas: '',
+      vasut: '',
+      megallok: '',
+      mogottes: '',
+      erkezes: '',
+      cel: '',
+      zarasi: '',
+      rendkivuli: '',
+    }, session.kozut || {});
+    this.prefill();
+    this.docs = (session.docs || []).slice();
+
+    this.root.hidden = false;
+    document.body.classList.add('modal-open');
+    this.render();
+  }
+
+  close() {
+    this.save();
+    this.root.hidden = true;
+    document.body.classList.remove('modal-open');
+  }
+
+  /** Amit a bejárásból tudunk, az előre bekerül — felülírható. */
+  prefill() {
+    const coords = this.points.filter((p) => p.lat != null);
+    const first = coords[0];
+    const last = coords[coords.length - 1];
+    if (first) {
+      if (!this.form.kiindulo) this.form.kiindulo = formatCoord(first.lat, first.lon);
+      if (!this.form.indulas) this.form.indulas = timeHu(first.t);
+    }
+    if (last) {
+      if (!this.form.cel) this.form.cel = formatCoord(last.lat, last.lon);
+      if (!this.form.erkezes) this.form.erkezes = timeHu(last.t);
+    }
+    if (!this.form.feltetelek) {
+      const kritikus = this.items.filter((i) => i.severity === 'kritikus').length;
+      const valid = formatDistance(trackLength(this.points.filter((p) => !isRejected(p))));
+      this.form.feltetelek = kritikus
+        ? `A bejárás ${valid} hosszú útvonalon megtörtént. ${kritikus} kritikus helyszín a részletezőben felsorolva.`
+        : `A bejárás ${valid} hosszú útvonalon megtörtént, kritikus helyszín nem merült fel.`;
+    }
+
+    // elemenkénti adatok: amit tudunk, azt kitöltjük
+    for (const it of this.items) {
+      it.kozut = Object.assign({
+        telepules: '', utszam: '', km: '',
+        munka: it.type === 'condition' ? describeForDoc(it) : '',
+        jegyzek: it.type === 'condition' && it.category === 'tabla',
+        megnevezes: it.type === 'condition' ? (it.what || categoryLabel(it.category)) : (it.title || ''),
+        ideiglenes: '', vegleges: '', technologia: '', jovahagyas: '',
+      }, it.kozut || {});
+    }
+  }
+
+  save() {
+    this.session.kozut = this.form;
+    this.session.docs = this.docs;
+    if (this.onSave) this.onSave();
+  }
+
+  /* ------------------------------------------------------ fájlok */
+
+  async addFiles(files) {
+    for (const f of files) {
+      if (!/\.docx$/i.test(f.name)) {
+        toast(`${f.name}: csak .docx fájl tölthető be.`, 'error');
+        continue;
+      }
+      try {
+        const type = await this.detect(f);
+        this.docs = this.docs.filter((d) => d.name !== f.name);
+        this.docs.push({ name: f.name, type, blob: f });
+      } catch (err) {
+        toast(`${f.name}: ${err.message}`, 'error');
+      }
+    }
+    this.save();
+    this.render();
+  }
+
+  async detect(blob) {
+    const files = await unzip(await blob.arrayBuffer());
+    const main = files.find((f) => f.name === 'word/document.xml');
+    if (!main) throw new Error('nem Word-dokumentum');
+    const text = new TextDecoder().decode(main.data).replace(/<[^>]+>/g, ' ');
+    const hit = TYPES.find((t) => t.test(text));
+    return hit ? hit.id : 'ismeretlen';
+  }
+
+  /* ------------------------------------------------------- felület */
+
+  render() {
+    const list = $('#kozut-list', this.root);
+    list.innerHTML = '';
+    if (!this.docs.length) {
+      list.appendChild(el('p', {
+        class: 'hint',
+        text: 'Még nincs betöltve dokumentum. Töltse be a Közúttól kapott .docx fájlokat — '
+          + 'az app felismeri, melyik melyik, és kitölti őket.',
+      }));
+    }
+    for (const d of this.docs) {
+      list.appendChild(el('div', { class: 'kozut-doc' }, [
+        el('div', {}, [
+          el('b', { text: typeName(d.type) }),
+          el('span', { class: 'muted small block', text: d.name }),
+        ]),
+        el('button', {
+          class: 'btn ghost tiny', type: 'button', text: 'Eltávolítás',
+          onclick: () => { this.docs = this.docs.filter((x) => x !== d); this.save(); this.render(); },
+        }),
+      ]));
+    }
+
+    const form = $('#kozut-form', this.root);
+    form.innerHTML = '';
+    const field = (name, label, opts = {}) => {
+      const input = el(opts.multiline ? 'textarea' : 'input', {
+        id: 'kz-' + name,
+        value: this.form[name] || '',
+        rows: opts.rows || 3,
+        placeholder: opts.placeholder || '',
+        oninput: (e) => { this.form[name] = e.target.value; },
+      });
+      if (opts.multiline) input.value = this.form[name] || '';
+      form.appendChild(el('label', { class: 'field' }, [
+        el('span', { text: label }), input,
+      ]));
+    };
+
+    field('nevek', 'A bejárást végző(k) neve, elérhetősége', { multiline: true, rows: 2 });
+    field('datum', 'Dátum');
+    field('feltetelek', 'A szállítás feltételei (bejárási nyilatkozat)', { multiline: true, rows: 3 });
+    field('kritikus', 'Az MK által megjelölt kritikus helyszínek vizsgálata', { multiline: true, rows: 2 });
+
+    form.appendChild(el('p', { class: 'section-head', text: 'Itiner' }));
+    field('kiindulo', 'Kiinduló állomás');
+    field('indulas', 'Indulás időpontja');
+    field('vasut', 'Vasúti átkelés időpontja / időablaka');
+    field('megallok', 'Megálló(k)', { multiline: true, rows: 2 });
+    field('mogottes', 'Mögöttes forgalom elengedésére alkalmas helyszín', { multiline: true, rows: 2 });
+    field('erkezes', 'Tervezett érkezés időpontja');
+    field('cel', 'Célállomás');
+    field('zarasi', 'Zárási terv', { multiline: true, rows: 4 });
+    field('rendkivuli', 'Rendkívüli jegyzék — további megjegyzés', { multiline: true, rows: 2 });
+
+    this.renderRows();
+  }
+
+  renderRows() {
+    const wrap = $('#kozut-rows', this.root);
+    wrap.innerHTML = '';
+    const rows = this.items.filter((i) => i.lat != null || i.type === 'condition');
+    if (!rows.length) {
+      wrap.appendChild(el('p', { class: 'hint', text: 'Nincs rögzített helyszín a bejárásban.' }));
+      return;
+    }
+    rows.forEach((it, idx) => {
+      const k = it.kozut;
+      const input = (name, label, width) => el('label', { class: 'field tiny' + (width ? ' ' + width : '') }, [
+        el('span', { text: label }),
+        el('input', {
+          value: k[name] || '',
+          oninput: (e) => { k[name] = e.target.value; },
+        }),
+      ]);
+      const card = el('div', { class: 'kozut-row' }, [
+        el('div', { class: 'kozut-row-head' }, [
+          el('b', { text: `${idx + 1}. ${it.title || it.what || typeLabel(it.type)}` }),
+          el('span', { class: 'muted small', text: it.lat != null ? formatCoord(it.lat, it.lon) : '—' }),
+        ]),
+        el('div', { class: 'kozut-grid' }, [
+          input('telepules', 'Település'),
+          input('utszam', 'Útszám'),
+          input('km', 'km szelvény'),
+        ]),
+        input('munka', 'Elvégzendő munka / leírás (részletező)'),
+        el('label', { class: 'check-row' }, [
+          el('input', {
+            type: 'checkbox',
+            checked: !!k.jegyzek,
+            onchange: (e) => { k.jegyzek = e.target.checked; this.renderRows(); },
+          }),
+          el('span', { text: 'Jegyzékbe (elbontandó tábla, érintett közúti jelzés)' }),
+        ]),
+      ]);
+      if (k.jegyzek) {
+        card.appendChild(el('div', { class: 'kozut-grid' }, [
+          input('megnevezes', 'Megnevezés'),
+          input('ideiglenes', 'Helyreállítás – ideiglenes'),
+          input('vegleges', 'Helyreállítás – végleges'),
+          input('technologia', 'Alkalmazott technológia'),
+        ]));
+      }
+      wrap.appendChild(card);
+    });
+  }
+
+  /* ------------------------------------------------- kitöltés */
+
+  munkaRows() {
+    const out = [];
+    this.items.forEach((it) => {
+      const k = it.kozut || {};
+      if (!k.munka) return;
+      out.push([String(out.length + 1), k.telepules || '', k.utszam || '', k.km || '', k.munka]);
+    });
+    return out;
+  }
+
+  jegyzekRows() {
+    const out = [];
+    this.items.forEach((it) => {
+      const k = it.kozut || {};
+      if (!k.jegyzek) return;
+      out.push([
+        String(out.length + 1), k.telepules || '', k.utszam || '', k.km || '',
+        k.megnevezes || describeForDoc(it), k.ideiglenes || '', k.vegleges || '',
+        k.technologia || '', k.jovahagyas || '',
+      ]);
+    });
+    return out;
+  }
+
+  /** A szállítás közben rögzített észrevételek — ezek valók a rendkívüli jegyzékbe. */
+  rendkivuliText() {
+    const bits = [];
+    this.items.filter((i) => i.phase === 'transport').forEach((it, i) => {
+      const k = it.kozut || {};
+      const hely = [k.telepules, k.utszam, k.km].filter(Boolean).join(', ')
+        || (it.lat != null ? formatCoord(it.lat, it.lon) : '');
+      bits.push(`${i + 1}. Helyszín, időpont: ${hely} – ${timeHu(it.created)}`);
+      bits.push(`   Károkozás leírása: ${describeForDoc(it)}`);
+      bits.push(`   Jellege: ${it.type === 'condition' ? conditionLabel(it.condition) : typeLabel(it.type)}`);
+      bits.push('   Ideiglenes helyreállítás időpontja: ');
+    });
+    if (this.form.rendkivuli) bits.push(this.form.rendkivuli);
+    return bits.join('\n');
+  }
+
+  fillDoc(id, doc) {
+    const f = this.form;
+    const tableWith = (needle) => tablesOf(doc).find((t) => textOf(t).includes(needle));
+    let touched = 0;
+
+    if (id === 'jegyzek' || id === 'reszletezo') {
+      const t = tableWith('Elbontandó jelzőtábla');
+      if (t) touched += fillTable(t, this.jegyzekRows());
+    }
+    if (id === 'reszletezo') {
+      const t = tableWith('Elvégzendő munka');
+      if (t) touched += fillTable(t, this.munkaRows());
+    }
+    if (id === 'bejaras') {
+      if (f.nevek) {
+        for (const p of findLeafParagraphs(doc, 'A bejárást végző')) {
+          addParagraphAfter(p, f.nevek, { plain: true });
+          touched++;
+        }
+      }
+      if (f.feltetelek) {
+        touched += fillDotsNear(doc, 'A szállítás a bejárt útvonalon lebonyolítható', f.feltetelek);
+      }
+      if (f.kritikus) {
+        // ehhez is pontozott hely tartozik; ha nincs, a felirat alá kerül
+        const n = fillDotsNear(doc, 'kritikus helyszín(ek) vizsgálata', f.kritikus);
+        if (n) touched += n;
+        else {
+          for (const krit of findLeafParagraphs(doc, 'kritikus helyszín(ek) vizsgálata')) {
+            addParagraphAfter(krit, f.kritikus, { plain: true });
+            touched++;
+          }
+        }
+      }
+    }
+    if (id === 'itiner') {
+      const pairs = [
+        ['Kiinduló állomás', f.kiindulo],
+        ['Indulás időpontja', f.indulas],
+        ['Vasúti átkelés', f.vasut],
+        ['Megálló(k)', f.megallok],
+        ['Mögöttes forgalom', f.mogottes],
+        ['Tervezett érkezés', f.erkezes],
+        ['Célállomás', f.cel],
+        ['Zárási terv', f.zarasi],
+      ];
+      for (const [label, value] of pairs) {
+        if (!value) continue;
+        for (const p of findLeafParagraphs(doc, label)) {
+          addParagraphAfter(p, value, { plain: true });
+          touched++;
+        }
+      }
+    }
+    if (id === 'rendkivuli') {
+      const text = this.rendkivuliText();
+      const ps = findLeafParagraphs(doc, 'Károkozás leírása');
+      const targets = ps.length ? ps : findLeafParagraphs(doc, 'Rendkívüli');
+      if (text) for (const p of targets) { addParagraphAfter(p, text, { plain: true }); touched++; }
+    }
+
+    // dátum minden dokumentumban
+    if (f.datum) touched += fillDotsNear(doc, 'Dátum', f.datum);
+    return touched;
+  }
+
+  async fillAll() {
+    if (!this.docs.length) {
+      toast('Előbb töltse be a Közúttól kapott .docx fájlokat.', 'error');
+      return;
+    }
+    this.save();
+    let ok = 0;
+    for (const d of this.docs) {
+      try {
+        const files = await unzip(await d.blob.arrayBuffer());
+        const main = files.find((f) => f.name === 'word/document.xml');
+        const doc = parseDocumentXml(main.data);
+        const touched = this.fillDoc(d.type, doc);
+        main.data = serializeDocumentXml(doc);
+        const blob = await zipFiles(files);
+        download(blob, d.name.replace(/\.docx$/i, '') + ' - kitoltve.docx');
+        ok += 1;
+        if (!touched) toast(`${typeName(d.type)}: nem találtam kitölthető helyet.`, 'error');
+      } catch (err) {
+        toast(`${d.name}: ${err.message}`, 'error');
+      }
+    }
+    if (ok) toast(`${ok} dokumentum kitöltve és letöltve.`);
+  }
+}

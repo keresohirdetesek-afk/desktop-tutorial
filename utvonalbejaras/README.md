@@ -28,6 +28,7 @@ használatra.
 | **Videós megjegyzés** a telefon kamerájával, bélyegképpel | *Videó* gomb |
 | **Állapot- és táblarögzítés** kategóriával, állapottal, minősítéssel | *Állapot / tábla* gomb |
 | **HTML-jegyzőkönyv** önálló fájlban, a közút felé átadható | *Riport (HTML)* gomb |
+| **Közút Word-űrlapjainak kitöltése** (bejárás, részletező, itiner, jegyzék, rendkívüli jegyzék) | *Közút dokumentumok* gomb |
 | **Élő kísérés a szállítás során**: közeledéskor szól, lejátssza a hangjegyzetet, előhozza a fotót/videót | *Élő kísérés* gomb |
 | **Írott jegyzet** és pontjelölés a nyomvonalon | *Jegyzet*, *Pont jelölése* |
 | **Visszakeresés** név, jegyzet, képre írt felirat, beírt méret és koordináta szerint | *Keresés* fül |
@@ -135,6 +136,52 @@ Az élő kísérésben a térkép alapból **követi a saját pozíciót** (📍
 kézzel elhúzod vagy csippented, a követés kikapcsol — a 📍 gombbal bármikor
 visszakérhető, a ⤢ gomb pedig a teljes útvonalat mutatja. A térképi jelölésre
 koppintva előjön az ott rögzített anyag.
+
+### A Magyar Közút dokumentumainak kitöltése
+
+A Közút az adott engedélyre kiállított **Word-űrlapokat** küld: *Útvonal
+bejárás*, *Útvonal bejárási részletező*, *Itiner*, *Jegyzék* és *Rendkívüli
+jegyzék*. Ezek a Közút saját dokumentumai — fejléccel, iktatószámmal, a
+szerelvény adataival és a bejárandó útvonallal. Az app **nem írja át őket**,
+csak kitölti a kitöltésre váró helyeket, a többi karakter változatlan marad.
+
+A bejárás adatlapján a **📋 Közút dokumentumok kitöltése** gomb nyitja meg:
+
+1. **Fájlok betöltése** — a kapott `.docx` fájlok. Az app a tartalmuk alapján
+   felismeri, melyik melyik, és a bejáráshoz menti őket (újratöltés és
+   mentés/visszatöltés után is megmaradnak).
+2. **Közös adatok** — a bejárást végző(k) neve és elérhetősége, dátum, a
+   bejárási nyilatkozat szövege, a kritikus helyszínek vizsgálata, és az
+   itiner mezői (kiinduló állomás, indulás, vasúti átkelés, megállók,
+   mögöttes forgalom elengedése, érkezés, célállomás, zárási terv). Amit a
+   bejárásból tudni lehet — időpontok, kiinduló és célkoordináta, a bejárt
+   hossz, a kritikus helyszínek száma —, az előre ki van töltve.
+3. **Helyszínek** — minden rögzített elem egy sor: település, útszám, km
+   szelvény (ezek a GPS-ből nem derülnek ki, itt adhatók meg), az elvégzendő
+   munka leírása, és egy jelölő, hogy a *Jegyzékbe* is kerüljön-e (elbontandó
+   tábla, érintett közúti jelzés) — ott a helyreállítás technológiája is
+   megadható. A beírt értékek a bejáráshoz mentődnek, legközelebb már ott
+   vannak.
+
+A **Kitöltés és letöltés** minden betöltött űrlapot kitölt és lement:
+
+| Dokumentum | Mi kerül bele automatikusan |
+|---|---|
+| Útvonal bejárás | a bejárást végzők neve, a bejárási nyilatkozat, a kritikus helyszínek vizsgálata, dátum |
+| Részletező | az *Elvégzendő munka* táblázat és a *Jegyzék* táblázat sorai a rögzített helyszínekből |
+| Jegyzék | az elbontandó táblák, jelzések sorai (helyszín, megnevezés, technológia) |
+| Itiner | kiinduló állomás, indulás és érkezés időpontja, megállók, zárási terv |
+| Rendkívüli jegyzék | a **szállítás közben** (élő kísérésben) rögzített események: helyszín, időpont, leírás, jelleg |
+
+A kész fájlok Wordben megnyithatók, kézzel tovább szerkeszthetők,
+nyomtathatók és a Közút felé beadhatók. Ha egy adat nem derül ki a
+bejárásból, a dokumentumban üresen marad — a Word-ben pótolható.
+
+> Az app csak a kitöltésre váró helyeket írja: a táblázatok üres sorait, a
+> pontozott kitöltőhelyeket és a feliratok alatti helyet. A Közút minden
+> eredeti szövege, képe és formázása a helyén marad; ezt teszt ellenőrzi
+> (az eredeti dokumentum minden szövegdarabjának meg kell lennie a
+> kitöltöttben is).
 
 ### Pontos nyomvonal térképen (önálló térképfájl)
 
@@ -495,6 +542,8 @@ a licencsáv → Licenckulcs**. Internet nem kell hozzá, és a készüléken ma
   ne törölje a felvételeket helyszűke esetén.
 - A fotók mentés előtt max. 2000 képpontra zsugorodnak (kb. 300–600 kB / kép),
   hogy egy hosszabb bejárás is elférjen.
+- A *Teljes mentés (JSON)* a fotókat, a hangjegyzeteket, a **videókat** és a
+  Közúttól kapott Word-űrlapokat is tartalmazza — videóval ez nagy fájl lesz.
 - Külső oldalt csak az *Útvonalterv Google Maps* és az elemek *Térképen*
   gombja nyit — ezek koordinátákat adnak át a Google-nek. A *Pontos nyomvonal
   térképen* saját fájlt készít: a bejárás adata nem hagyja el a készüléket, és
@@ -522,6 +571,8 @@ utvonalbejaras/
     ├── kiseres.js          élő kísérés a szállítás során (közelségi riasztás)
     ├── terkepnezet.js      nagyítás/mozgatás a térképes vásznakon
     ├── terkepfajl.js       önálló, nagyítható HTML-térkép a nyomvonalról
+    ├── docx.js             Word-fájlok (.docx) kibontása, kitöltése, mentése
+    ├── kozut.js            a Közút űrlapjainak kitöltése a bejárás adataiból
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés
 ```

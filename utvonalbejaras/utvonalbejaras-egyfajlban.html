@@ -796,6 +796,33 @@ button, input, select, textarea { font: inherit; color: inherit; }
   align-items: center;
 }
 
+/* ------------------------------------------- Közút dokumentumok */
+
+.kozut-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+.kozut-foot { padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); background: var(--surface); }
+.section-head { margin: 12px 0 2px; font-size: 14px; font-weight: 650; }
+
+.kozut-list { display: flex; flex-direction: column; gap: 8px; }
+.kozut-doc {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 9px 12px;
+}
+.block { display: block; }
+
+.kozut-fields { display: flex; flex-direction: column; gap: 10px; }
+.kozut-fields .field span { font-size: 12.5px; color: var(--muted); }
+
+.kozut-rows { display: flex; flex-direction: column; gap: 10px; }
+.kozut-row {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.kozut-row-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.kozut-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field.tiny span { font-size: 11.5px; color: var(--muted); }
+.field.tiny input { padding: 8px 10px; font-size: 14px; }
+
 </style>
 
 <header id="topbar">
@@ -905,6 +932,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
         <button id="export-gpx" class="btn ghost small">GPX export</button>
         <button id="export-geojson" class="btn ghost small">GeoJSON export</button>
         <button id="export-html" class="btn primary small">📄 Riport (HTML) a közút felé</button>
+        <button id="kozut-open" class="btn primary small">📋 Közút dokumentumok kitöltése</button>
         <button id="export-json" class="btn ghost small">Teljes mentés (JSON)</button>
         <button id="open-maps" class="btn ghost small">Útvonalterv Google Maps (közelítő)</button>
         <button id="delete-session" class="btn danger small">Bejárás törlése</button>
@@ -1008,6 +1036,41 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <button id="editor-redo" class="btn ghost tiny">↷ Újra</button>
       <button id="editor-clear" class="btn ghost tiny">Összes törlése</button>
     </div>
+  </div>
+</div>
+
+<!-- =================================== Közút dokumentumok kitöltése -->
+<div id="kozut" class="overlay" hidden>
+  <header class="overlay-bar">
+    <button id="kozut-close" class="icon-btn" aria-label="Bezárás">✕</button>
+    <h2>Közút dokumentumok</h2>
+  </header>
+
+  <div class="kozut-body">
+    <p class="hint">
+      Töltse be a Magyar Közúttól kapott Word-űrlapokat. Az app felismeri,
+      melyik melyik, és kitölti őket a bejárás adataival — a dokumentum többi
+      része (fejléc, iktatószám, szerelvény adatai, útvonal) változatlan marad.
+    </p>
+
+    <h3 class="section-head">1. A Közúttól kapott fájlok</h3>
+    <div id="kozut-list" class="kozut-list"></div>
+    <input id="kozut-file" type="file" accept=".docx" multiple hidden>
+    <button id="kozut-add" class="btn ghost small block">📎 .docx fájlok betöltése</button>
+
+    <h3 class="section-head">2. Közös adatok</h3>
+    <div id="kozut-form" class="kozut-fields"></div>
+
+    <h3 class="section-head">3. Helyszínek (a jegyzékhez és a részletezőhöz)</h3>
+    <p class="hint">
+      A település, az útszám és a km szelvény nem derül ki a GPS-ből — ezeket
+      itt lehet megadni. A beírt értékek megmaradnak a következő kitöltéshez.
+    </p>
+    <div id="kozut-rows" class="kozut-rows"></div>
+  </div>
+
+  <div class="kozut-foot">
+    <button id="kozut-fill" class="btn primary block">📥 Kitöltés és letöltés</button>
   </div>
 </div>
 
@@ -4535,6 +4598,777 @@ draw();
 </html>`;
 }
 
+/* ===== js/docx.js ===== */
+// Word-dokumentumok (.docx) kitöltése a böngészőben.
+//
+// A Magyar Közút a bejáráshoz saját, az adott engedélyre kiállított Word
+// űrlapokat küld (bejárás, részletező, itiner, jegyzék, rendkívüli jegyzék).
+// Ezeket nem átszerkeszteni kell, hanem kitölteni: a dokumentum minden más
+// része — fejléc, iktatószám, méretek, aláírásblokk — érintetlen marad.
+//
+// A .docx valójában egy ZIP, benne a word/document.xml. Itt van a ZIP
+// kibontása és visszacsomagolása, valamint a kitöltéshez való XML-műveletek.
+// Külső könyvtár nélkül, mert az app offline, telefonon is működik.
+
+const WNS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n';
+
+/* ----------------------------------------------------------------- ZIP */
+
+const CRC_TABLE = (() => {
+  const t = new Int32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  let c = -1;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+}
+
+async function inflateRaw(bytes) {
+  if (typeof DecompressionStream !== 'function') {
+    throw new Error('A böngésző nem tudja kibontani a Word-fájlt (DecompressionStream hiányzik).');
+  }
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function deflateRaw(bytes) {
+  if (typeof CompressionStream !== 'function') return null;
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/**
+ * ZIP kibontása.
+ * @returns {Promise<Array<{name: string, data: Uint8Array}>>} az eredeti sorrendben
+ */
+async function unzip(buffer) {
+  const buf = new Uint8Array(buffer);
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+
+  // a központi jegyzék vége hátulról kereshető meg
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= 0 && i > buf.length - 66000; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('Ez nem Word-fájl (hiányzik a ZIP jegyzéke).');
+
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const out = [];
+  const dec = new TextDecoder();
+
+  for (let i = 0; i < count; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('Sérült Word-fájl.');
+    const method = dv.getUint16(p + 10, true);
+    const compSize = dv.getUint32(p + 20, true);
+    const nameLen = dv.getUint16(p + 28, true);
+    const extraLen = dv.getUint16(p + 30, true);
+    const commentLen = dv.getUint16(p + 32, true);
+    const localOff = dv.getUint32(p + 42, true);
+    const name = dec.decode(buf.subarray(p + 46, p + 46 + nameLen));
+
+    const lNameLen = dv.getUint16(localOff + 26, true);
+    const lExtraLen = dv.getUint16(localOff + 28, true);
+    const start = localOff + 30 + lNameLen + lExtraLen;
+    const raw = buf.subarray(start, start + compSize);
+    out.push({ name, data: method === 8 ? await inflateRaw(raw) : raw.slice() });
+
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return out;
+}
+
+/** ZIP összeállítása (tömörítve, ha a böngésző tudja). */
+async function zipFiles(entries) {
+  const enc = new TextEncoder();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+
+  for (const e of entries) {
+    const nameBytes = enc.encode(e.name);
+    const data = e.data;
+    const packed = await deflateRaw(data);
+    const useDeflate = packed && packed.length < data.length;
+    const body = useDeflate ? packed : data;
+    const crc = crc32(data);
+
+    const local = new Uint8Array(30 + nameBytes.length);
+    const ldv = new DataView(local.buffer);
+    ldv.setUint32(0, 0x04034b50, true);
+    ldv.setUint16(4, 20, true);                    // kell hozzá: 2.0
+    ldv.setUint16(6, 0x0800, true);                // UTF-8 nevek
+    ldv.setUint16(8, useDeflate ? 8 : 0, true);
+    ldv.setUint16(10, 0, true);                    // idő
+    ldv.setUint16(12, 0x21, true);                 // dátum (2000.01.01)
+    ldv.setUint32(14, crc, true);
+    ldv.setUint32(18, body.length, true);
+    ldv.setUint32(22, data.length, true);
+    ldv.setUint16(26, nameBytes.length, true);
+    ldv.setUint16(28, 0, true);
+    local.set(nameBytes, 30);
+
+    parts.push(local, body);
+
+    const cen = new Uint8Array(46 + nameBytes.length);
+    const cdv = new DataView(cen.buffer);
+    cdv.setUint32(0, 0x02014b50, true);
+    cdv.setUint16(4, 20, true);
+    cdv.setUint16(6, 20, true);
+    cdv.setUint16(8, 0x0800, true);
+    cdv.setUint16(10, useDeflate ? 8 : 0, true);
+    cdv.setUint16(12, 0, true);
+    cdv.setUint16(14, 0x21, true);
+    cdv.setUint32(16, crc, true);
+    cdv.setUint32(20, body.length, true);
+    cdv.setUint32(24, data.length, true);
+    cdv.setUint16(28, nameBytes.length, true);
+    cdv.setUint32(42, offset, true);
+    cen.set(nameBytes, 46);
+    central.push(cen);
+
+    offset += local.length + body.length;
+  }
+
+  const centralSize = central.reduce((s, c) => s + c.length, 0);
+  const end = new Uint8Array(22);
+  const edv = new DataView(end.buffer);
+  edv.setUint32(0, 0x06054b50, true);
+  edv.setUint16(8, entries.length, true);
+  edv.setUint16(10, entries.length, true);
+  edv.setUint32(12, centralSize, true);
+  edv.setUint32(16, offset, true);
+
+  return new Blob([...parts, ...central, end],
+    { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+
+/* ------------------------------------------------------- Word XML */
+
+function parseDocumentXml(bytes) {
+  const text = new TextDecoder().decode(bytes);
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('A Word-fájl tartalma nem olvasható.');
+  return doc;
+}
+
+function serializeDocumentXml(doc) {
+  let xml = new XMLSerializer().serializeToString(doc);
+  // egyes böngészők kiírják az XML-fejlécet, mások nem — pontosan egy kell,
+  // kettőtől a Word érvénytelennek látná a fájlt
+  xml = xml.replace(/^\s*<\?xml[^>]*\?>\s*/, '');
+  return new TextEncoder().encode(XML_HEAD + xml);
+}
+
+const wTags = (root, tag) => Array.from(root.getElementsByTagNameNS(WNS, tag));
+
+/** Egy elem összes szövege. */
+function textOf(el) {
+  return wTags(el, 't').map((t) => t.textContent).join('');
+}
+
+function tablesOf(doc) {
+  return wTags(doc, 'tbl');
+}
+
+/** Egy táblázat saját sorai (a beágyazott táblázatokéi nélkül). */
+function rowsOf(tbl) {
+  return Array.from(tbl.childNodes).filter((n) => n.localName === 'tr');
+}
+
+function cellsOf(tr) {
+  return Array.from(tr.childNodes).filter((n) => n.localName === 'tc');
+}
+
+/**
+ * Szöveg beírása egy cellába. A formázás megmarad: a meglévő (üres) futamot
+ * írjuk át, vagy a bekezdés saját betűbeállításával hozunk létre újat.
+ */
+function setCellText(tc, text) {
+  const value = String(text == null ? '' : text);
+  const paragraphs = wTags(tc, 'p');
+  const p = paragraphs[0];
+  if (!p) return;
+
+  // a cella többi bekezdése és futama törlődik, hogy ne maradjon régi szöveg
+  for (let i = 1; i < paragraphs.length; i++) paragraphs[i].remove();
+  const runs = wTags(p, 'r');
+  for (let i = 1; i < runs.length; i++) runs[i].remove();
+
+  let run = runs[0];
+  if (!run) {
+    run = p.ownerDocument.createElementNS(WNS, 'w:r');
+    const pPr = wTags(p, 'pPr')[0];
+    const rPr = pPr && wTags(pPr, 'rPr')[0];
+    if (rPr) run.appendChild(rPr.cloneNode(true));
+    p.appendChild(run);
+  }
+
+  for (const t of wTags(run, 't')) t.remove();
+  for (const br of wTags(run, 'br')) br.remove();
+
+  const lines = value.split('\n');
+  lines.forEach((line, i) => {
+    if (i) run.appendChild(p.ownerDocument.createElementNS(WNS, 'w:br'));
+    const t = p.ownerDocument.createElementNS(WNS, 'w:t');
+    t.setAttribute('xml:space', 'preserve');
+    t.textContent = line;
+    run.appendChild(t);
+  });
+}
+
+/** Üres (kitöltésre váró) sor-e. */
+function isEmptyRow(tr) {
+  return !textOf(tr).trim();
+}
+
+/**
+ * Táblázat kitöltése. Az üres sorokat tölti fel sorban; ha kevés van,
+ * az utolsót klónozza — a táblázat szerkezete és stílusa marad.
+ *
+ * @param {Element} tbl
+ * @param {Array<Array<string>>} rows
+ */
+function fillTable(tbl, rows) {
+  const all = wTags(tbl, 'tr');
+  const empty = all.filter(isEmptyRow);
+  if (!empty.length || !rows.length) return 0;
+
+  const template = empty[empty.length - 1];
+  let used = 0;
+  for (const data of rows) {
+    let tr = empty[used];
+    if (!tr) {
+      tr = template.cloneNode(true);
+      for (const tc of cellsOf(tr)) setCellText(tc, '');
+      template.parentNode.insertBefore(tr, template.nextSibling);
+      empty.push(tr);
+    }
+    const cells = cellsOf(tr);
+    data.forEach((value, i) => {
+      if (cells[i] != null && value != null) setCellText(cells[i], value);
+    });
+    used += 1;
+  }
+  return used;
+}
+
+/** Az a bekezdés, amelynek szövege tartalmazza a keresett részletet. */
+function findParagraph(doc, needle) {
+  return findParagraphs(doc, needle)[0] || null;
+}
+
+/**
+ * Minden ilyen bekezdés. A Word a szövegdobozokat két változatban tárolja
+ * (mc:Choice és mc:Fallback), ezért ugyanaz a felirat kétszer is szerepelhet
+ * — mindkettőt ki kell tölteni, különben a megnyitó programtól függne, hogy
+ * látszik-e a beírt érték.
+ */
+function findParagraphs(doc, needle) {
+  return wTags(doc, 'p').filter((p) => textOf(p).includes(needle));
+}
+
+/**
+ * Csak a „levél” bekezdések: a szövegdobozt tartalmazó külső bekezdés szövege
+ * a dobozban lévőket is magában foglalja, oda beírni félrevinne. Beszúrásnál
+ * ezt használjuk, hogy az érték a felirat mellé kerüljön.
+ */
+function findLeafParagraphs(doc, needle) {
+  return findParagraphs(doc, needle).filter((p) => wTags(p, 'p').length === 0);
+}
+
+/**
+ * A felirathoz tartozó pontozott kitöltőhely feltöltése. A pontsor lehet a
+ * felirat bekezdésében vagy az azt követő néhány bekezdésben (a Közút
+ * űrlapjain a felirat gyakran szövegdobozban van, a pontsor alatta).
+ */
+function fillDotsNear(doc, label, text, filled = new Set()) {
+  let count = 0;
+  for (const p of findParagraphs(doc, label)) {
+    let el = p;
+    for (let step = 0; step < 4 && el; step++) {
+      if (!filled.has(el) && fillDots(el, text)) {
+        filled.add(el);
+        count += 1;
+        break;
+      }
+      el = el.nextElementSibling;
+    }
+  }
+  return count;
+}
+
+/** Új bekezdés a megadott után, ugyanazzal a formázással. */
+function addParagraphAfter(p, text, opts = {}) {
+  const doc = p.ownerDocument;
+  const copy = p.cloneNode(true);
+  for (const r of wTags(copy, 'r')) r.remove();
+  for (const bookmark of wTags(copy, 'bookmarkStart').concat(wTags(copy, 'bookmarkEnd'))) {
+    bookmark.remove();
+  }
+  const run = doc.createElementNS(WNS, 'w:r');
+  const pPr = wTags(copy, 'pPr')[0];
+  const rPr = pPr && wTags(pPr, 'rPr')[0];
+  if (rPr) {
+    const copyRPr = rPr.cloneNode(true);
+    // a kitöltött érték ne legyen félkövér, ha a címke az volt
+    if (opts.plain) for (const b of wTags(copyRPr, 'b')) b.remove();
+    run.appendChild(copyRPr);
+  }
+  String(text).split('\n').forEach((line, i) => {
+    if (i) run.appendChild(doc.createElementNS(WNS, 'w:br'));
+    const t = doc.createElementNS(WNS, 'w:t');
+    t.setAttribute('xml:space', 'preserve');
+    t.textContent = line;
+    run.appendChild(t);
+  });
+  copy.appendChild(run);
+  p.parentNode.insertBefore(copy, p.nextSibling);
+  return copy;
+}
+
+/**
+ * Pontozott kitöltőhely („…………”) feltöltése a megadott szöveggel.
+ * A pontsor annyit megtart magából, amennyi a szöveg után még kifér.
+ */
+function fillDots(el, text, minDots = 6) {
+  const value = String(text || '');
+  if (!value) return false;
+  for (const t of wTags(el, 't')) {
+    const m = /([…\.]{5,})/.exec(t.textContent);
+    if (!m) continue;
+    const keep = Math.max(minDots, m[1].length - value.length);
+    t.setAttribute('xml:space', 'preserve');
+    t.textContent = t.textContent.replace(m[1], ' ' + value + ' ' + m[1].slice(0, keep));
+    return true;
+  }
+  return false;
+}
+
+/* ===== js/kozut.js ===== */
+// A Magyar Közút bejárási dokumentumainak kitöltése a bejárás adataiból.
+//
+// A Közút az adott engedélyre kiállított Word-űrlapokat küld (bejárás,
+// részletező, itiner, jegyzék, rendkívüli jegyzék). Ezek a sajátjai: a
+// fejléc, az iktatószám, a szerelvény adatai és az útvonal már benne van.
+// Az app nem írja át őket — csak kitölti azt, amit a bejárás során
+// rögzítettünk, a hiányzó mezőket pedig itt lehet kézzel megadni.
+//
+// A kitöltött fájl ugyanaz a Word-dokumentum marad: nyomtatható, és a
+// Közút felé beadható.
+
+
+/** A felismert dokumentumtípusok — a sorrend számít (az első találat nyer). */
+const TYPES = [
+  { id: 'rendkivuli', nev: 'Rendkívüli jegyzék', test: (t) => /rendkívüli/i.test(t) },
+  { id: 'itiner', nev: 'Itiner', test: (t) => /\bitiner\b/i.test(t) },
+  { id: 'reszletezo', nev: 'Útvonal bejárási részletező', test: (t) => t.includes('Elvégzendő munka megnevezése') },
+  { id: 'jegyzek', nev: 'Jegyzék', test: (t) => t.includes('Elbontandó jelzőtábla') },
+  { id: 'bejaras', nev: 'Útvonal bejárás (alapdokumentum)', test: (t) => t.includes('A bejárást végző') },
+];
+
+const typeName = (id) => (TYPES.find((t) => t.id === id) || {}).nev || 'Ismeretlen dokumentum';
+
+const dateHu = (t) => {
+  const d = t ? new Date(t) : new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}. ${p(d.getMonth() + 1)}. ${p(d.getDate())}.`;
+};
+const timeHu = (t) => {
+  if (!t) return '';
+  const d = new Date(t);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${dateHu(t)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+/** Egy elem leírása a dokumentumokba. */
+function describeForDoc(it) {
+  const bits = [];
+  if (it.type === 'condition') {
+    bits.push(categoryLabel(it.category));
+    if (it.what) bits.push(it.what);
+    if (it.condition) bits.push(conditionLabel(it.condition));
+    if (it.severity) bits.push(severityLabel(it.severity));
+  } else {
+    if (it.title) bits.push(it.title);
+    else bits.push(typeLabel(it.type));
+  }
+  if ((it.dims || []).length) bits.push(it.dims.join(' · '));
+  if (it.note) bits.push(it.note);
+  return bits.filter(Boolean).join(' – ');
+}
+
+class KozutDocs {
+  constructor(root) {
+    this.root = root;
+    this.docs = [];      // { name, type, blob }
+    this.bind();
+  }
+
+  bind() {
+    $('#kozut-close', this.root).addEventListener('click', () => this.close());
+    $('#kozut-add', this.root).addEventListener('click', () => $('#kozut-file', this.root).click());
+    $('#kozut-file', this.root).addEventListener('change', (e) => {
+      const files = Array.from(e.target.files || []);
+      e.target.value = '';
+      this.addFiles(files);
+    });
+    $('#kozut-fill', this.root).addEventListener('click', () => this.fillAll());
+  }
+
+  async open({ session, points, items, onSave }) {
+    this.session = session;
+    this.points = points;
+    this.items = items;
+    this.onSave = onSave;
+    this.form = Object.assign({
+      nevek: '',
+      datum: dateHu(session.created),
+      feltetelek: '',
+      kritikus: '',
+      kiindulo: '',
+      indulas: '',
+      vasut: '',
+      megallok: '',
+      mogottes: '',
+      erkezes: '',
+      cel: '',
+      zarasi: '',
+      rendkivuli: '',
+    }, session.kozut || {});
+    this.prefill();
+    this.docs = (session.docs || []).slice();
+
+    this.root.hidden = false;
+    document.body.classList.add('modal-open');
+    this.render();
+  }
+
+  close() {
+    this.save();
+    this.root.hidden = true;
+    document.body.classList.remove('modal-open');
+  }
+
+  /** Amit a bejárásból tudunk, az előre bekerül — felülírható. */
+  prefill() {
+    const coords = this.points.filter((p) => p.lat != null);
+    const first = coords[0];
+    const last = coords[coords.length - 1];
+    if (first) {
+      if (!this.form.kiindulo) this.form.kiindulo = formatCoord(first.lat, first.lon);
+      if (!this.form.indulas) this.form.indulas = timeHu(first.t);
+    }
+    if (last) {
+      if (!this.form.cel) this.form.cel = formatCoord(last.lat, last.lon);
+      if (!this.form.erkezes) this.form.erkezes = timeHu(last.t);
+    }
+    if (!this.form.feltetelek) {
+      const kritikus = this.items.filter((i) => i.severity === 'kritikus').length;
+      const valid = formatDistance(trackLength(this.points.filter((p) => !isRejected(p))));
+      this.form.feltetelek = kritikus
+        ? `A bejárás ${valid} hosszú útvonalon megtörtént. ${kritikus} kritikus helyszín a részletezőben felsorolva.`
+        : `A bejárás ${valid} hosszú útvonalon megtörtént, kritikus helyszín nem merült fel.`;
+    }
+
+    // elemenkénti adatok: amit tudunk, azt kitöltjük
+    for (const it of this.items) {
+      it.kozut = Object.assign({
+        telepules: '', utszam: '', km: '',
+        munka: it.type === 'condition' ? describeForDoc(it) : '',
+        jegyzek: it.type === 'condition' && it.category === 'tabla',
+        megnevezes: it.type === 'condition' ? (it.what || categoryLabel(it.category)) : (it.title || ''),
+        ideiglenes: '', vegleges: '', technologia: '', jovahagyas: '',
+      }, it.kozut || {});
+    }
+  }
+
+  save() {
+    this.session.kozut = this.form;
+    this.session.docs = this.docs;
+    if (this.onSave) this.onSave();
+  }
+
+  /* ------------------------------------------------------ fájlok */
+
+  async addFiles(files) {
+    for (const f of files) {
+      if (!/\.docx$/i.test(f.name)) {
+        toast(`${f.name}: csak .docx fájl tölthető be.`, 'error');
+        continue;
+      }
+      try {
+        const type = await this.detect(f);
+        this.docs = this.docs.filter((d) => d.name !== f.name);
+        this.docs.push({ name: f.name, type, blob: f });
+      } catch (err) {
+        toast(`${f.name}: ${err.message}`, 'error');
+      }
+    }
+    this.save();
+    this.render();
+  }
+
+  async detect(blob) {
+    const files = await unzip(await blob.arrayBuffer());
+    const main = files.find((f) => f.name === 'word/document.xml');
+    if (!main) throw new Error('nem Word-dokumentum');
+    const text = new TextDecoder().decode(main.data).replace(/<[^>]+>/g, ' ');
+    const hit = TYPES.find((t) => t.test(text));
+    return hit ? hit.id : 'ismeretlen';
+  }
+
+  /* ------------------------------------------------------- felület */
+
+  render() {
+    const list = $('#kozut-list', this.root);
+    list.innerHTML = '';
+    if (!this.docs.length) {
+      list.appendChild(el('p', {
+        class: 'hint',
+        text: 'Még nincs betöltve dokumentum. Töltse be a Közúttól kapott .docx fájlokat — '
+          + 'az app felismeri, melyik melyik, és kitölti őket.',
+      }));
+    }
+    for (const d of this.docs) {
+      list.appendChild(el('div', { class: 'kozut-doc' }, [
+        el('div', {}, [
+          el('b', { text: typeName(d.type) }),
+          el('span', { class: 'muted small block', text: d.name }),
+        ]),
+        el('button', {
+          class: 'btn ghost tiny', type: 'button', text: 'Eltávolítás',
+          onclick: () => { this.docs = this.docs.filter((x) => x !== d); this.save(); this.render(); },
+        }),
+      ]));
+    }
+
+    const form = $('#kozut-form', this.root);
+    form.innerHTML = '';
+    const field = (name, label, opts = {}) => {
+      const input = el(opts.multiline ? 'textarea' : 'input', {
+        id: 'kz-' + name,
+        value: this.form[name] || '',
+        rows: opts.rows || 3,
+        placeholder: opts.placeholder || '',
+        oninput: (e) => { this.form[name] = e.target.value; },
+      });
+      if (opts.multiline) input.value = this.form[name] || '';
+      form.appendChild(el('label', { class: 'field' }, [
+        el('span', { text: label }), input,
+      ]));
+    };
+
+    field('nevek', 'A bejárást végző(k) neve, elérhetősége', { multiline: true, rows: 2 });
+    field('datum', 'Dátum');
+    field('feltetelek', 'A szállítás feltételei (bejárási nyilatkozat)', { multiline: true, rows: 3 });
+    field('kritikus', 'Az MK által megjelölt kritikus helyszínek vizsgálata', { multiline: true, rows: 2 });
+
+    form.appendChild(el('p', { class: 'section-head', text: 'Itiner' }));
+    field('kiindulo', 'Kiinduló állomás');
+    field('indulas', 'Indulás időpontja');
+    field('vasut', 'Vasúti átkelés időpontja / időablaka');
+    field('megallok', 'Megálló(k)', { multiline: true, rows: 2 });
+    field('mogottes', 'Mögöttes forgalom elengedésére alkalmas helyszín', { multiline: true, rows: 2 });
+    field('erkezes', 'Tervezett érkezés időpontja');
+    field('cel', 'Célállomás');
+    field('zarasi', 'Zárási terv', { multiline: true, rows: 4 });
+    field('rendkivuli', 'Rendkívüli jegyzék — további megjegyzés', { multiline: true, rows: 2 });
+
+    this.renderRows();
+  }
+
+  renderRows() {
+    const wrap = $('#kozut-rows', this.root);
+    wrap.innerHTML = '';
+    const rows = this.items.filter((i) => i.lat != null || i.type === 'condition');
+    if (!rows.length) {
+      wrap.appendChild(el('p', { class: 'hint', text: 'Nincs rögzített helyszín a bejárásban.' }));
+      return;
+    }
+    rows.forEach((it, idx) => {
+      const k = it.kozut;
+      const input = (name, label, width) => el('label', { class: 'field tiny' + (width ? ' ' + width : '') }, [
+        el('span', { text: label }),
+        el('input', {
+          value: k[name] || '',
+          oninput: (e) => { k[name] = e.target.value; },
+        }),
+      ]);
+      const card = el('div', { class: 'kozut-row' }, [
+        el('div', { class: 'kozut-row-head' }, [
+          el('b', { text: `${idx + 1}. ${it.title || it.what || typeLabel(it.type)}` }),
+          el('span', { class: 'muted small', text: it.lat != null ? formatCoord(it.lat, it.lon) : '—' }),
+        ]),
+        el('div', { class: 'kozut-grid' }, [
+          input('telepules', 'Település'),
+          input('utszam', 'Útszám'),
+          input('km', 'km szelvény'),
+        ]),
+        input('munka', 'Elvégzendő munka / leírás (részletező)'),
+        el('label', { class: 'check-row' }, [
+          el('input', {
+            type: 'checkbox',
+            checked: !!k.jegyzek,
+            onchange: (e) => { k.jegyzek = e.target.checked; this.renderRows(); },
+          }),
+          el('span', { text: 'Jegyzékbe (elbontandó tábla, érintett közúti jelzés)' }),
+        ]),
+      ]);
+      if (k.jegyzek) {
+        card.appendChild(el('div', { class: 'kozut-grid' }, [
+          input('megnevezes', 'Megnevezés'),
+          input('ideiglenes', 'Helyreállítás – ideiglenes'),
+          input('vegleges', 'Helyreállítás – végleges'),
+          input('technologia', 'Alkalmazott technológia'),
+        ]));
+      }
+      wrap.appendChild(card);
+    });
+  }
+
+  /* ------------------------------------------------- kitöltés */
+
+  munkaRows() {
+    const out = [];
+    this.items.forEach((it) => {
+      const k = it.kozut || {};
+      if (!k.munka) return;
+      out.push([String(out.length + 1), k.telepules || '', k.utszam || '', k.km || '', k.munka]);
+    });
+    return out;
+  }
+
+  jegyzekRows() {
+    const out = [];
+    this.items.forEach((it) => {
+      const k = it.kozut || {};
+      if (!k.jegyzek) return;
+      out.push([
+        String(out.length + 1), k.telepules || '', k.utszam || '', k.km || '',
+        k.megnevezes || describeForDoc(it), k.ideiglenes || '', k.vegleges || '',
+        k.technologia || '', k.jovahagyas || '',
+      ]);
+    });
+    return out;
+  }
+
+  /** A szállítás közben rögzített észrevételek — ezek valók a rendkívüli jegyzékbe. */
+  rendkivuliText() {
+    const bits = [];
+    this.items.filter((i) => i.phase === 'transport').forEach((it, i) => {
+      const k = it.kozut || {};
+      const hely = [k.telepules, k.utszam, k.km].filter(Boolean).join(', ')
+        || (it.lat != null ? formatCoord(it.lat, it.lon) : '');
+      bits.push(`${i + 1}. Helyszín, időpont: ${hely} – ${timeHu(it.created)}`);
+      bits.push(`   Károkozás leírása: ${describeForDoc(it)}`);
+      bits.push(`   Jellege: ${it.type === 'condition' ? conditionLabel(it.condition) : typeLabel(it.type)}`);
+      bits.push('   Ideiglenes helyreállítás időpontja: ');
+    });
+    if (this.form.rendkivuli) bits.push(this.form.rendkivuli);
+    return bits.join('\n');
+  }
+
+  fillDoc(id, doc) {
+    const f = this.form;
+    const tableWith = (needle) => tablesOf(doc).find((t) => textOf(t).includes(needle));
+    let touched = 0;
+
+    if (id === 'jegyzek' || id === 'reszletezo') {
+      const t = tableWith('Elbontandó jelzőtábla');
+      if (t) touched += fillTable(t, this.jegyzekRows());
+    }
+    if (id === 'reszletezo') {
+      const t = tableWith('Elvégzendő munka');
+      if (t) touched += fillTable(t, this.munkaRows());
+    }
+    if (id === 'bejaras') {
+      if (f.nevek) {
+        for (const p of findLeafParagraphs(doc, 'A bejárást végző')) {
+          addParagraphAfter(p, f.nevek, { plain: true });
+          touched++;
+        }
+      }
+      if (f.feltetelek) {
+        touched += fillDotsNear(doc, 'A szállítás a bejárt útvonalon lebonyolítható', f.feltetelek);
+      }
+      if (f.kritikus) {
+        // ehhez is pontozott hely tartozik; ha nincs, a felirat alá kerül
+        const n = fillDotsNear(doc, 'kritikus helyszín(ek) vizsgálata', f.kritikus);
+        if (n) touched += n;
+        else {
+          for (const krit of findLeafParagraphs(doc, 'kritikus helyszín(ek) vizsgálata')) {
+            addParagraphAfter(krit, f.kritikus, { plain: true });
+            touched++;
+          }
+        }
+      }
+    }
+    if (id === 'itiner') {
+      const pairs = [
+        ['Kiinduló állomás', f.kiindulo],
+        ['Indulás időpontja', f.indulas],
+        ['Vasúti átkelés', f.vasut],
+        ['Megálló(k)', f.megallok],
+        ['Mögöttes forgalom', f.mogottes],
+        ['Tervezett érkezés', f.erkezes],
+        ['Célállomás', f.cel],
+        ['Zárási terv', f.zarasi],
+      ];
+      for (const [label, value] of pairs) {
+        if (!value) continue;
+        for (const p of findLeafParagraphs(doc, label)) {
+          addParagraphAfter(p, value, { plain: true });
+          touched++;
+        }
+      }
+    }
+    if (id === 'rendkivuli') {
+      const text = this.rendkivuliText();
+      const ps = findLeafParagraphs(doc, 'Károkozás leírása');
+      const targets = ps.length ? ps : findLeafParagraphs(doc, 'Rendkívüli');
+      if (text) for (const p of targets) { addParagraphAfter(p, text, { plain: true }); touched++; }
+    }
+
+    // dátum minden dokumentumban
+    if (f.datum) touched += fillDotsNear(doc, 'Dátum', f.datum);
+    return touched;
+  }
+
+  async fillAll() {
+    if (!this.docs.length) {
+      toast('Előbb töltse be a Közúttól kapott .docx fájlokat.', 'error');
+      return;
+    }
+    this.save();
+    let ok = 0;
+    for (const d of this.docs) {
+      try {
+        const files = await unzip(await d.blob.arrayBuffer());
+        const main = files.find((f) => f.name === 'word/document.xml');
+        const doc = parseDocumentXml(main.data);
+        const touched = this.fillDoc(d.type, doc);
+        main.data = serializeDocumentXml(doc);
+        const blob = await zipFiles(files);
+        download(blob, d.name.replace(/\.docx$/i, '') + ' - kitoltve.docx');
+        ok += 1;
+        if (!touched) toast(`${typeName(d.type)}: nem találtam kitölthető helyet.`, 'error');
+      } catch (err) {
+        toast(`${d.name}: ${err.message}`, 'error');
+      }
+    }
+    if (ok) toast(`${ok} dokumentum kitöltve és letöltve.`);
+  }
+}
+
 /* ===== js/kiseres.js ===== */
 // Élő kísérés: a kész bejárás használata a valódi szállítás közben.
 //
@@ -6469,9 +7303,13 @@ let audioRec = null;
 let editor = null;
 let trackEditor = null;
 let escort = null;
+let kozut = null;
 // a kísérés közben rögzített elemek külön jelölést kapnak
 let capturePhase = 'survey';
 let tickTimer = null;
+/** A mentésbe és vissza: minden elemhez tartozó felvétel. */
+const MEDIA_KEYS = ['photo', 'flat', 'thumb', 'audio', 'video'];
+
 let trackHit = null;
 let trackView = null;           // nagyítás/mozgatás a bejárás térképén
 let firstPointAfterStart = false;
@@ -7730,16 +8568,28 @@ async function exportJSON() {
   const items = [];
   for (const i of state.items) {
     const copy = { ...i };
-    for (const key of ['photo', 'flat', 'thumb', 'audio']) {
+    for (const key of MEDIA_KEYS) {
       if (i[key] instanceof Blob) copy[key] = await blobToDataURL(i[key]);
       else delete copy[key];
     }
     items.push(copy);
   }
+
+  // a Közúttól kapott Word-űrlapok is a bejáráshoz tartoznak
+  const session = { ...state.session };
+  if (session.docs) {
+    session.docs = [];
+    for (const d of state.session.docs || []) {
+      if (d && d.blob instanceof Blob) {
+        session.docs.push({ name: d.name, type: d.type, data: await blobToDataURL(d.blob) });
+      }
+    }
+  }
+
   const data = {
     format: 'utvonalbejaras/1',
     exportedAt: new Date().toISOString(),
-    session: state.session,
+    session,
     points: state.points.map(({ id, ...p }) => p),
     items,
   };
@@ -7818,6 +8668,16 @@ async function importJSON(file) {
       return;
     }
     const session = { ...data.session, id: db.uid(), name: data.session.name + ' (visszatöltve)' };
+    // a mentésben a Word-űrlapok data: URI-ként vannak
+    if (Array.isArray(session.docs)) {
+      const docs = [];
+      for (const d of session.docs) {
+        if (d && typeof d.data === 'string' && d.data.startsWith('data:')) {
+          docs.push({ name: d.name, type: d.type, blob: await dataURLToBlob(d.data) });
+        }
+      }
+      session.docs = docs;
+    }
     await db.saveSession(session);
 
     for (const p of data.points || []) await db.addPoint({ ...p, sessionId: session.id });
@@ -7825,7 +8685,7 @@ async function importJSON(file) {
     let restored = 0;
     for (const raw of data.items || []) {
       const item = { ...raw, id: db.uid(), sessionId: session.id };
-      for (const key of ['photo', 'flat', 'thumb', 'audio']) {
+      for (const key of MEDIA_KEYS) {
         if (typeof raw[key] === 'string' && raw[key].startsWith('data:')) {
           item[key] = await dataURLToBlob(raw[key]);
         }
@@ -7845,6 +8705,22 @@ async function importJSON(file) {
 A kész bejárás használata a valódi szállításkor: a rögzített helyekhez
 közeledve előhozza, amit ott találtunk, és menet közben is lehet újat
 rögzíteni — az ilyen elemek „szállítás közben” jelölést kapnak.          */
+
+/** A Közúttól kapott Word-űrlapok kitöltése a bejárás adataiból. */
+async function openKozut() {
+  if (!state.session) return;
+  if (!kozut) kozut = new KozutDocs($('#kozut'));
+  await kozut.open({
+    session: state.session,
+    points: state.points,
+    items: state.items,
+    onSave: async () => {
+      await db.saveSession(state.session);
+      for (const it of state.items) if (it.kozut) await db.saveItem(it);
+      markUnsaved();
+    },
+  });
+}
 
 async function startEscort() {
   if (!state.session) return;
@@ -8186,6 +9062,7 @@ function bind() {
   $('#export-gpx').addEventListener('click', exportGPX);
   $('#export-geojson').addEventListener('click', exportGeoJSON);
   $('#export-html').addEventListener('click', exportHTML);
+  $('#kozut-open').addEventListener('click', openKozut);
   $('#export-json').addEventListener('click', exportJSON);
   $('#open-track-map').addEventListener('click', openTrackOnMap);
   $('#open-maps').addEventListener('click', openInMaps);
