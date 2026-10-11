@@ -13,6 +13,7 @@ import { AudioRecorder, shrinkImage, makeThumb, readExif, videoPoster } from './
 import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
 import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
+import { MapView } from './terkepnezet.js';
 import { buildReport } from './report.js';
 import { EscortMode } from './kiseres.js';
 import {
@@ -44,6 +45,7 @@ let escort = null;
 let capturePhase = 'survey';
 let tickTimer = null;
 let trackHit = null;
+let trackView = null;           // nagyítás/mozgatás a bejárás térképén
 let firstPointAfterStart = false;
 
 /* ------------------------------------------------------------ segédek */
@@ -238,6 +240,7 @@ async function openSession(id) {
   state.points = await db.getPoints(id);
   state.items = await db.getItems(id);
   state.recElapsed = state.session.stats?.elapsed || 0;
+  if (trackView) trackView.reset();   // új bejárás: a teljes nyomvonal látszódjon
   $('[data-screen="session"]').disabled = false;
   renderItems();
   renderMeta();
@@ -321,9 +324,20 @@ function drawTrack() {
   if (!canvas.clientWidth) return;
   trackHit = renderTrack(canvas, state.points, state.items, {
     drawn: (state.session && state.session.drawn) || [],
+    view: trackView ? trackView.view : null,
   });
+  if (trackView) $('#track-fit').hidden = !trackView.isZoomed();
   // a csempék később futnak be; amíg ez a képernyő aktív, újrarajzoljuk
   onTileLoad(() => { if (state.screen === 'session') drawTrack(); });
+}
+
+/** Koppintás a bejárás térképére: a jelölésre koppintva megnyílik az elem. */
+function trackTap(p) {
+  if (!trackHit || !trackHit.hitboxes) return false;
+  const hit = trackHit.hitboxes.find((h) => Math.hypot(h.x - p.x, h.y - p.y) < h.r);
+  if (!hit) return false;
+  openViewer(hit.id);
+  return true;
 }
 
 /* ------------------------------------------------------- GPS felvétel */
@@ -1740,13 +1754,14 @@ function bind() {
   $('#viewer-close').addEventListener('click', closeViewer);
   $('#viewer-delete').addEventListener('click', deleteCurrentItem);
 
-  $('#track-canvas').addEventListener('click', (e) => {
-    if (!trackHit || !trackHit.hitboxes) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - r.left, y = e.clientY - r.top;
-    const hit = trackHit.hitboxes.find((h) => Math.hypot(h.x - x, h.y - y) < h.r);
-    if (hit) openViewer(hit.id);
+  // a térkép nagyítható: csippentés, dupla koppintás, görgő és a sarokgombok
+  trackView = new MapView($('#track-canvas'), {
+    draw: () => drawTrack(),
+    onTap: (p) => trackTap(p),
   });
+  $('#track-zoom-in').addEventListener('click', () => trackView.zoomBy(1.6));
+  $('#track-zoom-out').addEventListener('click', () => trackView.zoomBy(1 / 1.6));
+  $('#track-fit').addEventListener('click', () => trackView.reset());
 
   window.addEventListener('resize', debounce(() => { if (state.screen === 'session') drawTrack(); }, 150));
 

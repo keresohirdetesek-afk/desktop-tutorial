@@ -114,6 +114,28 @@ veszi át (nincs átkódolás, marad az eredeti minőség). Az app bélyegképet
 készít belőle, és rögzíti a hosszát, a pozíciót és a kameairányt. 150 MB
 fölött rákérdez, mert a teljes mentés és a riport is ekkorára nő.
 
+### Nagyítható térkép
+
+Mindhárom térképnézet — a bejárás képernyőjén lévő kis térkép, a
+nyomvonal-szerkesztő és az élő kísérés — ugyanúgy kezelhető:
+
+- **két ujjal csippentés** nagyít/kicsinyít,
+- **egy ujjal húzás** mozgatja a térképet (a bejárás képernyőjén addig, amíg
+  nincs nagyítva, az egyujjas függőleges húzás az oldalt görgeti — nagyítás
+  után a térképet mozgatja),
+- **dupla koppintás** a megkoppintott helyre nagyít,
+- a sarokban lévő **＋ / −** gombok, és a **⤢** gomb visszaáll a teljes
+  nyomvonalra,
+- asztali gépen az **egérgörgő** nagyít.
+
+A nyomvonal-szerkesztőben a dupla koppintás szándékosan nem nagyít: ott a
+koppintás jelöli ki a szakaszt és rakja le a berajzolt csúcsokat.
+
+Az élő kísérésben a térkép alapból **követi a saját pozíciót** (📍 gomb). Ha
+kézzel elhúzod vagy csippented, a követés kikapcsol — a 📍 gombbal bármikor
+visszakérhető, a ⤢ gomb pedig a teljes útvonalat mutatja. A térképi jelölésre
+koppintva előjön az ott rögzített anyag.
+
 ### HTML-jegyzőkönyv a közút felé
 
 A *Riport (HTML)* gomb **egyetlen, önálló fájlt** készít: térképpel, a
@@ -127,6 +149,24 @@ nyomtatható**.
 Készítéskor választható, mi kerüljön bele: teljes méretű fotók vagy csak
 kisképek, hangjegyzetek igen/nem, videók igen/nem (ez utóbbi dönti el a
 fájlméretet).
+
+**A jegyzőkönyv térképe nem vaktérkép**: utcákkal, településekkel együtt
+készül. Az alkalmazás a kép elkészítése előtt bevárja az alaptérkép csempéit
+(akkor is, ha a szerkesztőben épp vázlatnézet volt bekapcsolva), ezért tart
+pár másodpercig. Ha nincs hálózat és korábban sem töltődött le a terület, a
+jegyzőkönyv ezt **kiírja a térkép alá** — így nem marad észrevétlen.
+
+**A számok megmutatják, hol vannak.** A táblázatok sorszámai rajta vannak a
+térképen is, ugyanazzal a jelöléssel:
+
+| Jel | Mit jelöl |
+|---|---|
+| kék **1**, **2**, … | rögzített elem (fotó, hang, videó, jegyzet, állapot) — a számra kattintva a jegyzőkönyvben az adatlapjára ugrik |
+| narancs **E1**, **E2**, … | elvetett szakasz |
+| zöld **B1**, **B2**, … | berajzolt szakasz |
+
+Az elvetett és berajzolt szakaszok táblázatában a koordináta is szerepel, így
+a térképi jel mellett számszerűen is visszakereshető a hely.
 
 ### Élő kísérés a valós szállítás során
 
@@ -447,6 +487,7 @@ utvonalbejaras/
     ├── compass.js          kameairány a készülék tájolásérzékelőjéből
     ├── report.js           önálló HTML-jegyzőkönyv összeállítása
     ├── kiseres.js          élő kísérés a szállítás során (közelségi riasztás)
+    ├── terkepnezet.js      nagyítás/mozgatás a térképes vásznakon
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés
 ```

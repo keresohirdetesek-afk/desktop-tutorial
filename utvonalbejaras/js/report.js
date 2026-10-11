@@ -9,6 +9,12 @@ import {
   formatDistance, formatDuration, formatCoord, formatHeading, cardinal,
   typeLabel, categoryLabel, conditionLabel, severityLabel, ATTRIBUTION_TEXT,
 } from './geo.js';
+import { tilesEnabled, setTilesEnabled, pendingTiles } from './tiles.js';
+
+/** A jegyzőkönyvben használt jelölésszínek — a táblázatok ugyanezt viselik. */
+const MARK_ITEM = '#0a6ed1';
+const MARK_REJECTED = '#c2410c';
+const MARK_DRAWN = '#1a7f45';
 
 const rEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -30,8 +36,14 @@ const dt = (t) => {
   return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}. ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-/** Térképkép a riporthoz: ugyanaz a rajzoló, csak kép-méretben. */
-async function mapImage(session, points, items, width = 1100, height = 740) {
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Térképkép a riporthoz: ugyanaz a rajzoló, csak kép-méretben, számozott
+ * jelölésekkel. Az alaptérkép csempéit megvárjuk — a vaktérkép (csak a
+ * vonal, utcák nélkül) a közút felé használhatatlan.
+ */
+async function mapImage(session, points, items, labels, width = 1100, height = 740) {
   const holder = document.createElement('div');
   holder.style.cssText = `position:fixed;left:-99999px;top:0;width:${width}px;height:${height}px`;
   const canvas = document.createElement('canvas');
@@ -39,17 +51,46 @@ async function mapImage(session, points, items, width = 1100, height = 740) {
   canvas.style.height = height + 'px';
   holder.appendChild(canvas);
   document.body.appendChild(holder);
+
+  // a riporthoz akkor is kell az alaptérkép, ha a szerkesztőben vázlatra
+  // volt kapcsolva — utána visszaállítjuk
+  const tilesWere = tilesEnabled();
+  setTilesEnabled(true);
   try {
     // a riport világos lapra kerül: a térképvázlat is ahhoz igazodjon
-    const style = { drawn: session.drawn || [], lineWidth: 4, bg: '#eef2f7', dim: '#5d6b7d' };
-    renderTrack(canvas, points, items, style);
-    // a csempék aszinkron érkeznek; adunk nekik egy kis időt, majd újrarajzolunk
-    await new Promise((r) => setTimeout(r, 1800));
-    renderTrack(canvas, points, items, style);
-    return canvas.toDataURL('image/jpeg', 0.85);
+    const style = {
+      drawn: session.drawn || [], labels, lineWidth: 4, bg: '#eef2f7', dim: '#5d6b7d',
+    };
+    let res = renderTrack(canvas, points, items, style);
+
+    // az első rajzolás indítja el a csempék letöltését; megvárjuk őket.
+    // Hosszú útvonalhoz több csempe kell, ezért a türelmi idő ahhoz igazodik.
+    const wanted = (res.tiles && res.tiles.wanted) || 0;
+    const deadline = Date.now() + Math.min(45000, 8000 + wanted * 300);
+    let quiet = 0;
+    while (Date.now() < deadline) {
+      await wait(250);
+      quiet = pendingTiles() === 0 ? quiet + 1 : 0;
+      if (quiet >= 2) {
+        // minden kérés lefutott — de egy újrarajzolás kérhet újabb csempéket
+        res = renderTrack(canvas, points, items, style);
+        if (pendingTiles() === 0) break;
+        quiet = 0;
+      }
+    }
+    res = renderTrack(canvas, points, items, style);
+    return { url: canvas.toDataURL('image/jpeg', 0.85), tiles: res.tiles || { wanted: 0, drawn: 0 } };
   } finally {
+    setTilesEnabled(tilesWere);
     holder.remove();
   }
+}
+
+/** Egy szakasz közepe — ide kerül a sorszámozott jelölés. */
+function midPoint(pts = []) {
+  const valid = pts.filter((p) => p && p.lat != null && p.lon != null);
+  if (!valid.length) return null;
+  return valid[Math.floor(valid.length / 2)];
 }
 
 /**
@@ -64,10 +105,27 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   const drawn = session.drawn || [];
   const ordered = items.slice().sort((a, b) => a.created - b.created);
 
-  progress('Térképkép készítése…');
+  // a térképi jelölések és a táblázatok sorszámai ugyanazok
+  const labels = [];
+  ordered.forEach((it, i) => {
+    if (it.lat != null) labels.push({ lat: it.lat, lon: it.lon, text: String(i + 1), color: MARK_ITEM });
+  });
+  rejected.forEach((r, i) => {
+    const m = midPoint(points.slice(r.from, r.to + 1));
+    if (m) labels.push({ lat: m.lat, lon: m.lon, text: 'E' + (i + 1), color: MARK_REJECTED });
+  });
+  drawn.forEach((d, i) => {
+    const m = midPoint(d.pts || []);
+    if (m) labels.push({ lat: m.lat, lon: m.lon, text: 'B' + (i + 1), color: MARK_DRAWN });
+  });
+
+  progress('Térképkép készítése… (alaptérkép letöltése)');
   let map = '';
+  let mapTiles = { wanted: 0, drawn: 0 };
   try {
-    map = await mapImage(session, points, items);
+    const res = await mapImage(session, points, items, labels);
+    map = res.url;
+    mapTiles = res.tiles;
   } catch (_) { /* térkép nélkül is érvényes a riport */ }
 
   const media = [];
@@ -132,10 +190,10 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   const signTable = signs.length ? `
 <h2>Táblajegyzék</h2>
 <table class="grid">
-  <thead><tr><th>#</th><th>Tábla</th><th>Állapot</th><th>Minősítés</th><th>Mért érték</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Tábla</th><th>Állapot</th><th>Minősítés</th><th>Mért érték</th><th>Pozíció</th></tr></thead>
   <tbody>${signs.map((s) => {
     const idx = ordered.indexOf(s) + 1;
-    return `<tr><td><a href="#elem-${idx}">${idx}</a></td><td>${rEsc(s.what || 'jelzőtábla')}</td>`
+    return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td><td>${rEsc(s.what || 'jelzőtábla')}</td>`
       + `<td>${rEsc(conditionLabel(s.condition))}</td><td class="sev ${rEsc(s.severity || '')}">${rEsc(severityLabel(s.severity))}</td>`
       + `<td>${rEsc((s.dims || []).join(', '))}</td><td>${rEsc(formatCoord(s.lat, s.lon))}</td></tr>`;
   }).join('')}</tbody>
@@ -144,10 +202,10 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   const conditionTable = conditions.length ? `
 <h2>Rögzített állapotok</h2>
 <table class="grid">
-  <thead><tr><th>#</th><th>Mi</th><th>Megnevezés</th><th>Állapot</th><th>Minősítés</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Mi</th><th>Megnevezés</th><th>Állapot</th><th>Minősítés</th><th>Pozíció</th></tr></thead>
   <tbody>${conditions.map((c) => {
     const idx = ordered.indexOf(c) + 1;
-    return `<tr><td><a href="#elem-${idx}">${idx}</a></td><td>${rEsc(categoryLabel(c.category))}</td>`
+    return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td><td>${rEsc(categoryLabel(c.category))}</td>`
       + `<td>${rEsc(c.what || '')}</td><td>${rEsc(conditionLabel(c.condition))}</td>`
       + `<td class="sev ${rEsc(c.severity || '')}">${rEsc(severityLabel(c.severity))}</td>`
       + `<td>${rEsc(formatCoord(c.lat, c.lon))}</td></tr>`;
@@ -158,20 +216,26 @@ export async function buildReport(session, points, items, opts = {}, progress = 
 <h2>Elvetett szakaszok</h2>
 <p class="muted">A kísérőautó bejárta, de nem része a javasolt útvonalnak.</p>
 <table class="grid">
-  <thead><tr><th>#</th><th>Indoklás</th><th>Hossz</th></tr></thead>
-  <tbody>${rejected.map((r, i) =>
-    `<tr><td>${i + 1}</td><td>${rEsc(r.reason || 'nincs indoklás')}</td><td>${rEsc(formatDistance(r.length))}</td></tr>`
-  ).join('')}</tbody>
+  <thead><tr><th>Jel a térképen</th><th>Indoklás</th><th>Hossz</th><th>Hol</th></tr></thead>
+  <tbody>${rejected.map((r, i) => {
+    const m = midPoint(points.slice(r.from, r.to + 1));
+    return `<tr><td><span class="mark rejected">E${i + 1}</span></td>`
+      + `<td>${rEsc(r.reason || 'nincs indoklás')}</td><td>${rEsc(formatDistance(r.length))}</td>`
+      + `<td>${m ? rEsc(formatCoord(m.lat, m.lon)) : '—'}</td></tr>`;
+  }).join('')}</tbody>
 </table>` : '';
 
   const drawnBlock = drawn.length ? `
 <h2>Berajzolt szakaszok</h2>
 <p class="muted">Térképen megadott útvonalrész, amelyen a bejáráskor nem haladtunk végig.</p>
 <table class="grid">
-  <thead><tr><th>#</th><th>Megnevezés</th><th>Megjegyzés</th><th>Hossz</th></tr></thead>
-  <tbody>${drawn.map((d, i) =>
-    `<tr><td>${i + 1}</td><td>${rEsc(d.name || '—')}</td><td>${rEsc(d.note || '')}</td><td>${rEsc(formatDistance(trackLength(d.pts || [])))}</td></tr>`
-  ).join('')}</tbody>
+  <thead><tr><th>Jel a térképen</th><th>Megnevezés</th><th>Megjegyzés</th><th>Hossz</th><th>Hol</th></tr></thead>
+  <tbody>${drawn.map((d, i) => {
+    const m = midPoint(d.pts || []);
+    return `<tr><td><span class="mark drawn">B${i + 1}</span></td><td>${rEsc(d.name || '—')}</td>`
+      + `<td>${rEsc(d.note || '')}</td><td>${rEsc(formatDistance(trackLength(d.pts || [])))}</td>`
+      + `<td>${m ? rEsc(formatCoord(m.lat, m.lon)) : '—'}</td></tr>`;
+  }).join('')}</tbody>
 </table>` : '';
 
   const counts = ordered.reduce((acc, i) => { acc[i.type] = (acc[i.type] || 0) + 1; return acc; }, {});
@@ -210,6 +274,16 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   .summary b { display:block; font-size:19px; }
   .map { width:100%; border:1px solid var(--line); border-radius:8px; }
   .legend { font-size:13px; color:var(--muted); margin:6px 0 0; }
+  .warnbox { border:1px solid #e6c200; background:#fffbe6; color:#6b5200;
+             border-radius:8px; padding:8px 11px; margin-top:8px; }
+  /* a térképi jelölésekkel azonos jelek a táblázatokban */
+  .mark { display:inline-grid; place-items:center; min-width:26px; height:22px;
+          padding:0 7px; border-radius:6px; color:#fff; font-size:12.5px;
+          font-weight:700; text-decoration:none;
+          -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .mark.elem { background:${MARK_ITEM}; }
+  .mark.rejected { background:${MARK_REJECTED}; }
+  .mark.drawn { background:${MARK_DRAWN}; }
   .item { border:1px solid var(--line); border-left:4px solid var(--accent);
           border-radius:8px; padding:14px 16px; margin:14px 0; page-break-inside:avoid; }
   .item.sev-kritikus { border-left-color:var(--bad); }
@@ -266,8 +340,19 @@ export async function buildReport(session, points, items, opts = {}, progress = 
 
   ${map ? `<h2>Útvonal</h2>
   <img class="map" src="${map}" alt="A bejárt útvonal térképen">
-  <p class="legend">Kék: érvényes útvonal · narancs szaggatott: elvetett szakasz ·
-     zöld: berajzolt szakasz · ${rEsc(ATTRIBUTION_TEXT)}</p>` : ''}
+  <p class="legend">Kék vonal: érvényes útvonal · narancs szaggatott: elvetett szakasz ·
+     zöld: berajzolt szakasz.<br>
+     A térképen lévő számok a táblázatok sorszámai:
+     <span class="mark elem">1</span> rögzített elem (fotó, hang, állapot) ·
+     <span class="mark rejected">E1</span> elvetett szakasz ·
+     <span class="mark drawn">B1</span> berajzolt szakasz.
+     ${mapTiles.drawn ? rEsc(ATTRIBUTION_TEXT) : ''}</p>
+  ${mapTiles.drawn === 0 ? `<p class="legend warnbox">Az alaptérkép (utcák, települések) nem
+     töltődött be — a jegyzőkönyv készítésekor nem volt hálózat, vagy a térképszolgáltató nem
+     válaszolt. A nyomvonal és a jelölések így is pontosak. Ha az alaptérkép is kell a képre:
+     nyissa meg a bejárást hálózaton, nézze meg a nyomvonalat térképnézetben, és készítse el
+     újra a jegyzőkönyvet.</p>` : mapTiles.drawn < mapTiles.wanted ? `<p class="legend warnbox">Az
+     alaptérkép egy része nem töltődött be (${mapTiles.drawn}/${mapTiles.wanted} csempe).</p>` : ''}` : ''}
 
   ${signTable}
   ${conditionTable}

@@ -13,6 +13,7 @@ import {
   typeLabel, categoryLabel, severityLabel, isRejected,
 } from './geo.js';
 import { onTileLoad } from './tiles.js';
+import { MapView } from './terkepnezet.js';
 import { $, el, toast, modal, formatTime } from './ui.js';
 
 /** Ennyire megközelítve szól (méter). */
@@ -34,6 +35,14 @@ export class EscortMode {
     this.alertItem = null;
     this.urls = new Set();
     this.offRoute = false;
+    this.follow = true;           // a térkép a saját pozíciót kövesse
+    this.mapView = new MapView(this.canvas, {
+      draw: () => this.draw(),
+      onTap: (p) => this.tapMap(p),
+      // ha a vezető maga húzza vagy csippenti a térképet, hagyjuk nála a
+      // vezérlést — a 📍 gombbal kérheti vissza a követést
+      onPan: () => this.setFollow(false),
+    });
     this._bind();
   }
 
@@ -49,6 +58,8 @@ export class EscortMode {
     this.here = null;
     this.alertItem = null;
     this.startedAt = Date.now();
+    this.mapView.reset();
+    this.setFollow(true);
 
     try {
       this.radius = Number(localStorage.getItem('escortRadius')) || 300;
@@ -118,6 +129,20 @@ export class EscortMode {
   _bind() {
     $('#escort-close', this.root).addEventListener('click', () => this.close());
     $('#escort-alert-close', this.root).addEventListener('click', () => this.dismissAlert());
+
+    $('#escort-zoom-in', this.root).addEventListener('click', () => this.mapView.zoomBy(1.6));
+    $('#escort-zoom-out', this.root).addEventListener('click', () => this.mapView.zoomBy(1 / 1.6));
+    $('#escort-follow', this.root).addEventListener('click', () => {
+      this.setFollow(!this.follow);
+      // követéskor legyen látható környezet is: ha teljesen ki van zoomolva,
+      // közelítsünk rá a saját pozícióra
+      if (this.follow && this.mapView.view.k < 1.2) this.mapView.zoomBy(4);
+      else this.draw();
+    });
+    $('#escort-fit', this.root).addEventListener('click', () => {
+      this.setFollow(false);
+      this.mapView.reset();
+    });
 
     $('#escort-radius', this.root).addEventListener('change', (e) => {
       this.radius = Number(e.target.value);
@@ -254,10 +279,6 @@ export class EscortMode {
       .map((i) => ({ item: i, d: haversine(this.here, i) }))
       .sort((a, b) => a.d - b.d);
 
-    // riasztás a legközelebbire, ha hatótávon belül van és még nem szólt
-    const hit = withDist.find((x) => x.d <= this.radius && !this.triggered.has(x.item.id));
-    if (hit && !this.alertItem) this.showAlert(hit.item, hit.d);
-
     // a nyitva lévő riasztás távolsága kövesse a mozgást
     if (this.alertItem) {
       const open = withDist.find((x) => x.item.id === this.alertItem.id);
@@ -285,6 +306,12 @@ export class EscortMode {
     $('#escort-headline', this.root).textContent = next
       ? `${formatDistance(next.d)} — ${next.item.title || typeLabel(next.item.type)}`
       : 'Nincs figyelt pont a közelben';
+
+    // Riasztás a legközelebbire, ha hatótávon belül van és még nem szólt.
+    // Ez a lista felépítése UTÁN jön: a showAlert újra frissít, és ha ezt
+    // menet közben tennénk, a lista sorai megkettőződnének.
+    const hit = withDist.find((x) => x.d <= this.radius && !this.triggered.has(x.item.id));
+    if (hit && !this.alertItem) this.showAlert(hit.item, hit.d);
   }
 
   describe(item) {
@@ -315,8 +342,8 @@ export class EscortMode {
 
   setAlertDistance(distance) {
     if (!this.alertItem) return;
-    $('#escort-alert-dist', this.root).textContent =
-      (this.alertManual ? '' : '⚠️ ') + formatDistance(distance) + ' · ' + this.describe(this.alertItem);
+    const near = distance == null ? '' : (this.alertManual ? '' : '⚠️ ') + formatDistance(distance) + ' · ';
+    $('#escort-alert-dist', this.root).textContent = near + this.describe(this.alertItem);
   }
 
   showAlert(item, distance, manual = false) {
@@ -375,12 +402,44 @@ export class EscortMode {
 
   /* --------------------------------------------------------- kirajz */
 
+  /** Követés be/ki — a gomb jelzi, mi van érvényben. */
+  setFollow(on) {
+    this.follow = on;
+    const b = $('#escort-follow', this.root);
+    if (b) b.classList.toggle('active', on);
+  }
+
+  /** Koppintás a térképre: ha jelölést talált, hozza elő, amit ott rögzítettünk. */
+  tapMap(p) {
+    if (!this.hit || !this.hit.hitboxes) return false;
+    const box = this.hit.hitboxes.find((b) => Math.hypot(b.x - p.x, b.y - p.y) < b.r);
+    if (!box) return false;
+    const item = this.items.find((i) => i.id === box.id);
+    if (!item) return false;
+    this.showAlert(item, this.here ? haversine(this.here, item) : null, true);
+    return true;
+  }
+
   draw() {
     if (this.root.hidden || !this.canvas.clientWidth) return;
-    renderTrack(this.canvas, this.points, this.relevant(), {
+    const opts = {
       drawn: (this.session && this.session.drawn) || [],
       here: this.here,
+      view: this.mapView.view,
       lineWidth: 4,
-    });
+    };
+    this.hit = renderTrack(this.canvas, this.points, this.relevant(), opts);
+
+    // követés: a saját pozíció kerüljön a vászon közepére. A nézet eltolása
+    // után újra kell rajzolni — így nagyításban is mindig magunkat látjuk.
+    if (this.follow && this.here && this.hit.project) {
+      const r = this.canvas.getBoundingClientRect();
+      const p = this.hit.project(this.here.lat, this.here.lon);
+      const dx = r.width / 2 - p.x, dy = r.height / 2 - p.y;
+      if (Math.hypot(dx, dy) > 1.5) {
+        this.mapView.panBy(dx, dy);
+        this.hit = renderTrack(this.canvas, this.points, this.relevant(), opts);
+      }
+    }
   }
 }

@@ -49,7 +49,14 @@
   <!-- ================================================ aktív bejárás -->
   <section class="screen" id="scr-session" hidden>
     <div class="track-panel">
-      <canvas id="track-canvas" aria-label="Rögzített nyomvonal"></canvas>
+      <div class="track-map">
+        <canvas id="track-canvas" aria-label="Rögzített nyomvonal"></canvas>
+        <div class="map-zoom">
+          <button id="track-zoom-in" class="map-zoom-btn" title="Nagyítás" aria-label="Nagyítás">＋</button>
+          <button id="track-zoom-out" class="map-zoom-btn" title="Kicsinyítés" aria-label="Kicsinyítés">－</button>
+          <button id="track-fit" class="map-zoom-btn" title="Teljes nyomvonal" aria-label="Teljes nyomvonal" hidden>⤢</button>
+        </div>
+      </div>
       <div class="track-stats">
         <div><span class="stat-val" id="st-distance">0 m</span><span class="stat-lbl" id="st-dist-label">Táv</span></div>
         <div><span class="stat-val" id="st-time">00:00</span><span class="stat-lbl">Idő</span></div>
@@ -232,7 +239,15 @@
   <p id="escort-headline" class="escort-headline">Helymeghatározás indul…</p>
   <p id="escort-offroute" class="escort-offroute" hidden></p>
 
-  <div id="escort-stage"><canvas id="escort-canvas"></canvas></div>
+  <div id="escort-stage">
+    <canvas id="escort-canvas"></canvas>
+    <div class="map-zoom">
+      <button id="escort-zoom-in" class="map-zoom-btn" title="Nagyítás" aria-label="Nagyítás">＋</button>
+      <button id="escort-zoom-out" class="map-zoom-btn" title="Kicsinyítés" aria-label="Kicsinyítés">－</button>
+      <button id="escort-follow" class="map-zoom-btn active" title="Középre: a saját pozíció követése" aria-label="Saját pozíció követése">📍</button>
+      <button id="escort-fit" class="map-zoom-btn" title="Teljes útvonal" aria-label="Teljes útvonal">⤢</button>
+    </div>
+  </div>
 
   <div class="escort-panel">
     <div id="escort-next" class="escort-list"></div>

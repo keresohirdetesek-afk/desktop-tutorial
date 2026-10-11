@@ -339,12 +339,13 @@ export function unmercator(x, y) {
  * teljes értékűen látszik.
  */
 function drawTiles(ctx, w, h, px, worldToScreen, screenToWorld) {
-  if (!tilesEnabled() || !isFinite(px) || px <= 0) return;
+  const stats = { wanted: 0, drawn: 0 };
+  if (!tilesEnabled() || !isFinite(px) || px <= 0) return stats;
 
   const z = Math.max(0, Math.min(19, Math.round(Math.log2(px / TILE_SIZE))));
   const n = 2 ** z;
   const tilePx = px / n;
-  if (!isFinite(tilePx) || tilePx < 1) return;
+  if (!isFinite(tilePx) || tilePx < 1) return stats;
 
   const topLeft = screenToWorld(0, 0);
   const bottomRight = screenToWorld(w, h);
@@ -352,14 +353,16 @@ function drawTiles(ctx, w, h, px, worldToScreen, screenToWorld) {
   const x1 = Math.ceil(bottomRight.x * n);
   const y0 = Math.max(0, Math.floor(topLeft.y * n));
   const y1 = Math.min(n - 1, Math.ceil(bottomRight.y * n));
-  if ((x1 - x0) * (y1 - y0) > 400) return; // ésszerűtlenül sok csempe
+  if ((x1 - x0) * (y1 - y0) > 400) return stats; // ésszerűtlenül sok csempe
 
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   for (let tx = x0; tx <= x1; tx++) {
     for (let ty = y0; ty <= y1; ty++) {
+      stats.wanted++;
       const img = getTile(z, tx, ty);
       if (!img) continue;
+      stats.drawn++;
       const p = worldToScreen(tx / n, ty / n);
       // +1 képpont, hogy a csempék között ne maradjon hajszálvékony rés
       ctx.drawImage(img, Math.floor(p.x), Math.floor(p.y),
@@ -367,6 +370,7 @@ function drawTiles(ctx, w, h, px, worldToScreen, screenToWorld) {
     }
   }
   ctx.restore();
+  return stats;
 }
 
 function drawAttribution(ctx, w, h, color) {
@@ -455,7 +459,9 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
 
   // térképcsempék a nyomvonal alá
   const px = scale * view.k;   // képpont / világegység (a teljes Föld = 1)
-  if (opts.tiles !== false) drawTiles(ctx, w, h, px, worldToScreen, screenToWorld);
+  const tileStats = opts.tiles !== false
+    ? drawTiles(ctx, w, h, px, worldToScreen, screenToWorld)
+    : { wanted: 0, drawn: 0 };
 
   const rejectColor = opts.rejectLine || '#ff8a4d';
   const lineW = (opts.lineWidth || 4) * Math.min(2, Math.max(1, view.k * 0.5 + 0.5));
@@ -615,6 +621,18 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     dot(ctx, p, 7, '#4da3ff', '#ffffff');
   }
 
+  // számozott jelölések (jegyzőkönyv): a táblázatok sorszámai a térképen
+  if (opts.labels && opts.labels.length) {
+    const placed = [];
+    for (const lab of opts.labels) {
+      if (lab.lat == null || lab.lon == null) continue;
+      const p = project(lab.lat, lab.lon);
+      if (p.x < -40 || p.y < -40 || p.x > w + 40 || p.y > h + 40) continue;
+      dot(ctx, p, 4, lab.color || '#13202e', '#ffffff');
+      drawBadge(ctx, p, String(lab.text), lab.color || '#13202e', placed);
+    }
+  }
+
   /** A képernyőponthoz legközelebbi nyomvonalpont indexe. */
   const nearest = (x, y) => {
     let best = -1, bestD = Infinity;
@@ -645,7 +663,7 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     return best ? { ...best, distance: bestD } : { distance: Infinity };
   };
 
-  return { project, unproject, hitboxes, nearest, nearestDrawn, coords };
+  return { project, unproject, hitboxes, nearest, nearestDrawn, coords, tiles: tileStats };
 }
 
 /* ------------------------------------------------------------- GeoJSON
@@ -767,6 +785,56 @@ function dot(ctx, p, r, fill, stroke) {
     ctx.strokeStyle = stroke;
     ctx.stroke();
   }
+}
+
+/**
+ * Számozott jelölés a térképen (jegyzőkönyvhöz): a táblázatok sorszámai
+ * így mutatják meg, hol is vannak valójában.
+ */
+function drawBadge(ctx, p, text, color, placed) {
+  ctx.save();
+  ctx.font = 'bold 13px system-ui, sans-serif';
+  const w = Math.max(22, ctx.measureText(text).width + 14);
+  const h = 20;
+  let x = p.x + 9;
+  let y = p.y - h - 7;
+
+  // ne takarják egymást: ha ütközik egy korábbival, csúsztassuk lejjebb
+  for (let tries = 0; tries < 8; tries++) {
+    const clash = placed.some((b) =>
+      x < b.x + b.w + 3 && x + w + 3 > b.x && y < b.y + b.h + 3 && y + h + 3 > b.y);
+    if (!clash) break;
+    y += h + 4;
+  }
+  placed.push({ x, y, w, h });
+
+  const r = 6;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#ffffff';
+  ctx.stroke();
+
+  // vezetővonal a jelölt pontig
+  ctx.beginPath();
+  ctx.moveTo(x, y + h);
+  ctx.lineTo(p.x, p.y);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + w / 2, y + h / 2 + 0.5);
+  ctx.restore();
 }
 
 function drawArrowHead(ctx, a, b, size) {

@@ -42,6 +42,11 @@ export function tilesEnabled() {
   return enabled;
 }
 
+/** Hány csempe letöltése van folyamatban (a jegyzőkönyv ezt megvárja). */
+export function pendingTiles() {
+  return queue.length + active;
+}
+
 /** A vászon újrarajzolása, amint befut egy csempe. */
 export function onTileLoad(fn) {
   listener = fn || (() => {});

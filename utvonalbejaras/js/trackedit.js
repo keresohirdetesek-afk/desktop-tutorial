@@ -11,12 +11,10 @@ import {
   formatDistance, formatDuration, REJECTED, isRejected,
 } from './geo.js';
 import { onTileLoad, setTilesEnabled, tilesEnabled, cachedTileCount } from './tiles.js';
+import { MapView } from './terkepnezet.js';
 import { $, el, toast, modal } from './ui.js';
 
 const SNAP_PX = 26; // ennél közelebb a meglévő nyomvonalhoz odaillesztjük a csúcsot
-
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 40;
 
 export class TrackEditor {
   constructor(root) {
@@ -25,13 +23,18 @@ export class TrackEditor {
     this.points = [];
     this.items = [];
     this.sel = null;                  // { from, to } — indexek a points tömbben
-    this.view = { k: 1, tx: 0, ty: 0 };
     this.hit = null;
-    this.pointers = new Map();
-    this.pinch = null;
     this.dirty = false;
+    this.mapView = new MapView(this.canvas, {
+      draw: () => this.draw(),
+      onTap: (p) => this.tap(p),
+      doubleTap: false,   // itt a koppintás kijelöl / csúcsot rak le
+    });
     this._bind();
   }
+
+  /** A nagyítás/mozgatás állapota — a renderTrack ezt kapja meg. */
+  get view() { return this.mapView.view; }
 
   /**
    * @returns {Promise<boolean>} true, ha változott a nyomvonal
@@ -44,7 +47,7 @@ export class TrackEditor {
     this.sel = null;
     this.draft = null;        // éppen rajzolt szakasz
     this.selectedDrawn = null;
-    this.view = { k: 1, tx: 0, ty: 0 };
+    this.mapView.reset();
     this.dirty = false;
     this.root.hidden = false;
     document.body.classList.add('modal-open');
@@ -67,22 +70,14 @@ export class TrackEditor {
   /* ------------------------------------------------------------- vezérlés */
 
   _bind() {
-    const c = this.canvas;
-    c.addEventListener('pointerdown', (e) => this.onDown(e));
-    c.addEventListener('pointermove', (e) => this.onMove(e));
-    c.addEventListener('pointerup', (e) => this.onUp(e));
-    c.addEventListener('pointercancel', (e) => this.onUp(e));
-    c.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
-    c.addEventListener('contextmenu', (e) => e.preventDefault());
+    // a vászon gesztusait (csippentés, húzás, dupla koppintás, görgő) a
+    // MapView kezeli — lásd a konstruktort
 
     $('#trackedit-close', this.root).addEventListener('click', () => this.close());
     $('#trackedit-map', this.root).addEventListener('click', () => this.toggleMap());
-    $('#trackedit-zoom-in', this.root).addEventListener('click', () => this.zoomBy(1.5));
-    $('#trackedit-zoom-out', this.root).addEventListener('click', () => this.zoomBy(1 / 1.5));
-    $('#trackedit-fit', this.root).addEventListener('click', () => {
-      this.view = { k: 1, tx: 0, ty: 0 };
-      this.draw();
-    });
+    $('#trackedit-zoom-in', this.root).addEventListener('click', () => this.mapView.zoomBy(1.5));
+    $('#trackedit-zoom-out', this.root).addEventListener('click', () => this.mapView.zoomBy(1 / 1.5));
+    $('#trackedit-fit', this.root).addEventListener('click', () => this.mapView.reset());
 
     $('#trackedit-reject', this.root).addEventListener('click', () => this.markSelection(REJECTED));
     $('#trackedit-accept', this.root).addEventListener('click', () => this.markSelection('ok'));
@@ -152,79 +147,6 @@ export class TrackEditor {
     b.textContent = on ? '🗺️ Térkép' : '🗺️ Vázlat';
     b.classList.toggle('active', on);
     b.title = on ? 'Alaptérkép kikapcsolása' : 'Alaptérkép bekapcsolása';
-  }
-
-  /* --------------------------------------------------- nagyítás, mozgatás */
-
-  local(e) {
-    const r = this.canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  }
-
-  onDown(e) {
-    this.canvas.setPointerCapture(e.pointerId);
-    this.pointers.set(e.pointerId, this.local(e));
-    if (this.pointers.size === 2) {
-      const [a, b] = [...this.pointers.values()];
-      this.pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), k: this.view.k };
-      this.moved = true;
-    } else {
-      this.start = this.local(e);
-      this.startView = { ...this.view };
-      this.moved = false;
-    }
-  }
-
-  onMove(e) {
-    if (!this.pointers.has(e.pointerId)) return;
-    this.pointers.set(e.pointerId, this.local(e));
-
-    if (this.pointers.size === 2 && this.pinch) {
-      const [a, b] = [...this.pointers.values()];
-      const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      const k = clamp(this.pinch.k * (dist / (this.pinch.dist || 1)), MIN_ZOOM, MAX_ZOOM);
-      this.zoomAt(mid, k);
-      return;
-    }
-
-    const p = this.local(e);
-    if (!this.start) return;
-    const dx = p.x - this.start.x, dy = p.y - this.start.y;
-    if (Math.hypot(dx, dy) > 8) this.moved = true;
-    if (this.moved) {
-      this.view.tx = this.startView.tx + dx;
-      this.view.ty = this.startView.ty + dy;
-      this.draw();
-    }
-  }
-
-  onUp(e) {
-    const p = this.pointers.get(e.pointerId);
-    this.pointers.delete(e.pointerId);
-    if (this.pointers.size < 2) this.pinch = null;
-    if (this.pointers.size === 0 && !this.moved && p) this.tap(p);
-    if (this.pointers.size === 0) this.start = null;
-  }
-
-  onWheel(e) {
-    e.preventDefault();
-    const k = clamp(this.view.k * (e.deltaY < 0 ? 1.2 : 1 / 1.2), MIN_ZOOM, MAX_ZOOM);
-    this.zoomAt(this.local(e), k);
-  }
-
-  zoomBy(f) {
-    const r = this.canvas.getBoundingClientRect();
-    this.zoomAt({ x: r.width / 2, y: r.height / 2 }, clamp(this.view.k * f, MIN_ZOOM, MAX_ZOOM));
-  }
-
-  /** Nagyítás úgy, hogy a megadott képernyőpont a helyén maradjon. */
-  zoomAt(anchor, k) {
-    const ratio = k / this.view.k;
-    this.view.tx = anchor.x - (anchor.x - this.view.tx) * ratio;
-    this.view.ty = anchor.y - (anchor.y - this.view.ty) * ratio;
-    this.view.k = k;
-    this.draw();
   }
 
   /* ------------------------------------------------------------ kijelölés */
@@ -605,5 +527,3 @@ export class TrackEditor {
     });
   }
 }
-
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
