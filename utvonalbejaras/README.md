@@ -133,8 +133,14 @@ A kísérőautó útja nem feltétlenül a jóváhagyandó útvonal: akadály mi
 kellett fordulni, kerülőt kellett keresni. Ezt utólag, térképen lehet rendbe
 tenni — a *Nyomvonal szerkesztése* gombbal.
 
-- **Szakasz kijelölése**: koppintson a nyomvonalra a szakasz elejénél, majd a
-  végénél (az **A** és **B** fogópont jelzi). A két csúszkával pontosan
+- **↩️ Innen fordultunk vissza — egy koppintás.** A leggyakoribb esetre ez a
+  gyors út: koppintson a nyomvonalon oda, ahol visszafordultak, majd nyomja meg
+  a gombot. Az app a fordulóponttól kifelé haladva magától megkeresi a teljes
+  zsákutcát — az odafelé és a visszafelé utat is —, egészen a becsatlakozásig,
+  megmutatja kijelölve, és csak az indoklást kérdezi meg. Nem kell az A és B
+  pontot külön beállítani.
+- **Szakasz kijelölése kézzel**: koppintson a nyomvonalra a szakasz elejénél,
+  majd a végénél (az **A** és **B** fogópont jelzi). A két csúszkával pontosan
   ráhangolható. Két ujjal nagyíthat, húzással mozgathatja a térképet.
 - **Elvetett szakasz**: a kijelölés kikerül a hivatalos útvonalból, de
   **benne marad a felvételben** — szaggatott narancs vonallal, a megadott

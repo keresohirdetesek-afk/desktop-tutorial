@@ -538,9 +538,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 #trackedit-stage {
   flex: 1;
-  min-height: 0;
+  /* a térkép ne zsugorodjon használhatatlanra, ha sok gomb van alatta */
+  min-height: 42vh;
   background: var(--map-bg);
   overflow: hidden;
+}
+
+/* a vezérlők görgethetők, a térkép viszont marad */
+#trackedit .editor-panel {
+  max-height: 52vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 #trackedit-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
 

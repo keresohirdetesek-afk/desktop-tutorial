@@ -99,8 +99,58 @@ export function lengthByStatus(points) {
   return out;
 }
 
-/** Az elvetett szakaszok listája indexhatárokkal, hosszal és indoklással. */
-export function rejectedSections(points) {
+/* ------------------------------------------------- zsákutca felismerése
+
+A leggyakoribb eset a bejáráson: a kísérőautó behajt valahová, nem fér el,
+visszafordul, és másfelé megy tovább. Ilyenkor az oda- és a visszaút
+egymás mellett fut a nyomvonalon. Ha a vezető megmondja, HOL fordult vissza,
+a teljes zsákutcát ki tudjuk keresni magunktól: a fordulóponttól kifelé
+haladva addig tágítjuk a szakaszt, amíg a két ág egymás mellett marad — ahol
+szétválnak, ott volt a becsatlakozás.                                     */
+
+/**
+ * @param {Array} points a teljes nyomvonal
+ * @param {number} pivot a fordulópont indexe (ide koppintott a felhasználó)
+ * @param {number} tolerance ennél közelebb még „ugyanaz az út” (méter)
+ * @returns {{from:number, to:number, length:number, ok:boolean}}
+ */
+export function detectTurnaround(points, pivot, tolerance = 35) {
+  if (!points || points.length < 3) return { from: pivot, to: pivot, length: 0, ok: false };
+
+  const LOOKAHEAD = 600;     // ennyi pontnál tovább nem keressük a párját
+  let i = pivot;
+  let j = pivot;
+
+  while (i > 0 && j < points.length - 1) {
+    const back = points[i - 1];
+
+    // a visszafelé ágon keressük meg a hozzá legközelebbi pontot
+    let best = -1;
+    let bestD = Infinity;
+    const limit = Math.min(points.length, j + 1 + LOOKAHEAD);
+    for (let m = j + 1; m < limit; m++) {
+      const d = haversine(back, points[m]);
+      if (d < bestD) { bestD = d; best = m; }
+    }
+
+    if (best < 0 || bestD > tolerance) break;   // itt válik szét a két ág
+    i -= 1;
+    j = best;
+  }
+
+  const from = Math.min(i + 1, pivot);
+  const to = Math.max(j, pivot);
+  const slice = points.slice(Math.max(0, from - 1), to + 1);
+  return {
+    from,
+    to,
+    length: trackLength(slice),
+    // akkor hihető a felismerés, ha tényleg van oda- és visszaút is
+    ok: to - from >= 2 && i < pivot && j > pivot,
+  };
+}
+
+/** Az elvetett szakaszok listája indexhatárokkal, hosszal és indoklással. */export function rejectedSections(points) {
   const out = [];
   let start = -1;
   for (let i = 0; i <= points.length; i++) {

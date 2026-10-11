@@ -7,7 +7,7 @@
 // térképen lehet rendbe tenni.
 
 import {
-  renderTrack, lengthByStatus, rejectedSections, trackLength, drawnLength,
+  renderTrack, lengthByStatus, rejectedSections, trackLength, drawnLength, detectTurnaround,
   formatDistance, formatDuration, REJECTED, isRejected,
 } from './geo.js';
 import { onTileLoad, setTilesEnabled, tilesEnabled, cachedTileCount } from './tiles.js';
@@ -93,6 +93,7 @@ export class TrackEditor {
       this.renderPanel();
     });
 
+    $('#trackedit-turnaround', this.root).addEventListener('click', () => this.markTurnaround());
     $('#trackedit-draw', this.root).addEventListener('click', () => this.startDraw());
     $('#trackedit-draw-undo', this.root).addEventListener('click', () => {
       if (!this.draft) return;
@@ -248,6 +249,7 @@ export class TrackEditor {
 
     if (!this.sel) {
       this.sel = { from: index, to: index };
+      toast('Ha itt fordultak vissza, elég az „Innen fordultunk vissza” gomb.');
     } else {
       // a közelebbi fogópontot mozgatjuk
       const dFrom = Math.abs(index - this.sel.from);
@@ -373,6 +375,55 @@ export class TrackEditor {
     toast('Szakasz törölve.');
   }
 
+  /**
+   * Egy koppintás — kész szakasz. A fordulóponttól kiindulva megkeresi a
+   * teljes zsákutcát (oda- és visszautat), megmutatja, és elvetteti.
+   */
+  async markTurnaround() {
+    if (!this.sel) {
+      toast('Előbb koppintson a nyomvonalra ott, ahol visszafordultak.', 'error');
+      return;
+    }
+    const pivot = Math.round((this.sel.from + this.sel.to) / 2);
+    const found = detectTurnaround(this.points, pivot);
+
+    if (!found.ok) {
+      toast('Itt nem látok oda-vissza utat. Jelölje ki a szakaszt kézzel az A és B ponttal.', 'error');
+      return;
+    }
+
+    // előbb mutassuk meg, mit talált, és csak utána kérdezzünk
+    this.sel = { from: found.from, to: found.to };
+    this.draw();
+    this.renderPanel();
+
+    const pts = this.selectedPoints();
+    const res = await modal({
+      title: 'Zsákutca elvetése',
+      text: `A fordulóponttól visszafelé és előre is megtaláltam az utat: `
+        + `${pts.length} pont, ${formatDistance(found.length)}. `
+        + 'Ez kikerül a hivatalos útvonalból, de megmarad a felvételben.',
+      fields: [{
+        name: 'reason',
+        label: 'Miért kellett visszafordulni?',
+        type: 'textarea',
+        rows: 2,
+        value: 'Visszafordulás — nem járható tovább',
+        placeholder: 'pl. 3,8 m magasságkorlát a hídnál',
+      }],
+      okText: 'Elvetés',
+    });
+    if (!res) return;
+
+    for (const p of pts) { p.status = REJECTED; p.reason = res.reason; }
+    await this.onApply({ updated: pts });
+    this.dirty = true;
+    this.sel = null;
+    this.draw();
+    this.renderPanel();
+    toast(`Zsákutca elvetve: ${formatDistance(found.length)}.`);
+  }
+
   /* -------------------------------------------------------------- műveletek */
 
   async markSelection(status) {
@@ -467,6 +518,7 @@ export class TrackEditor {
         ? `${n} pont · ${formatDistance(trackLength(this.draft.pts))} — koppintson a következő pontra.`
         : 'Koppintson a szakasz első pontjára. A meglévő nyomvonal közelében automatikusan illeszkedik.';
       $('#trackedit-selinfo', this.root).hidden = true;
+      $('#trackedit-turnaround', this.root).disabled = true;
       $('#trackedit-draw-done', this.root).disabled = n < 2;
       $('#trackedit-draw-undo', this.root).disabled = n === 0;
       this.renderDrawnList();
@@ -506,7 +558,8 @@ export class TrackEditor {
     $('#trackedit-hint', this.root).hidden = hasSel || hasDrawnSel;
     $('#trackedit-hint', this.root).textContent =
       'Koppintson a nyomvonalra a szakasz elejénél, majd a végénél. Két ujjal nagyíthat, húzással mozgathatja a térképet.';
-    for (const id of ['#trackedit-reject', '#trackedit-accept', '#trackedit-delete', '#trackedit-clear-sel']) {
+    for (const id of ['#trackedit-reject', '#trackedit-accept', '#trackedit-delete',
+                      '#trackedit-clear-sel', '#trackedit-turnaround']) {
       $(id, this.root).disabled = !hasSel;
     }
     if (!hasSel) return;
