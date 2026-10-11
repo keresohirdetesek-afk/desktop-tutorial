@@ -161,6 +161,46 @@ function parseTiff(view, tiff) {
   return Object.keys(out).length ? out : null;
 }
 
+/** Videó első használható képkockája bélyegképnek, plusz a hossza. */
+export function videoPoster(file, maxSide = 360) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.muted = true;
+    v.playsInline = true;
+
+    const done = (value, err) => {
+      URL.revokeObjectURL(url);
+      v.removeAttribute('src');
+      err ? reject(err) : resolve(value);
+    };
+    const timer = setTimeout(() => done(null, new Error('időtúllépés')), 12000);
+
+    v.onloadeddata = () => {
+      // az első képkocka sokszor fekete; ugorjunk kicsit beljebb
+      const t = Math.min(0.6, (v.duration || 1) / 4);
+      v.currentTime = isFinite(t) ? t : 0;
+    };
+    v.onseeked = async () => {
+      clearTimeout(timer);
+      try {
+        const scale = Math.min(1, maxSide / Math.max(v.videoWidth || 1, v.videoHeight || 1));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round((v.videoWidth || maxSide) * scale));
+        c.height = Math.max(1, Math.round((v.videoHeight || maxSide) * scale));
+        c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+        const thumb = await canvasToBlob(c, 'image/jpeg', 0.72);
+        done({ thumb, duration: isFinite(v.duration) ? Math.round(v.duration * 1000) : null });
+      } catch (err) {
+        done(null, err);
+      }
+    };
+    v.onerror = () => { clearTimeout(timer); done(null, new Error('a videó nem olvasható')); };
+    v.src = url;
+  });
+}
+
 /* ----------------------------------------------------------- hangjegyzet */
 
 function pickAudioType() {

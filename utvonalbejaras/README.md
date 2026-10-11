@@ -25,6 +25,9 @@ használatra.
 | **Halvány útirány-nyíl** — külön eszköz, saját beállításokkal | Szerkesztő → *Útirány* eszköz |
 | **Égtáj (iránytű) minden fotón** — merre nézett a kamera | automatikus, Szerkesztő → *Iránytű* |
 | **Hangjegyzet** felvétele a helyszínen, önállóan vagy fotóhoz csatolva | *Hangjegyzet* gomb, vagy fotó → *Hangjegyzet* |
+| **Videós megjegyzés** a telefon kamerájával, bélyegképpel | *Videó* gomb |
+| **Állapot- és táblarögzítés** kategóriával, állapottal, minősítéssel | *Állapot / tábla* gomb |
+| **HTML-jegyzőkönyv** önálló fájlban, a közút felé átadható | *Riport (HTML)* gomb |
 | **Írott jegyzet** és pontjelölés a nyomvonalon | *Jegyzet*, *Pont jelölése* |
 | **Visszakeresés** név, jegyzet, képre írt felirat, beírt méret és koordináta szerint | *Keresés* fül |
 | **OpenStreetMap alaptérkép** a nyomvonal mögött, offline tárolt csempékkel | Nyomvonal szerkesztése → *Térkép* |
@@ -82,6 +85,47 @@ képen áthelyezhető, ha eltakarna valamit.
 
 Az égtáj a **keresésben** is szerepel: rá lehet keresni arra, hogy
 „délkelet”, „DK” vagy „135”.
+
+### Állapotok és táblajegyzék
+
+A bejárás nemcsak az akadályokról szól: egy sérült útpadka vagy szalagkorlát
+később vita tárgya lehet, ha csak a szállítás után derül ki. Az *Állapot /
+tábla* gombbal rögzíthető a **bejáráskori állapot**:
+
+- **Kategória**: közúti jelzőtábla, útpadka, szalagkorlát, burkolat, híd,
+  légvezeték, növényzet, egyéb.
+- **Állapot**: ép / sérült / hiányzik / takart.
+- **Minősítés**: megfelelő / figyelendő / kritikus — ez adja a színjelölést a
+  listán és a riportban.
+- **Mért érték** és megjegyzés, majd felajánlja, hogy **fotót** is csatol
+  ugyanehhez a bejegyzéshez (nem külön elemként).
+
+A **táblajegyzék** ebből áll össze magától: minden „közúti jelzőtábla”
+kategóriájú bejegyzés egy sor a riport táblázatában, GPS-koordinátával együtt.
+
+> Többtagú mért értéket **pontosvesszővel** válasszon el
+> (`szabad magasság: 3,80 m; útszélesség: 5,10 m`) — a vessző a tizedesjel.
+
+### Videós megjegyzés
+
+A *Videó* gomb a telefon saját kameraalkalmazását nyitja, és a kész felvételt
+veszi át (nincs átkódolás, marad az eredeti minőség). Az app bélyegképet
+készít belőle, és rögzíti a hosszát, a pozíciót és a kameairányt. 150 MB
+fölött rákérdez, mert a teljes mentés és a riport is ekkorára nő.
+
+### HTML-jegyzőkönyv a közút felé
+
+A *Riport (HTML)* gomb **egyetlen, önálló fájlt** készít: térképpel, a
+szerelvény adataival, összegzéssel, táblajegyzékkel, állapottáblázattal, az
+elvetett és berajzolt szakaszokkal, majd sorszámozva minden rögzített elemmel
+— a jelölt fotókkal, a hangfelvételekkel és (választhatóan) a videókkal
+**beágyazva**. Külső hivatkozás nincs benne: e-mailben elküldve vagy
+pendrive-on átadva is ugyanazt mutatja, és bármelyik böngészőből **PDF-be
+nyomtatható**.
+
+Készítéskor választható, mi kerüljön bele: teljes méretű fotók vagy csak
+kisképek, hangjegyzetek igen/nem, videók igen/nem (ez utóbbi dönti el a
+fájlméretet).
 
 ### A nyomvonal utólagos szerkesztése
 
@@ -300,14 +344,20 @@ utvonalbejaras/
     ├── editor.js           fotó-jelölő (rajz, méret, útirány-nyíl, szöveg)
     ├── tiles.js            OSM-csempék betöltése és offline tárolása
     ├── compass.js          kameairány a készülék tájolásérzékelőjéből
+    ├── report.js           önálló HTML-jegyzőkönyv összeállítása
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés
 ```
 
 ## Korlátok
 
-- A háttérben (más appra váltva, lezárt képernyővel) a böngésző felfüggesztheti
-  a GPS-figyelést — ezért érdemes az appot előtérben hagyni.
+- **Lezárt képernyővel nem lehet rögzíteni.** Ha a képernyő lezár vagy más
+  alkalmazásra vált, a böngésző felfüggeszti az oldalt, és a GPS-figyelés
+  leáll; erre a webes platformon nincs megoldás. Amit az app tud: ébren
+  tartja a képernyőt, és rögzítés közben felkínálja a **🌙 Képernyő
+  elsötétítése** gombot — ilyenkor a kijelző szinte fekete (sokkal kevesebbet
+  fogyaszt), a mérés viszont fut tovább, és a táv folyamatosan látszik.
+  Valódi háttérrögzítéshez az appot natív alkalmazásba kellene csomagolni.
 - Alaptérkép csak hálózaton tölthető le; offline az marad meg, amit korábban
   már megnézett (a csempék tárolódnak).
 - Az iOS Safari a hangfelvételt `audio/mp4`, a Chrome `audio/webm` formátumban

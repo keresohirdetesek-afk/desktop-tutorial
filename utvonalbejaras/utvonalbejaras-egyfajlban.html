@@ -227,6 +227,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: var(--muted);
 }
 .tag.dim { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.tag.sev-kritikus { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
+.tag.sev-figyelendo { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.tag.sev-megfelelo { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+
+.thumb-wrap { position: relative; flex: none; }
+.thumb-badge {
+  position: absolute;
+  inset: auto 4px 4px auto;
+  background: rgba(0, 0, 0, .65);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 5px;
+}
 
 .empty {
   text-align: center;
@@ -301,6 +316,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .capture-bar {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 1fr;
   gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
@@ -581,6 +597,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .section-reason { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .section-sub { font-size: 11.5px; color: var(--muted); }
 
+.dark-mode {
+  background: #000;
+  color: #4b5a6b;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+.dark-inner { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.dark-note { margin: 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+.dark-big { margin: 0; font-size: 34px; font-weight: 700; color: #7b8ea3; font-variant-numeric: tabular-nums; }
+.dark-sub { margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.dark-hint { margin: 14px 0 6px; font-size: 12px; line-height: 1.6; color: #3c4857; }
+.dark-mode .btn { color: #6d8095; border-color: #243040; }
+
 /* ------------------------------------------------------- hangfelvétel */
 
 .rec-card {
@@ -667,6 +698,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
       </div>
       <button id="edit-track" class="btn ghost small block">🗺️ Nyomvonal szerkesztése</button>
       <button id="reject-summary" class="reject-summary" hidden></button>
+      <button id="dim-screen" class="btn ghost small block" hidden>🌙 Képernyő elsötétítése (rögzítés fut tovább)</button>
       <p id="gps-status" class="muted small"></p>
     </div>
 
@@ -677,10 +709,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <button id="cap-audio" class="cap">
         <span class="cap-icon">🎙️</span><span>Hangjegyzet</span>
       </button>
+      <button id="cap-video" class="cap">
+        <span class="cap-icon">🎬</span><span>Videó</span>
+      </button>
+      <button id="cap-condition" class="cap">
+        <span class="cap-icon">⚠️</span><span>Állapot / tábla</span>
+      </button>
       <button id="cap-note" class="cap">
         <span class="cap-icon">📝</span><span>Jegyzet</span>
       </button>
       <input id="photo-input" type="file" accept="image/*" capture="environment" hidden multiple>
+      <input id="video-input" type="file" accept="video/*" capture="environment" hidden>
+      <input id="attach-photo-input" type="file" accept="image/*" capture="environment" hidden>
     </div>
 
     <div class="pad">
@@ -690,6 +730,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
           <button class="chip active" data-f="all">Mind</button>
           <button class="chip" data-f="photo">Fotó</button>
           <button class="chip" data-f="audio">Hang</button>
+          <button class="chip" data-f="video">Videó</button>
+          <button class="chip" data-f="condition">Állapot</button>
           <button class="chip" data-f="note">Jegyzet</button>
         </div>
       </div>
@@ -707,6 +749,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
         <button id="open-track-map" class="btn ghost small">🗺️ Pontos nyomvonal térképen</button>
         <button id="export-gpx" class="btn ghost small">GPX export</button>
         <button id="export-geojson" class="btn ghost small">GeoJSON export</button>
+        <button id="export-html" class="btn primary small">📄 Riport (HTML) a közút felé</button>
         <button id="export-json" class="btn ghost small">Teljes mentés (JSON)</button>
         <button id="open-maps" class="btn ghost small">Útvonalterv Google Maps (közelítő)</button>
         <button id="delete-session" class="btn danger small">Bejárás törlése</button>
@@ -810,6 +853,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <button id="editor-redo" class="btn ghost tiny">↷ Újra</button>
       <button id="editor-clear" class="btn ghost tiny">Összes törlése</button>
     </div>
+  </div>
+</div>
+
+<!-- ====================================== takarékos rögzítő képernyő -->
+<div id="dark-mode" class="overlay dark-mode" hidden>
+  <div class="dark-inner">
+    <p class="dark-note">Rögzítés fut</p>
+    <p id="dark-distance" class="dark-big">0 m</p>
+    <p id="dark-info" class="dark-sub">—</p>
+    <p class="dark-hint">
+      A képernyő sötét, de az alkalmazás ébren van, és rögzíti a nyomvonalat.<br>
+      A telefont <strong>ne zárja le</strong> — akkor a mérés megszakad.
+    </p>
+    <button id="dark-exit" class="btn ghost small">Vissza a kezelőfelületre</button>
   </div>
 </div>
 
@@ -1258,6 +1315,8 @@ return { uid, createSession, saveSession, getSession, listSessions, deleteSessio
 // GPS: nyomvonal rögzítés, számítások, rajzolás, GPX/GeoJSON export
 
 
+const ATTRIBUTION_TEXT = ATTRIBUTION;
+
 const R = 6371000; // Föld sugara méterben
 
 function haversine(a, b) {
@@ -1606,7 +1665,7 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
   const css = getComputedStyle(document.documentElement);
   const bg = opts.bg || css.getPropertyValue('--map-bg').trim() || '#0f1621';
   const line = opts.line || css.getPropertyValue('--accent').trim() || '#4da3ff';
-  const dim = css.getPropertyValue('--muted').trim() || '#8b98a9';
+  const dim = opts.dim || css.getPropertyValue('--muted').trim() || '#8b98a9';
 
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, w, h);
@@ -1783,7 +1842,9 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
   const hitboxes = [];
   markerPts.forEach((m) => {
     const p = project(m.lat, m.lon);
-    const color = m.type === 'audio' ? '#ffbe4d' : m.type === 'note' ? '#c58cff' : '#ffffff';
+    const color = {
+      audio: '#ffbe4d', note: '#c58cff', video: '#6fd3ff', condition: '#ff5f56',
+    }[m.type] || '#ffffff';
     dot(ctx, p, 5, color, '#0b0f16');
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 12 });
   });
@@ -2112,8 +2173,62 @@ ${rejectedTracks}
 }
 
 function typeLabel(type) {
-  return type === 'photo' ? 'Fotó' : type === 'audio' ? 'Hangjegyzet' : 'Jegyzet';
+  return {
+    photo: 'Fotó',
+    video: 'Videó',
+    audio: 'Hangjegyzet',
+    condition: 'Állapot / tábla',
+    note: 'Jegyzet',
+  }[type] || 'Jegyzet';
 }
+
+/* -------------------------------------------------- állapotrögzítés
+
+A bejáráskor nemcsak az akadályokat kell rögzíteni, hanem a meglévő
+állapotot is: egy sérült útpadka vagy szalagkorlát később vita tárgya lehet,
+ha a szállítás után derül ki. A táblajegyzék ugyanebből a nyilvántartásból
+áll össze: minden „tábla” kategóriájú bejegyzés egy sor benne.          */
+
+const CONDITION_CATEGORIES = [
+  { id: 'tabla', label: 'Közúti jelzőtábla' },
+  { id: 'utpadka', label: 'Útpadka' },
+  { id: 'szalagkorlat', label: 'Szalagkorlát' },
+  { id: 'burkolat', label: 'Burkolat' },
+  { id: 'hid', label: 'Híd, áteresz' },
+  { id: 'vezetek', label: 'Légvezeték' },
+  { id: 'novenyzet', label: 'Növényzet' },
+  { id: 'egyeb', label: 'Egyéb' },
+];
+
+const CONDITION_STATES = [
+  { id: 'ep', label: 'Ép' },
+  { id: 'serult', label: 'Sérült' },
+  { id: 'hianyzik', label: 'Hiányzik' },
+  { id: 'takart', label: 'Takart / nem olvasható' },
+];
+
+const SEVERITIES = [
+  { id: 'megfelelo', label: 'Megfelelő' },
+  { id: 'figyelendo', label: 'Figyelendő' },
+  { id: 'kritikus', label: 'Kritikus' },
+];
+
+const byId = (list, id) => (list.find((x) => x.id === id) || {}).label || id || '—';
+
+/**
+ * Méretek felsorolásból lista. Magyarul a tizedesjel vessző („3,80 m”),
+ * ezért csak olyan vessző mentén vágunk, amit NEM számjegy követ.
+ */
+function parseDims(text) {
+  return String(text || '')
+    .split(/[;\n]|,(?!\s*\d)/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+const categoryLabel = (id) => byId(CONDITION_CATEGORIES, id);
+const conditionLabel = (id) => byId(CONDITION_STATES, id);
+const severityLabel = (id) => byId(SEVERITIES, id);
 
 function describeItem(i) {
   const parts = [];
@@ -2283,6 +2398,46 @@ function parseTiff(view, tiff) {
   }
 
   return Object.keys(out).length ? out : null;
+}
+
+/** Videó első használható képkockája bélyegképnek, plusz a hossza. */
+function videoPoster(file, maxSide = 360) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.muted = true;
+    v.playsInline = true;
+
+    const done = (value, err) => {
+      URL.revokeObjectURL(url);
+      v.removeAttribute('src');
+      err ? reject(err) : resolve(value);
+    };
+    const timer = setTimeout(() => done(null, new Error('időtúllépés')), 12000);
+
+    v.onloadeddata = () => {
+      // az első képkocka sokszor fekete; ugorjunk kicsit beljebb
+      const t = Math.min(0.6, (v.duration || 1) / 4);
+      v.currentTime = isFinite(t) ? t : 0;
+    };
+    v.onseeked = async () => {
+      clearTimeout(timer);
+      try {
+        const scale = Math.min(1, maxSide / Math.max(v.videoWidth || 1, v.videoHeight || 1));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round((v.videoWidth || maxSide) * scale));
+        c.height = Math.max(1, Math.round((v.videoHeight || maxSide) * scale));
+        c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+        const thumb = await canvasToBlob(c, 'image/jpeg', 0.72);
+        done({ thumb, duration: isFinite(v.duration) ? Math.round(v.duration * 1000) : null });
+      } catch (err) {
+        done(null, err);
+      }
+    };
+    v.onerror = () => { clearTimeout(timer); done(null, new Error('a videó nem olvasható')); };
+    v.src = url;
+  });
 }
 
 /* ----------------------------------------------------------- hangjegyzet */
@@ -2473,6 +2628,278 @@ function compassHeading() {
 
 function compassState() {
   return { state: permissionState, listening, heading: compassHeading() };
+}
+
+/* ===== js/report.js ===== */
+// Önálló HTML-riport a bejárásról.
+//
+// Egyetlen fájl, minden benne: térképkép, fotók, hangfelvételek, videók,
+// táblajegyzék. Külső hivatkozás nélkül, hogy e-mailben elküldve vagy
+// pendrive-on átadva is ugyanazt mutassa — ez a közút felé a lényeg.
+
+
+const rEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+
+function reportBlobToDataURL(blob) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result);
+    fr.onerror = () => rej(fr.error);
+    fr.readAsDataURL(blob);
+  });
+}
+
+const dt = (t) => {
+  if (!t) return '—';
+  const d = new Date(t);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}. ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+/** Térképkép a riporthoz: ugyanaz a rajzoló, csak kép-méretben. */
+async function mapImage(session, points, items, width = 1100, height = 740) {
+  const holder = document.createElement('div');
+  holder.style.cssText = `position:fixed;left:-99999px;top:0;width:${width}px;height:${height}px`;
+  const canvas = document.createElement('canvas');
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  holder.appendChild(canvas);
+  document.body.appendChild(holder);
+  try {
+    // a riport világos lapra kerül: a térképvázlat is ahhoz igazodjon
+    const style = { drawn: session.drawn || [], lineWidth: 4, bg: '#eef2f7', dim: '#5d6b7d' };
+    renderTrack(canvas, points, items, style);
+    // a csempék aszinkron érkeznek; adunk nekik egy kis időt, majd újrarajzolunk
+    await new Promise((r) => setTimeout(r, 1800));
+    renderTrack(canvas, points, items, style);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  } finally {
+    holder.remove();
+  }
+}
+
+/**
+ * @param {object} opts { photos, audio, video } — mit ágyazzunk be
+ * @param {(msg:string)=>void} progress
+ */
+async function buildReport(session, points, items, opts = {}, progress = () => {}) {
+  const include = { photos: true, audio: true, video: false, ...opts };
+  const len = lengthByStatus(points);
+  const rejected = rejectedSections(points);
+  const drawn = session.drawn || [];
+  const ordered = items.slice().sort((a, b) => a.created - b.created);
+
+  progress('Térképkép készítése…');
+  let map = '';
+  try {
+    map = await mapImage(session, points, items);
+  } catch (_) { /* térkép nélkül is érvényes a riport */ }
+
+  const media = [];
+  for (let i = 0; i < ordered.length; i++) {
+    const it = ordered[i];
+    progress(`Elemek beágyazása… (${i + 1}/${ordered.length})`);
+    const m = { img: null, audio: null, video: null };
+    const picture = it.flat || it.photo;
+    if (include.photos && picture) m.img = await reportBlobToDataURL(picture);
+    else if (picture && it.thumb) m.img = await reportBlobToDataURL(it.thumb);
+    if (include.audio && it.audio) m.audio = await reportBlobToDataURL(it.audio);
+    if (include.video && it.video) m.video = await reportBlobToDataURL(it.video);
+    else if (!include.video && it.video && it.thumb) m.img = m.img || await reportBlobToDataURL(it.thumb);
+    media.push(m);
+  }
+
+  progress('Riport összeállítása…');
+  const v = session.vehicle || {};
+  const vehicleRows = [
+    ['Rendszám / szerelvény', v.plate],
+    ['Hossz', v.length && v.length + ' m'],
+    ['Szélesség', v.width && v.width + ' m'],
+    ['Magasság', v.height && v.height + ' m'],
+    ['Össztömeg', v.weight && v.weight + ' t'],
+    ['Max. tengelyterhelés', v.axleLoad && v.axleLoad + ' t'],
+  ].filter(([, val]) => val);
+
+  const signs = ordered.filter((i) => i.type === 'condition' && i.category === 'tabla');
+  const conditions = ordered.filter((i) => i.type === 'condition' && i.category !== 'tabla');
+
+  const itemBlocks = ordered.map((it, idx) => {
+    const m = media[idx];
+    const facts = [
+      ['Idő', dt(it.created)],
+      ['Pozíció', formatCoord(it.lat, it.lon)],
+      it.heading != null ? ['Kameairány', `${cardinal(it.heading).name} (${formatHeading(it.heading)})`] : null,
+      it.type === 'condition' ? ['Kategória', categoryLabel(it.category)] : null,
+      it.type === 'condition' ? ['Állapot', conditionLabel(it.condition)] : null,
+      it.type === 'condition' ? ['Minősítés', severityLabel(it.severity)] : null,
+      (it.dims || []).length ? ['Mért értékek', it.dims.join(' · ')] : null,
+      (it.texts || []).length ? ['Feliratok a képen', it.texts.join(' · ')] : null,
+      it.note ? ['Megjegyzés', it.note] : null,
+    ].filter(Boolean);
+
+    const maps = it.lat != null
+      ? `<a class="maplink" href="https://www.google.com/maps/search/?api=1&amp;query=${it.lat},${it.lon}" target="_blank" rel="noopener">Megnyitás térképen</a>`
+      : '';
+
+    return `<section class="item${it.type === 'condition' ? ' sev-' + rEsc(it.severity || '') : ''}" id="elem-${idx + 1}">
+  <h3><span class="num">${idx + 1}</span> ${rEsc(it.title || typeLabel(it.type))}
+    <span class="kind">${rEsc(typeLabel(it.type))}</span></h3>
+  ${m.img ? `<img class="shot" src="${m.img}" alt="${rEsc(it.title || 'fotó')}">` : ''}
+  ${m.video ? `<video class="shot" controls preload="none"${m.img ? ` poster="${m.img}"` : ''} src="${m.video}"></video>` : ''}
+  ${!include.video && it.video ? '<p class="muted">Videófelvétel készült — a riportból helytakarékosságból kimaradt.</p>' : ''}
+  ${m.audio ? `<audio controls src="${m.audio}"></audio>` : ''}
+  ${!include.audio && it.audio ? '<p class="muted">Hangjegyzet készült — a riportból kimaradt.</p>' : ''}
+  <table class="facts">${facts.map(([k, val]) => `<tr><th>${rEsc(k)}</th><td>${rEsc(val)}</td></tr>`).join('')}</table>
+  ${maps}
+</section>`;
+  }).join('\n');
+
+  const signTable = signs.length ? `
+<h2>Táblajegyzék</h2>
+<table class="grid">
+  <thead><tr><th>#</th><th>Tábla</th><th>Állapot</th><th>Minősítés</th><th>Mért érték</th><th>Pozíció</th></tr></thead>
+  <tbody>${signs.map((s) => {
+    const idx = ordered.indexOf(s) + 1;
+    return `<tr><td><a href="#elem-${idx}">${idx}</a></td><td>${rEsc(s.what || 'jelzőtábla')}</td>`
+      + `<td>${rEsc(conditionLabel(s.condition))}</td><td class="sev ${rEsc(s.severity || '')}">${rEsc(severityLabel(s.severity))}</td>`
+      + `<td>${rEsc((s.dims || []).join(', '))}</td><td>${rEsc(formatCoord(s.lat, s.lon))}</td></tr>`;
+  }).join('')}</tbody>
+</table>` : '';
+
+  const conditionTable = conditions.length ? `
+<h2>Rögzített állapotok</h2>
+<table class="grid">
+  <thead><tr><th>#</th><th>Mi</th><th>Megnevezés</th><th>Állapot</th><th>Minősítés</th><th>Pozíció</th></tr></thead>
+  <tbody>${conditions.map((c) => {
+    const idx = ordered.indexOf(c) + 1;
+    return `<tr><td><a href="#elem-${idx}">${idx}</a></td><td>${rEsc(categoryLabel(c.category))}</td>`
+      + `<td>${rEsc(c.what || '')}</td><td>${rEsc(conditionLabel(c.condition))}</td>`
+      + `<td class="sev ${rEsc(c.severity || '')}">${rEsc(severityLabel(c.severity))}</td>`
+      + `<td>${rEsc(formatCoord(c.lat, c.lon))}</td></tr>`;
+  }).join('')}</tbody>
+</table>` : '';
+
+  const rejectedBlock = rejected.length ? `
+<h2>Elvetett szakaszok</h2>
+<p class="muted">A kísérőautó bejárta, de nem része a javasolt útvonalnak.</p>
+<table class="grid">
+  <thead><tr><th>#</th><th>Indoklás</th><th>Hossz</th></tr></thead>
+  <tbody>${rejected.map((r, i) =>
+    `<tr><td>${i + 1}</td><td>${rEsc(r.reason || 'nincs indoklás')}</td><td>${rEsc(formatDistance(r.length))}</td></tr>`
+  ).join('')}</tbody>
+</table>` : '';
+
+  const drawnBlock = drawn.length ? `
+<h2>Berajzolt szakaszok</h2>
+<p class="muted">Térképen megadott útvonalrész, amelyen a bejáráskor nem haladtunk végig.</p>
+<table class="grid">
+  <thead><tr><th>#</th><th>Megnevezés</th><th>Megjegyzés</th><th>Hossz</th></tr></thead>
+  <tbody>${drawn.map((d, i) =>
+    `<tr><td>${i + 1}</td><td>${rEsc(d.name || '—')}</td><td>${rEsc(d.note || '')}</td><td>${rEsc(formatDistance(trackLength(d.pts || [])))}</td></tr>`
+  ).join('')}</tbody>
+</table>` : '';
+
+  const counts = ordered.reduce((acc, i) => { acc[i.type] = (acc[i.type] || 0) + 1; return acc; }, {});
+
+  return `<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Útvonalbejárási jegyzőkönyv — ${rEsc(session.name)}</title>
+<style>
+  :root { --ink:#13202e; --muted:#5d6b7d; --line:#d7dee8; --accent:#0a6ed1;
+          --ok:#1a7f45; --warn:#9a6400; --bad:#b3261e; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#f4f6f9; color:var(--ink);
+         font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .page { max-width:980px; margin:0 auto; padding:28px 20px 60px; background:#fff;
+          box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  h1 { font-size:24px; margin:0 0 4px; }
+  h2 { font-size:18px; margin:30px 0 10px; padding-bottom:6px; border-bottom:2px solid var(--line); }
+  h3 { font-size:16px; margin:0 0 10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .sub { color:var(--muted); margin:0 0 18px; }
+  .muted { color:var(--muted); }
+  table { border-collapse:collapse; width:100%; }
+  .facts th { width:150px; text-align:left; color:var(--muted); font-weight:500;
+              vertical-align:top; padding:3px 10px 3px 0; }
+  .facts td { padding:3px 0; }
+  .grid { margin:10px 0 4px; font-size:14px; }
+  .grid th, .grid td { border:1px solid var(--line); padding:6px 9px; text-align:left; }
+  .grid thead th { background:#eef2f7; }
+  .sev.kritikus { color:var(--bad); font-weight:600; }
+  .sev.figyelendo { color:var(--warn); font-weight:600; }
+  .sev.megfelelo { color:var(--ok); }
+  .summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:14px 0; }
+  .summary div { border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .summary b { display:block; font-size:19px; }
+  .map { width:100%; border:1px solid var(--line); border-radius:8px; }
+  .legend { font-size:13px; color:var(--muted); margin:6px 0 0; }
+  .item { border:1px solid var(--line); border-left:4px solid var(--accent);
+          border-radius:8px; padding:14px 16px; margin:14px 0; page-break-inside:avoid; }
+  .item.sev-kritikus { border-left-color:var(--bad); }
+  .item.sev-figyelendo { border-left-color:var(--warn); }
+  .num { background:var(--accent); color:#fff; border-radius:999px; min-width:26px;
+         height:26px; display:inline-grid; place-items:center; font-size:13px; }
+  .kind { font-size:12px; color:var(--muted); font-weight:400; }
+  .shot { width:100%; max-width:720px; border-radius:6px; display:block; margin:0 0 10px; }
+  audio { width:100%; max-width:720px; margin:0 0 10px; }
+  .maplink { font-size:13px; }
+  footer { margin-top:34px; padding-top:12px; border-top:1px solid var(--line);
+           color:var(--muted); font-size:13px; }
+  @media print {
+    body { background:#fff; }
+    .page { box-shadow:none; max-width:none; padding:0; }
+    .item { break-inside:avoid; }
+    a { color:inherit; text-decoration:none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Útvonalbejárási jegyzőkönyv</h1>
+  <p class="sub">${rEsc(session.name)} · bejárás ideje: ${dt(session.created)} · készült: ${dt(Date.now())}</p>
+
+  ${vehicleRows.length ? `<h2>Szerelvény adatai</h2>
+  <table class="grid"><tbody>${vehicleRows.map(([k, val]) =>
+    `<tr><th>${rEsc(k)}</th><td>${rEsc(val)}</td></tr>`).join('')}</tbody></table>` : ''}
+
+  <h2>Összegzés</h2>
+  <div class="summary">
+    <div><b>${rEsc(formatDistance(len.ok))}</b>érvényes útvonal</div>
+    ${drawn.length ? `<div><b>${rEsc(formatDistance(drawnLength(drawn)))}</b>berajzolt szakasz</div>` : ''}
+    ${rejected.length ? `<div><b>${rEsc(formatDistance(len.rejected))}</b>elvetett szakasz</div>` : ''}
+    ${len.gaps ? `<div><b>${rEsc(formatDistance(len.gap))}</b>GPS-kimaradás</div>` : ''}
+    <div><b>${counts.photo || 0}</b>fotó</div>
+    ${counts.video ? `<div><b>${counts.video}</b>videó</div>` : ''}
+    ${counts.audio ? `<div><b>${counts.audio}</b>hangjegyzet</div>` : ''}
+    ${counts.condition ? `<div><b>${counts.condition}</b>állapotbejegyzés</div>` : ''}
+  </div>
+  ${session.note ? `<p>${rEsc(session.note)}</p>` : ''}
+
+  ${map ? `<h2>Útvonal</h2>
+  <img class="map" src="${map}" alt="A bejárt útvonal térképen">
+  <p class="legend">Kék: érvényes útvonal · narancs szaggatott: elvetett szakasz ·
+     zöld: berajzolt szakasz · ${rEsc(ATTRIBUTION_TEXT)}</p>` : ''}
+
+  ${signTable}
+  ${conditionTable}
+  ${rejectedBlock}
+  ${drawnBlock}
+
+  <h2>Rögzített elemek (${ordered.length})</h2>
+  ${itemBlocks || '<p class="muted">Nincs rögzített elem.</p>'}
+
+  <footer>
+    Készítette az Útvonalbejárás alkalmazás. A jegyzőkönyv önálló fájl:
+    a képek, hangfelvételek${include.video ? ' és videók' : ''} benne vannak,
+    külön melléklet nélkül megnyitható.
+  </footer>
+</div>
+</body>
+</html>`;
 }
 
 /* ===== js/editor.js ===== */
@@ -4313,8 +4740,9 @@ function startRecording() {
   $('#rec-toggle').textContent = '■ Rögzítés leállítása';
   $('#rec-toggle').classList.add('active');
   $('#rec-mark').disabled = false;
+  $('#dim-screen').hidden = false;
   $('#gps-status').textContent = RECORDING_HINT;
-  tickTimer = setInterval(() => { updateStats(); }, 1000);
+  tickTimer = setInterval(() => { updateStats(); updateDarkMode(); }, 1000);
   keepAwake(true);
 }
 
@@ -4328,6 +4756,8 @@ async function stopRecording(silent = false) {
   $('#rec-toggle').textContent = '● Nyomvonal rögzítése';
   $('#rec-toggle').classList.remove('active');
   $('#rec-mark').disabled = true;
+  $('#dim-screen').hidden = true;
+  setDarkMode(false);
   $('#gps-status').textContent = '';
   if (state.session) {
     state.session.stats = {
@@ -4399,6 +4829,34 @@ async function openTrackEditor() {
     renderMeta();
     drawTrack();
   }
+}
+
+/**
+ * Takarékos rögzítő képernyő.
+ *
+ * Valódi háttérrögzítés webalkalmazással nem lehetséges: a képernyő
+ * lezárásakor a böngésző felfüggeszti az oldalt, és a GPS-figyelés leáll.
+ * Amit tehetünk: a képernyőt ébren tartjuk, de szinte feketére váltunk —
+ * így az akkumulátor sokkal lassabban fogy, a mérés viszont folytatódik.
+ */
+function setDarkMode(on) {
+  const box = $('#dark-mode');
+  box.hidden = !on;
+  document.body.classList.toggle('modal-open', on);
+  if (on) {
+    keepAwake(true);
+    updateDarkMode();
+    toast('A rögzítés fut. A telefont ne zárja le.');
+  }
+}
+
+function updateDarkMode() {
+  if ($('#dark-mode').hidden) return;
+  const len = lengthByStatus(state.points);
+  const elapsed = state.recording ? state.recElapsed + (Date.now() - state.recStartedAt) : state.recElapsed;
+  $('#dark-distance').textContent = formatDistance(len.ok);
+  const acc = recorder && recorder.current && recorder.current.acc != null ? `±${recorder.current.acc} m` : 'GPS…';
+  $('#dark-info').textContent = `${formatDuration(elapsed)} · ${state.points.length} pont · ${acc}`;
 }
 
 let wakeLock = null;
@@ -4643,13 +5101,183 @@ async function recordAudio(attachToItemId = null) {
   $('#rec-cancel').onclick = () => finish(false);
 }
 
+/* --------------------------------------------------------------- videó
+
+A videót a telefon saját kameraalkalmazása veszi fel (jobb minőség, nincs
+engedélybűvészkedés), mi csak átvesszük a kész fájlt. A videó nem kerül
+átkódolásra, ezért a mérete számít — a mentésnél jelezzük is.               */
+
+async function onVideoSelected(e) {
+  const file = (e.target.files || [])[0];
+  e.target.value = '';
+  if (!file) return;
+
+  const mb = file.size / 1048576;
+  if (mb > 150) {
+    const ok = await modal({
+      title: 'Nagy videófájl',
+      text: `A felvétel ${mb.toFixed(0)} MB. Ez elfér, de a teljes mentés és a riport is nagy lesz. Rögzítsük?`,
+      okText: 'Mentés',
+    });
+    if (!ok) return;
+  }
+
+  toast('Videó feldolgozása…');
+  const pos = await positionNow();
+  const heading = compassHeading();
+  let thumb = null;
+  let duration = null;
+  try {
+    const frame = await videoPoster(file);
+    thumb = frame.thumb;
+    duration = frame.duration;
+  } catch (_) { /* a bélyegkép nem kritikus */ }
+
+  const item = {
+    id: db.uid(),
+    sessionId: state.session.id,
+    type: 'video',
+    created: Date.now(),
+    ...pos,
+    heading,
+    headingSource: heading == null ? null : 'compass',
+    title: '',
+    note: '',
+    dims: [],
+    video: file,
+    videoDuration: duration,
+    thumb,
+  };
+  await db.saveItem(item);
+  state.items.push(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  toast(`Videó mentve (${mb.toFixed(1).replace('.', ',')} MB${duration ? ', ' + formatDuration(duration) : ''}).`);
+}
+
+/* ------------------------------------------------- állapot / tábla */
+
+const conditionFields = (v = {}) => [
+  {
+    name: 'category', label: 'Mi ez?', type: 'select', value: v.category || 'tabla',
+    options: CONDITION_CATEGORIES.map((c) => ({ value: c.id, label: c.label })),
+  },
+  { name: 'what', label: 'Megnevezés', value: v.what || '', placeholder: 'pl. magasságkorlátozó tábla, 3,8 m' },
+  {
+    name: 'condition', label: 'Állapota', type: 'select', value: v.condition || 'ep',
+    options: CONDITION_STATES.map((c) => ({ value: c.id, label: c.label })),
+  },
+  {
+    name: 'severity', label: 'Minősítés', type: 'select', value: v.severity || 'megfelelo',
+    options: SEVERITIES.map((c) => ({ value: c.id, label: c.label })),
+  },
+  { name: 'dims', label: 'Mért érték (többet pontosvesszővel)', value: (v.dims || []).join('; '), placeholder: 'pl. szabad magasság: 3,80 m' },
+  { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2, value: v.note || '' },
+];
+
+async function addCondition() {
+  const res = await modal({
+    title: 'Állapot rögzítése',
+    text: 'A bejáráskori állapot rögzítése — tábla, útpadka, szalagkorlát és társai. '
+      + 'A „Közúti jelzőtábla” bejegyzésekből áll össze a táblajegyzék.',
+    fields: conditionFields(),
+    okText: 'Mentés',
+  });
+  if (!res) return;
+
+  const pos = await positionNow();
+  const heading = compassHeading();
+  const item = {
+    id: db.uid(),
+    sessionId: state.session.id,
+    type: 'condition',
+    created: Date.now(),
+    ...pos,
+    heading,
+    headingSource: heading == null ? null : 'compass',
+    category: res.category,
+    what: res.what,
+    condition: res.condition,
+    severity: res.severity,
+    title: res.what || categoryLabel(res.category),
+    note: res.note,
+    dims: parseDims(res.dims),
+  };
+  await db.saveItem(item);
+  state.items.push(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+
+  const withPhoto = await modal({
+    title: 'Fotó hozzá?',
+    text: 'Készít most fotót ehhez a bejegyzéshez? A kép ugyanehhez a rekordhoz kerül.',
+    okText: 'Fotó készítése',
+    cancelText: 'Most nem',
+  });
+  if (withPhoto) attachPhotoTo(item.id);
+}
+
+async function editCondition(item) {
+  const res = await modal({ title: 'Állapot szerkesztése', fields: conditionFields(item) });
+  if (!res) return;
+  Object.assign(item, {
+    category: res.category,
+    what: res.what,
+    condition: res.condition,
+    severity: res.severity,
+    title: res.what || categoryLabel(res.category),
+    note: res.note,
+    dims: parseDims(res.dims),
+  });
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  closeViewer();
+  toast('Mentve.');
+}
+
+/** Fotó csatolása egy meglévő bejegyzéshez (nem külön elemként). */
+let attachTargetId = null;
+function attachPhotoTo(itemId) {
+  attachTargetId = itemId;
+  $('#attach-photo-input').click();
+}
+
+async function onAttachPhoto(e) {
+  const file = (e.target.files || [])[0];
+  e.target.value = '';
+  const item = state.items.find((i) => i.id === attachTargetId);
+  attachTargetId = null;
+  if (!file || !item) return;
+
+  try {
+    const { blob, width, height } = await shrinkImage(file);
+    item.photo = blob;
+    item.thumb = await makeThumb(blob);
+    item.width = width;
+    item.height = height;
+    if (item.heading == null) {
+      const exif = await readExif(file);
+      if (exif && exif.heading != null) { item.heading = exif.heading; item.headingSource = 'exif'; }
+    }
+    await db.saveItem(item);
+    markUnsaved();
+    renderItems();
+    toast('Fotó csatolva a bejegyzéshez.');
+  } catch (err) {
+    toast('A fotó nem csatolható: ' + err.message, 'error');
+  }
+}
+
 async function addNote() {
   const res = await modal({
     title: 'Írott jegyzet',
     fields: [
       { name: 'title', label: 'Cím', placeholder: 'pl. útszűkület a hídnál' },
       { name: 'note', label: 'Jegyzet', type: 'textarea', rows: 4 },
-      { name: 'dims', label: 'Méretek (vesszővel elválasztva)', placeholder: 'pl. szabad magasság: 4,30 m, útszélesség: 5,10 m' },
+      { name: 'dims', label: 'Méretek (többet pontosvesszővel)', placeholder: 'pl. szabad magasság: 4,30 m; útszélesség: 5,10 m' },
     ],
     okText: 'Mentés',
   });
@@ -4663,7 +5291,7 @@ async function addNote() {
     ...pos,
     title: res.title,
     note: res.note,
-    dims: res.dims ? res.dims.split(',').map((s) => s.trim()).filter(Boolean) : [],
+    dims: parseDims(res.dims),
   };
   await db.saveItem(item);
   state.items.push(item);
@@ -4714,17 +5342,29 @@ function renderItems() {
 }
 
 function itemCard(item, extraSub) {
-  const thumb = item.type === 'photo' && item.thumb
-    ? el('img', { class: 'thumb', src: objectUrl(item.thumb), alt: '' })
-    : el('div', { class: 'thumb placeholder', text: item.type === 'audio' ? '🎙️' : '📝' });
+  const icons = { audio: '🎙️', note: '📝', video: '🎬', condition: '⚠️' };
+  const thumb = item.thumb
+    ? el('div', { class: 'thumb-wrap' }, [
+        el('img', { class: 'thumb', src: objectUrl(item.thumb), alt: '' }),
+        item.type === 'video' ? el('span', { class: 'thumb-badge', text: '▶' }) : null,
+      ])
+    : el('div', { class: 'thumb placeholder', text: icons[item.type] || '📝' });
 
   const sub = [];
   sub.push(formatTime(item.created));
   if (item.type === 'audio' && item.audioDuration) sub.push(formatDuration(item.audioDuration));
+  if (item.type === 'video' && item.videoDuration) sub.push(formatDuration(item.videoDuration));
+  if (item.type === 'condition') sub.push(categoryLabel(item.category));
   if (item.lat != null) sub.push(formatCoord(item.lat, item.lon));
 
   const tags = [];
   for (const d of item.dims || []) tags.push(el('span', { class: 'tag dim', text: '↔ ' + d }));
+  if (item.type === 'condition') {
+    tags.push(el('span', {
+      class: 'tag sev-' + (item.severity || 'megfelelo'),
+      text: severityLabel(item.severity) + ' · ' + conditionLabel(item.condition),
+    }));
+  }
   if (item.heading != null) tags.push(el('span', { class: 'tag', text: '🧭 ' + formatHeading(item.heading) }));
   if (item.audio && item.type === 'photo') tags.push(el('span', { class: 'tag', text: '🎙️ hang' }));
   if ((item.ops || []).some((o) => o.k === 'dir')) tags.push(el('span', { class: 'tag', text: '⇨ útirány' }));
@@ -4828,8 +5468,15 @@ async function openViewer(id) {
   body.innerHTML = '';
   actions.innerHTML = '';
 
-  if (item.type === 'photo') {
+  if (item.photo || item.flat) {
     body.appendChild(el('img', { class: 'full-photo', src: objectUrl(item.flat || item.photo), alt: '' }));
+  }
+  if (item.video) {
+    body.appendChild(el('video', {
+      class: 'full-photo', controls: true, playsinline: true,
+      poster: item.thumb ? objectUrl(item.thumb) : null,
+      src: objectUrl(item.video),
+    }));
   }
   if (item.audio) {
     body.appendChild(el('audio', { class: 'player', controls: true, src: objectUrl(item.audio) }));
@@ -4844,6 +5491,15 @@ async function openViewer(id) {
     const c = cardinal(item.heading);
     const src = { compass: 'iránytű', exif: 'a kép adatából', gps: 'haladási irány', manual: 'kézzel' }[item.headingSource];
     rows.push(['Kameairány', `${c.name} (${c.short} ${c.deg}°)${src ? ` — ${src}` : ''}`]);
+  }
+  if (item.type === 'condition') {
+    rows.push(['Kategória', categoryLabel(item.category)]);
+    if (item.what) rows.push(['Megnevezés', item.what]);
+    rows.push(['Állapot', conditionLabel(item.condition)]);
+    rows.push(['Minősítés', severityLabel(item.severity)]);
+  }
+  if (item.type === 'video' && item.video) {
+    rows.push(['Videó', `${formatDuration(item.videoDuration || 0)} · ${(item.video.size / 1048576).toFixed(1).replace('.', ',')} MB`]);
   }
   if (item.dims && item.dims.length) rows.push(['Méretek', item.dims.join(' · ')]);
   if (item.texts && item.texts.length) rows.push(['Feliratok', item.texts.join(' · ')]);
@@ -4870,6 +5526,23 @@ async function openViewer(id) {
       closeViewer();
       await recordAudio(item.id);
     } }));
+  }
+  if (item.type === 'condition') {
+    actions.appendChild(el('button', {
+      class: 'btn primary small', text: '⚠️ Állapot szerkesztése', onclick: () => editCondition(item),
+    }));
+  }
+  if (!item.photo && !item.flat && item.type !== 'video') {
+    actions.appendChild(el('button', {
+      class: 'btn ghost small', text: '📷 Fotó csatolása',
+      onclick: () => { closeViewer(); attachPhotoTo(item.id); },
+    }));
+  }
+  if (item.video) {
+    actions.appendChild(el('button', {
+      class: 'btn ghost small', text: '⬇️ Videó letöltése',
+      onclick: () => download(item.video, `${slug(state.session?.name)}-${item.id.slice(0, 6)}.mp4`),
+    }));
   }
   actions.appendChild(el('button', { class: 'btn ghost small', text: '📝 Megjegyzés', onclick: () => editItemNote(item) }));
   actions.appendChild(el('button', {
@@ -4901,13 +5574,13 @@ async function editItemNote(item) {
     fields: [
       { name: 'title', label: 'Cím', value: item.title || '' },
       { name: 'note', label: 'Jegyzet', type: 'textarea', rows: 4, value: item.note || '' },
-      { name: 'dims', label: 'Méretek (vesszővel)', value: (item.dims || []).join(', ') },
+      { name: 'dims', label: 'Méretek (többet pontosvesszővel)', value: (item.dims || []).join('; ') },
     ],
   });
   if (!res) return;
   item.title = res.title;
   item.note = res.note;
-  item.dims = res.dims ? res.dims.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  item.dims = parseDims(res.dims);
   await db.saveItem(item);
   markUnsaved();
   renderItems();
@@ -5160,6 +5833,56 @@ async function openTrackOnMap() {
   );
 }
 
+/**
+ * HTML-riport: egyetlen fájl, minden melléklettel — ezt lehet a közútnak
+ * átadni vagy e-mailben elküldeni.
+ */
+async function exportHTML() {
+  const hasVideo = state.items.some((i) => i.video);
+  const videoMb = state.items.reduce((s, i) => s + (i.video ? i.video.size : 0), 0) / 1048576;
+
+  const res = await modal({
+    title: 'Riport készítése',
+    text: 'Önálló HTML-fájl készül: a térképpel, a fotókkal és a táblajegyzékkel együtt. '
+      + 'Bármelyik böngészőben megnyitható, és onnan PDF-be is nyomtatható.',
+    fields: [
+      {
+        name: 'photos', label: 'Fotók', type: 'select', value: 'full',
+        options: [
+          { value: 'full', label: 'Teljes méretben (ajánlott)' },
+          { value: 'thumb', label: 'Csak kisképek (kisebb fájl)' },
+        ],
+      },
+      {
+        name: 'audio', label: 'Hangjegyzetek', type: 'select', value: 'yes',
+        options: [{ value: 'yes', label: 'Beágyazva' }, { value: 'no', label: 'Kihagyva' }],
+      },
+      {
+        name: 'video', label: 'Videók', type: 'select', value: hasVideo && videoMb < 60 ? 'yes' : 'no',
+        options: [
+          { value: 'no', label: hasVideo ? `Kihagyva (${videoMb.toFixed(0)} MB-ot spórol)` : 'Nincs videó' },
+          { value: 'yes', label: 'Beágyazva — nagy fájl lesz' },
+        ],
+      },
+    ],
+    okText: 'Riport készítése',
+  });
+  if (!res) return;
+
+  try {
+    const html = await buildReport(
+      state.session, state.points, state.items,
+      { photos: res.photos === 'full', audio: res.audio === 'yes', video: res.video === 'yes' },
+      (msg) => toast(msg)
+    );
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    download(blob, `${slug(state.session.name)}-jegyzokonyv.html`);
+    toast(`Riport kész (${(blob.size / 1048576).toFixed(1).replace('.', ',')} MB).`);
+  } catch (err) {
+    toast('A riport nem készült el: ' + err.message, 'error');
+  }
+}
+
 function exportGeoJSON() {
   const gj = toGeoJSON(state.session, state.points, state.items, { tolerance: 0 });
   download(
@@ -5217,6 +5940,8 @@ function bind() {
 
   $('#rec-toggle').addEventListener('click', () => (state.recording ? stopRecording() : startRecording()));
   $('#rec-mark').addEventListener('click', markPoint);
+  $('#dim-screen').addEventListener('click', () => setDarkMode(true));
+  $('#dark-exit').addEventListener('click', () => setDarkMode(false));
   $('#edit-track').addEventListener('click', openTrackEditor);
   $('#reject-summary').addEventListener('click', openTrackEditor);
   $('#cap-photo').addEventListener('click', async () => {
@@ -5225,6 +5950,10 @@ function bind() {
     $('#photo-input').click();
   });
   $('#photo-input').addEventListener('change', onPhotoSelected);
+  $('#cap-video').addEventListener('click', () => $('#video-input').click());
+  $('#video-input').addEventListener('change', onVideoSelected);
+  $('#attach-photo-input').addEventListener('change', onAttachPhoto);
+  $('#cap-condition').addEventListener('click', addCondition);
   $('#cap-audio').addEventListener('click', () => recordAudio(null));
   $('#cap-note').addEventListener('click', addNote);
 
@@ -5247,6 +5976,7 @@ function bind() {
   $('#edit-session').addEventListener('click', editSessionData);
   $('#export-gpx').addEventListener('click', exportGPX);
   $('#export-geojson').addEventListener('click', exportGeoJSON);
+  $('#export-html').addEventListener('click', exportHTML);
   $('#export-json').addEventListener('click', exportJSON);
   $('#open-track-map').addEventListener('click', openTrackOnMap);
   $('#open-maps').addEventListener('click', openInMaps);

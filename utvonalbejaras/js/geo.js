@@ -2,6 +2,8 @@
 
 import { getTile, tilesEnabled, TILE_SIZE, ATTRIBUTION } from './tiles.js';
 
+export const ATTRIBUTION_TEXT = ATTRIBUTION;
+
 const R = 6371000; // Föld sugara méterben
 
 export function haversine(a, b) {
@@ -350,7 +352,7 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   const css = getComputedStyle(document.documentElement);
   const bg = opts.bg || css.getPropertyValue('--map-bg').trim() || '#0f1621';
   const line = opts.line || css.getPropertyValue('--accent').trim() || '#4da3ff';
-  const dim = css.getPropertyValue('--muted').trim() || '#8b98a9';
+  const dim = opts.dim || css.getPropertyValue('--muted').trim() || '#8b98a9';
 
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, w, h);
@@ -527,7 +529,9 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   const hitboxes = [];
   markerPts.forEach((m) => {
     const p = project(m.lat, m.lon);
-    const color = m.type === 'audio' ? '#ffbe4d' : m.type === 'note' ? '#c58cff' : '#ffffff';
+    const color = {
+      audio: '#ffbe4d', note: '#c58cff', video: '#6fd3ff', condition: '#ff5f56',
+    }[m.type] || '#ffffff';
     dot(ctx, p, 5, color, '#0b0f16');
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 12 });
   });
@@ -856,8 +860,62 @@ ${rejectedTracks}
 }
 
 export function typeLabel(type) {
-  return type === 'photo' ? 'Fotó' : type === 'audio' ? 'Hangjegyzet' : 'Jegyzet';
+  return {
+    photo: 'Fotó',
+    video: 'Videó',
+    audio: 'Hangjegyzet',
+    condition: 'Állapot / tábla',
+    note: 'Jegyzet',
+  }[type] || 'Jegyzet';
 }
+
+/* -------------------------------------------------- állapotrögzítés
+
+A bejáráskor nemcsak az akadályokat kell rögzíteni, hanem a meglévő
+állapotot is: egy sérült útpadka vagy szalagkorlát később vita tárgya lehet,
+ha a szállítás után derül ki. A táblajegyzék ugyanebből a nyilvántartásból
+áll össze: minden „tábla” kategóriájú bejegyzés egy sor benne.          */
+
+export const CONDITION_CATEGORIES = [
+  { id: 'tabla', label: 'Közúti jelzőtábla' },
+  { id: 'utpadka', label: 'Útpadka' },
+  { id: 'szalagkorlat', label: 'Szalagkorlát' },
+  { id: 'burkolat', label: 'Burkolat' },
+  { id: 'hid', label: 'Híd, áteresz' },
+  { id: 'vezetek', label: 'Légvezeték' },
+  { id: 'novenyzet', label: 'Növényzet' },
+  { id: 'egyeb', label: 'Egyéb' },
+];
+
+export const CONDITION_STATES = [
+  { id: 'ep', label: 'Ép' },
+  { id: 'serult', label: 'Sérült' },
+  { id: 'hianyzik', label: 'Hiányzik' },
+  { id: 'takart', label: 'Takart / nem olvasható' },
+];
+
+export const SEVERITIES = [
+  { id: 'megfelelo', label: 'Megfelelő' },
+  { id: 'figyelendo', label: 'Figyelendő' },
+  { id: 'kritikus', label: 'Kritikus' },
+];
+
+const byId = (list, id) => (list.find((x) => x.id === id) || {}).label || id || '—';
+
+/**
+ * Méretek felsorolásból lista. Magyarul a tizedesjel vessző („3,80 m”),
+ * ezért csak olyan vessző mentén vágunk, amit NEM számjegy követ.
+ */
+export function parseDims(text) {
+  return String(text || '')
+    .split(/[;\n]|,(?!\s*\d)/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+export const categoryLabel = (id) => byId(CONDITION_CATEGORIES, id);
+export const conditionLabel = (id) => byId(CONDITION_STATES, id);
+export const severityLabel = (id) => byId(SEVERITIES, id);
 
 export function describeItem(i) {
   const parts = [];

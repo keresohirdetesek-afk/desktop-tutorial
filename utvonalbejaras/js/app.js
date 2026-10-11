@@ -5,12 +5,15 @@ import {
   TrackRecorder, currentPosition, renderTrack, lengthByStatus, isRejected,
   rejectedSections, drawnLength, detectGap, formatDistance, formatDuration,
   formatCoord, formatHeading, cardinal, toGPX, toGeoJSON, typeLabel, describeItem,
+  CONDITION_CATEGORIES, CONDITION_STATES, SEVERITIES, parseDims,
+  categoryLabel, conditionLabel, severityLabel,
 } from './geo.js';
 import { startCompass, compassHeading, compassState } from './compass.js';
-import { AudioRecorder, shrinkImage, makeThumb, readExif } from './media.js';
+import { AudioRecorder, shrinkImage, makeThumb, readExif, videoPoster } from './media.js';
 import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
 import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
+import { buildReport } from './report.js';
 import { $, $$, el, toast, modal, download, formatDateTime, formatTime } from './ui.js';
 
 const state = {
@@ -349,8 +352,9 @@ function startRecording() {
   $('#rec-toggle').textContent = '■ Rögzítés leállítása';
   $('#rec-toggle').classList.add('active');
   $('#rec-mark').disabled = false;
+  $('#dim-screen').hidden = false;
   $('#gps-status').textContent = RECORDING_HINT;
-  tickTimer = setInterval(() => { updateStats(); }, 1000);
+  tickTimer = setInterval(() => { updateStats(); updateDarkMode(); }, 1000);
   keepAwake(true);
 }
 
@@ -364,6 +368,8 @@ async function stopRecording(silent = false) {
   $('#rec-toggle').textContent = '● Nyomvonal rögzítése';
   $('#rec-toggle').classList.remove('active');
   $('#rec-mark').disabled = true;
+  $('#dim-screen').hidden = true;
+  setDarkMode(false);
   $('#gps-status').textContent = '';
   if (state.session) {
     state.session.stats = {
@@ -435,6 +441,34 @@ async function openTrackEditor() {
     renderMeta();
     drawTrack();
   }
+}
+
+/**
+ * Takarékos rögzítő képernyő.
+ *
+ * Valódi háttérrögzítés webalkalmazással nem lehetséges: a képernyő
+ * lezárásakor a böngésző felfüggeszti az oldalt, és a GPS-figyelés leáll.
+ * Amit tehetünk: a képernyőt ébren tartjuk, de szinte feketére váltunk —
+ * így az akkumulátor sokkal lassabban fogy, a mérés viszont folytatódik.
+ */
+function setDarkMode(on) {
+  const box = $('#dark-mode');
+  box.hidden = !on;
+  document.body.classList.toggle('modal-open', on);
+  if (on) {
+    keepAwake(true);
+    updateDarkMode();
+    toast('A rögzítés fut. A telefont ne zárja le.');
+  }
+}
+
+function updateDarkMode() {
+  if ($('#dark-mode').hidden) return;
+  const len = lengthByStatus(state.points);
+  const elapsed = state.recording ? state.recElapsed + (Date.now() - state.recStartedAt) : state.recElapsed;
+  $('#dark-distance').textContent = formatDistance(len.ok);
+  const acc = recorder && recorder.current && recorder.current.acc != null ? `±${recorder.current.acc} m` : 'GPS…';
+  $('#dark-info').textContent = `${formatDuration(elapsed)} · ${state.points.length} pont · ${acc}`;
 }
 
 let wakeLock = null;
@@ -679,13 +713,183 @@ async function recordAudio(attachToItemId = null) {
   $('#rec-cancel').onclick = () => finish(false);
 }
 
+/* --------------------------------------------------------------- videó
+
+A videót a telefon saját kameraalkalmazása veszi fel (jobb minőség, nincs
+engedélybűvészkedés), mi csak átvesszük a kész fájlt. A videó nem kerül
+átkódolásra, ezért a mérete számít — a mentésnél jelezzük is.               */
+
+async function onVideoSelected(e) {
+  const file = (e.target.files || [])[0];
+  e.target.value = '';
+  if (!file) return;
+
+  const mb = file.size / 1048576;
+  if (mb > 150) {
+    const ok = await modal({
+      title: 'Nagy videófájl',
+      text: `A felvétel ${mb.toFixed(0)} MB. Ez elfér, de a teljes mentés és a riport is nagy lesz. Rögzítsük?`,
+      okText: 'Mentés',
+    });
+    if (!ok) return;
+  }
+
+  toast('Videó feldolgozása…');
+  const pos = await positionNow();
+  const heading = compassHeading();
+  let thumb = null;
+  let duration = null;
+  try {
+    const frame = await videoPoster(file);
+    thumb = frame.thumb;
+    duration = frame.duration;
+  } catch (_) { /* a bélyegkép nem kritikus */ }
+
+  const item = {
+    id: db.uid(),
+    sessionId: state.session.id,
+    type: 'video',
+    created: Date.now(),
+    ...pos,
+    heading,
+    headingSource: heading == null ? null : 'compass',
+    title: '',
+    note: '',
+    dims: [],
+    video: file,
+    videoDuration: duration,
+    thumb,
+  };
+  await db.saveItem(item);
+  state.items.push(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  toast(`Videó mentve (${mb.toFixed(1).replace('.', ',')} MB${duration ? ', ' + formatDuration(duration) : ''}).`);
+}
+
+/* ------------------------------------------------- állapot / tábla */
+
+const conditionFields = (v = {}) => [
+  {
+    name: 'category', label: 'Mi ez?', type: 'select', value: v.category || 'tabla',
+    options: CONDITION_CATEGORIES.map((c) => ({ value: c.id, label: c.label })),
+  },
+  { name: 'what', label: 'Megnevezés', value: v.what || '', placeholder: 'pl. magasságkorlátozó tábla, 3,8 m' },
+  {
+    name: 'condition', label: 'Állapota', type: 'select', value: v.condition || 'ep',
+    options: CONDITION_STATES.map((c) => ({ value: c.id, label: c.label })),
+  },
+  {
+    name: 'severity', label: 'Minősítés', type: 'select', value: v.severity || 'megfelelo',
+    options: SEVERITIES.map((c) => ({ value: c.id, label: c.label })),
+  },
+  { name: 'dims', label: 'Mért érték (többet pontosvesszővel)', value: (v.dims || []).join('; '), placeholder: 'pl. szabad magasság: 3,80 m' },
+  { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2, value: v.note || '' },
+];
+
+async function addCondition() {
+  const res = await modal({
+    title: 'Állapot rögzítése',
+    text: 'A bejáráskori állapot rögzítése — tábla, útpadka, szalagkorlát és társai. '
+      + 'A „Közúti jelzőtábla” bejegyzésekből áll össze a táblajegyzék.',
+    fields: conditionFields(),
+    okText: 'Mentés',
+  });
+  if (!res) return;
+
+  const pos = await positionNow();
+  const heading = compassHeading();
+  const item = {
+    id: db.uid(),
+    sessionId: state.session.id,
+    type: 'condition',
+    created: Date.now(),
+    ...pos,
+    heading,
+    headingSource: heading == null ? null : 'compass',
+    category: res.category,
+    what: res.what,
+    condition: res.condition,
+    severity: res.severity,
+    title: res.what || categoryLabel(res.category),
+    note: res.note,
+    dims: parseDims(res.dims),
+  };
+  await db.saveItem(item);
+  state.items.push(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+
+  const withPhoto = await modal({
+    title: 'Fotó hozzá?',
+    text: 'Készít most fotót ehhez a bejegyzéshez? A kép ugyanehhez a rekordhoz kerül.',
+    okText: 'Fotó készítése',
+    cancelText: 'Most nem',
+  });
+  if (withPhoto) attachPhotoTo(item.id);
+}
+
+async function editCondition(item) {
+  const res = await modal({ title: 'Állapot szerkesztése', fields: conditionFields(item) });
+  if (!res) return;
+  Object.assign(item, {
+    category: res.category,
+    what: res.what,
+    condition: res.condition,
+    severity: res.severity,
+    title: res.what || categoryLabel(res.category),
+    note: res.note,
+    dims: parseDims(res.dims),
+  });
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  closeViewer();
+  toast('Mentve.');
+}
+
+/** Fotó csatolása egy meglévő bejegyzéshez (nem külön elemként). */
+let attachTargetId = null;
+function attachPhotoTo(itemId) {
+  attachTargetId = itemId;
+  $('#attach-photo-input').click();
+}
+
+async function onAttachPhoto(e) {
+  const file = (e.target.files || [])[0];
+  e.target.value = '';
+  const item = state.items.find((i) => i.id === attachTargetId);
+  attachTargetId = null;
+  if (!file || !item) return;
+
+  try {
+    const { blob, width, height } = await shrinkImage(file);
+    item.photo = blob;
+    item.thumb = await makeThumb(blob);
+    item.width = width;
+    item.height = height;
+    if (item.heading == null) {
+      const exif = await readExif(file);
+      if (exif && exif.heading != null) { item.heading = exif.heading; item.headingSource = 'exif'; }
+    }
+    await db.saveItem(item);
+    markUnsaved();
+    renderItems();
+    toast('Fotó csatolva a bejegyzéshez.');
+  } catch (err) {
+    toast('A fotó nem csatolható: ' + err.message, 'error');
+  }
+}
+
 async function addNote() {
   const res = await modal({
     title: 'Írott jegyzet',
     fields: [
       { name: 'title', label: 'Cím', placeholder: 'pl. útszűkület a hídnál' },
       { name: 'note', label: 'Jegyzet', type: 'textarea', rows: 4 },
-      { name: 'dims', label: 'Méretek (vesszővel elválasztva)', placeholder: 'pl. szabad magasság: 4,30 m, útszélesség: 5,10 m' },
+      { name: 'dims', label: 'Méretek (többet pontosvesszővel)', placeholder: 'pl. szabad magasság: 4,30 m; útszélesség: 5,10 m' },
     ],
     okText: 'Mentés',
   });
@@ -699,7 +903,7 @@ async function addNote() {
     ...pos,
     title: res.title,
     note: res.note,
-    dims: res.dims ? res.dims.split(',').map((s) => s.trim()).filter(Boolean) : [],
+    dims: parseDims(res.dims),
   };
   await db.saveItem(item);
   state.items.push(item);
@@ -750,17 +954,29 @@ function renderItems() {
 }
 
 function itemCard(item, extraSub) {
-  const thumb = item.type === 'photo' && item.thumb
-    ? el('img', { class: 'thumb', src: objectUrl(item.thumb), alt: '' })
-    : el('div', { class: 'thumb placeholder', text: item.type === 'audio' ? '🎙️' : '📝' });
+  const icons = { audio: '🎙️', note: '📝', video: '🎬', condition: '⚠️' };
+  const thumb = item.thumb
+    ? el('div', { class: 'thumb-wrap' }, [
+        el('img', { class: 'thumb', src: objectUrl(item.thumb), alt: '' }),
+        item.type === 'video' ? el('span', { class: 'thumb-badge', text: '▶' }) : null,
+      ])
+    : el('div', { class: 'thumb placeholder', text: icons[item.type] || '📝' });
 
   const sub = [];
   sub.push(formatTime(item.created));
   if (item.type === 'audio' && item.audioDuration) sub.push(formatDuration(item.audioDuration));
+  if (item.type === 'video' && item.videoDuration) sub.push(formatDuration(item.videoDuration));
+  if (item.type === 'condition') sub.push(categoryLabel(item.category));
   if (item.lat != null) sub.push(formatCoord(item.lat, item.lon));
 
   const tags = [];
   for (const d of item.dims || []) tags.push(el('span', { class: 'tag dim', text: '↔ ' + d }));
+  if (item.type === 'condition') {
+    tags.push(el('span', {
+      class: 'tag sev-' + (item.severity || 'megfelelo'),
+      text: severityLabel(item.severity) + ' · ' + conditionLabel(item.condition),
+    }));
+  }
   if (item.heading != null) tags.push(el('span', { class: 'tag', text: '🧭 ' + formatHeading(item.heading) }));
   if (item.audio && item.type === 'photo') tags.push(el('span', { class: 'tag', text: '🎙️ hang' }));
   if ((item.ops || []).some((o) => o.k === 'dir')) tags.push(el('span', { class: 'tag', text: '⇨ útirány' }));
@@ -864,8 +1080,15 @@ async function openViewer(id) {
   body.innerHTML = '';
   actions.innerHTML = '';
 
-  if (item.type === 'photo') {
+  if (item.photo || item.flat) {
     body.appendChild(el('img', { class: 'full-photo', src: objectUrl(item.flat || item.photo), alt: '' }));
+  }
+  if (item.video) {
+    body.appendChild(el('video', {
+      class: 'full-photo', controls: true, playsinline: true,
+      poster: item.thumb ? objectUrl(item.thumb) : null,
+      src: objectUrl(item.video),
+    }));
   }
   if (item.audio) {
     body.appendChild(el('audio', { class: 'player', controls: true, src: objectUrl(item.audio) }));
@@ -880,6 +1103,15 @@ async function openViewer(id) {
     const c = cardinal(item.heading);
     const src = { compass: 'iránytű', exif: 'a kép adatából', gps: 'haladási irány', manual: 'kézzel' }[item.headingSource];
     rows.push(['Kameairány', `${c.name} (${c.short} ${c.deg}°)${src ? ` — ${src}` : ''}`]);
+  }
+  if (item.type === 'condition') {
+    rows.push(['Kategória', categoryLabel(item.category)]);
+    if (item.what) rows.push(['Megnevezés', item.what]);
+    rows.push(['Állapot', conditionLabel(item.condition)]);
+    rows.push(['Minősítés', severityLabel(item.severity)]);
+  }
+  if (item.type === 'video' && item.video) {
+    rows.push(['Videó', `${formatDuration(item.videoDuration || 0)} · ${(item.video.size / 1048576).toFixed(1).replace('.', ',')} MB`]);
   }
   if (item.dims && item.dims.length) rows.push(['Méretek', item.dims.join(' · ')]);
   if (item.texts && item.texts.length) rows.push(['Feliratok', item.texts.join(' · ')]);
@@ -906,6 +1138,23 @@ async function openViewer(id) {
       closeViewer();
       await recordAudio(item.id);
     } }));
+  }
+  if (item.type === 'condition') {
+    actions.appendChild(el('button', {
+      class: 'btn primary small', text: '⚠️ Állapot szerkesztése', onclick: () => editCondition(item),
+    }));
+  }
+  if (!item.photo && !item.flat && item.type !== 'video') {
+    actions.appendChild(el('button', {
+      class: 'btn ghost small', text: '📷 Fotó csatolása',
+      onclick: () => { closeViewer(); attachPhotoTo(item.id); },
+    }));
+  }
+  if (item.video) {
+    actions.appendChild(el('button', {
+      class: 'btn ghost small', text: '⬇️ Videó letöltése',
+      onclick: () => download(item.video, `${slug(state.session?.name)}-${item.id.slice(0, 6)}.mp4`),
+    }));
   }
   actions.appendChild(el('button', { class: 'btn ghost small', text: '📝 Megjegyzés', onclick: () => editItemNote(item) }));
   actions.appendChild(el('button', {
@@ -937,13 +1186,13 @@ async function editItemNote(item) {
     fields: [
       { name: 'title', label: 'Cím', value: item.title || '' },
       { name: 'note', label: 'Jegyzet', type: 'textarea', rows: 4, value: item.note || '' },
-      { name: 'dims', label: 'Méretek (vesszővel)', value: (item.dims || []).join(', ') },
+      { name: 'dims', label: 'Méretek (többet pontosvesszővel)', value: (item.dims || []).join('; ') },
     ],
   });
   if (!res) return;
   item.title = res.title;
   item.note = res.note;
-  item.dims = res.dims ? res.dims.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  item.dims = parseDims(res.dims);
   await db.saveItem(item);
   markUnsaved();
   renderItems();
@@ -1196,6 +1445,56 @@ async function openTrackOnMap() {
   );
 }
 
+/**
+ * HTML-riport: egyetlen fájl, minden melléklettel — ezt lehet a közútnak
+ * átadni vagy e-mailben elküldeni.
+ */
+async function exportHTML() {
+  const hasVideo = state.items.some((i) => i.video);
+  const videoMb = state.items.reduce((s, i) => s + (i.video ? i.video.size : 0), 0) / 1048576;
+
+  const res = await modal({
+    title: 'Riport készítése',
+    text: 'Önálló HTML-fájl készül: a térképpel, a fotókkal és a táblajegyzékkel együtt. '
+      + 'Bármelyik böngészőben megnyitható, és onnan PDF-be is nyomtatható.',
+    fields: [
+      {
+        name: 'photos', label: 'Fotók', type: 'select', value: 'full',
+        options: [
+          { value: 'full', label: 'Teljes méretben (ajánlott)' },
+          { value: 'thumb', label: 'Csak kisképek (kisebb fájl)' },
+        ],
+      },
+      {
+        name: 'audio', label: 'Hangjegyzetek', type: 'select', value: 'yes',
+        options: [{ value: 'yes', label: 'Beágyazva' }, { value: 'no', label: 'Kihagyva' }],
+      },
+      {
+        name: 'video', label: 'Videók', type: 'select', value: hasVideo && videoMb < 60 ? 'yes' : 'no',
+        options: [
+          { value: 'no', label: hasVideo ? `Kihagyva (${videoMb.toFixed(0)} MB-ot spórol)` : 'Nincs videó' },
+          { value: 'yes', label: 'Beágyazva — nagy fájl lesz' },
+        ],
+      },
+    ],
+    okText: 'Riport készítése',
+  });
+  if (!res) return;
+
+  try {
+    const html = await buildReport(
+      state.session, state.points, state.items,
+      { photos: res.photos === 'full', audio: res.audio === 'yes', video: res.video === 'yes' },
+      (msg) => toast(msg)
+    );
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    download(blob, `${slug(state.session.name)}-jegyzokonyv.html`);
+    toast(`Riport kész (${(blob.size / 1048576).toFixed(1).replace('.', ',')} MB).`);
+  } catch (err) {
+    toast('A riport nem készült el: ' + err.message, 'error');
+  }
+}
+
 function exportGeoJSON() {
   const gj = toGeoJSON(state.session, state.points, state.items, { tolerance: 0 });
   download(
@@ -1253,6 +1552,8 @@ function bind() {
 
   $('#rec-toggle').addEventListener('click', () => (state.recording ? stopRecording() : startRecording()));
   $('#rec-mark').addEventListener('click', markPoint);
+  $('#dim-screen').addEventListener('click', () => setDarkMode(true));
+  $('#dark-exit').addEventListener('click', () => setDarkMode(false));
   $('#edit-track').addEventListener('click', openTrackEditor);
   $('#reject-summary').addEventListener('click', openTrackEditor);
   $('#cap-photo').addEventListener('click', async () => {
@@ -1261,6 +1562,10 @@ function bind() {
     $('#photo-input').click();
   });
   $('#photo-input').addEventListener('change', onPhotoSelected);
+  $('#cap-video').addEventListener('click', () => $('#video-input').click());
+  $('#video-input').addEventListener('change', onVideoSelected);
+  $('#attach-photo-input').addEventListener('change', onAttachPhoto);
+  $('#cap-condition').addEventListener('click', addCondition);
   $('#cap-audio').addEventListener('click', () => recordAudio(null));
   $('#cap-note').addEventListener('click', addNote);
 
@@ -1283,6 +1588,7 @@ function bind() {
   $('#edit-session').addEventListener('click', editSessionData);
   $('#export-gpx').addEventListener('click', exportGPX);
   $('#export-geojson').addEventListener('click', exportGeoJSON);
+  $('#export-html').addEventListener('click', exportHTML);
   $('#export-json').addEventListener('click', exportJSON);
   $('#open-track-map').addEventListener('click', openTrackOnMap);
   $('#open-maps').addEventListener('click', openInMaps);

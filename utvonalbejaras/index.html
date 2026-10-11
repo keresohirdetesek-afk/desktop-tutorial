@@ -60,6 +60,7 @@
       </div>
       <button id="edit-track" class="btn ghost small block">🗺️ Nyomvonal szerkesztése</button>
       <button id="reject-summary" class="reject-summary" hidden></button>
+      <button id="dim-screen" class="btn ghost small block" hidden>🌙 Képernyő elsötétítése (rögzítés fut tovább)</button>
       <p id="gps-status" class="muted small"></p>
     </div>
 
@@ -70,10 +71,18 @@
       <button id="cap-audio" class="cap">
         <span class="cap-icon">🎙️</span><span>Hangjegyzet</span>
       </button>
+      <button id="cap-video" class="cap">
+        <span class="cap-icon">🎬</span><span>Videó</span>
+      </button>
+      <button id="cap-condition" class="cap">
+        <span class="cap-icon">⚠️</span><span>Állapot / tábla</span>
+      </button>
       <button id="cap-note" class="cap">
         <span class="cap-icon">📝</span><span>Jegyzet</span>
       </button>
       <input id="photo-input" type="file" accept="image/*" capture="environment" hidden multiple>
+      <input id="video-input" type="file" accept="video/*" capture="environment" hidden>
+      <input id="attach-photo-input" type="file" accept="image/*" capture="environment" hidden>
     </div>
 
     <div class="pad">
@@ -83,6 +92,8 @@
           <button class="chip active" data-f="all">Mind</button>
           <button class="chip" data-f="photo">Fotó</button>
           <button class="chip" data-f="audio">Hang</button>
+          <button class="chip" data-f="video">Videó</button>
+          <button class="chip" data-f="condition">Állapot</button>
           <button class="chip" data-f="note">Jegyzet</button>
         </div>
       </div>
@@ -100,6 +111,7 @@
         <button id="open-track-map" class="btn ghost small">🗺️ Pontos nyomvonal térképen</button>
         <button id="export-gpx" class="btn ghost small">GPX export</button>
         <button id="export-geojson" class="btn ghost small">GeoJSON export</button>
+        <button id="export-html" class="btn primary small">📄 Riport (HTML) a közút felé</button>
         <button id="export-json" class="btn ghost small">Teljes mentés (JSON)</button>
         <button id="open-maps" class="btn ghost small">Útvonalterv Google Maps (közelítő)</button>
         <button id="delete-session" class="btn danger small">Bejárás törlése</button>
@@ -203,6 +215,20 @@
       <button id="editor-redo" class="btn ghost tiny">↷ Újra</button>
       <button id="editor-clear" class="btn ghost tiny">Összes törlése</button>
     </div>
+  </div>
+</div>
+
+<!-- ====================================== takarékos rögzítő képernyő -->
+<div id="dark-mode" class="overlay dark-mode" hidden>
+  <div class="dark-inner">
+    <p class="dark-note">Rögzítés fut</p>
+    <p id="dark-distance" class="dark-big">0 m</p>
+    <p id="dark-info" class="dark-sub">—</p>
+    <p class="dark-hint">
+      A képernyő sötét, de az alkalmazás ébren van, és rögzíti a nyomvonalat.<br>
+      A telefont <strong>ne zárja le</strong> — akkor a mérés megszakad.
+    </p>
+    <button id="dark-exit" class="btn ghost small">Vissza a kezelőfelületre</button>
   </div>
 </div>
 

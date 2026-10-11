@@ -17,6 +17,7 @@ const ASSETS = [
   'js/trackedit.js',
   'js/tiles.js',
   'js/compass.js',
+  'js/report.js',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/icon-192.png',
