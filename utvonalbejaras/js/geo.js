@@ -434,13 +434,24 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     minX = Math.min(minX, m.x); maxX = Math.max(maxX, m.x);
     minY = Math.min(minY, m.y); maxY = Math.max(maxY, m.y);
   }
+  // kivágat egy pont köré (jegyzőkönyv: hol készült egy-egy fotó)
+  if (opts.focus && opts.focus.lat != null) {
+    const c = mercator(opts.focus.lat, opts.focus.lon);
+    const metersPerWorld = 40075016.686 * Math.cos((opts.focus.lat * Math.PI) / 180);
+    const r = Math.max(20, opts.focus.radius || 150) / Math.max(1, metersPerWorld);
+    minX = c.x - r; maxX = c.x + r;
+    minY = c.y - r; maxY = c.y + r;
+  }
+
   const spanX = Math.max(maxX - minX, 1e-9);
   const spanY = Math.max(maxY - minY, 1e-9);
-  const pad = 22;
+  const pad = opts.focus ? 0 : 22;      // kivágatnál a megadott sugár pontos legyen
   const scale = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY);
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
-  const midLat = (Math.max(...all.map((p) => p.lat)) + Math.min(...all.map((p) => p.lat))) / 2;
+  const midLat = opts.focus
+    ? opts.focus.lat
+    : (Math.max(...all.map((p) => p.lat)) + Math.min(...all.map((p) => p.lat))) / 2;
 
   // a nagyítás/mozgatás az illesztett nézetre ül rá
   const view = opts.view || { k: 1, tx: 0, ty: 0 };
@@ -601,6 +612,7 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   // saját pozíció (élő kísérésnél): irányjelző kúp + pont
   if (opts.here && opts.here.lat != null) {
     const p = project(opts.here.lat, opts.here.lon);
+    const hereColor = opts.here.color || '#4da3ff';
     if (opts.here.heading != null && isFinite(opts.here.heading)) {
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -611,17 +623,20 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
       ctx.lineTo(0, 3);
       ctx.lineTo(9, 8);
       ctx.closePath();
-      ctx.fillStyle = 'rgba(77,163,255,0.85)';
+      ctx.fillStyle = hereColor;
+      ctx.globalAlpha = 0.85;
       ctx.fill();
+      ctx.globalAlpha = 1;
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1.5;
       ctx.stroke();
       ctx.restore();
     }
-    dot(ctx, p, 7, '#4da3ff', '#ffffff');
+    dot(ctx, p, 7, hereColor, '#ffffff');
   }
 
   // számozott jelölések (jegyzőkönyv): a táblázatok sorszámai a térképen
+  const labelBoxes = [];
   if (opts.labels && opts.labels.length) {
     const placed = [];
     for (const lab of opts.labels) {
@@ -629,7 +644,9 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
       const p = project(lab.lat, lab.lon);
       if (p.x < -40 || p.y < -40 || p.x > w + 40 || p.y > h + 40) continue;
       dot(ctx, p, 4, lab.color || '#13202e', '#ffffff');
-      drawBadge(ctx, p, String(lab.text), lab.color || '#13202e', placed);
+      const box = drawBadge(ctx, p, String(lab.text), lab.color || '#13202e', placed, { w, h });
+      // a riport ezekre tesz átlátszó hivatkozást: a térképi szám kattintható
+      labelBoxes.push({ ...box, text: String(lab.text), href: lab.href || null, w: box.w, h: box.h });
     }
   }
 
@@ -663,7 +680,10 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     return best ? { ...best, distance: bestD } : { distance: Infinity };
   };
 
-  return { project, unproject, hitboxes, nearest, nearestDrawn, coords, tiles: tileStats };
+  return {
+    project, unproject, hitboxes, nearest, nearestDrawn, coords,
+    tiles: tileStats, labelBoxes, width: w, height: h,
+  };
 }
 
 /* ------------------------------------------------------------- GeoJSON
@@ -791,7 +811,7 @@ function dot(ctx, p, r, fill, stroke) {
  * Számozott jelölés a térképen (jegyzőkönyvhöz): a táblázatok sorszámai
  * így mutatják meg, hol is vannak valójában.
  */
-function drawBadge(ctx, p, text, color, placed) {
+function drawBadge(ctx, p, text, color, placed, bounds) {
   ctx.save();
   ctx.font = 'bold 13px system-ui, sans-serif';
   const w = Math.max(22, ctx.measureText(text).width + 14);
@@ -799,12 +819,21 @@ function drawBadge(ctx, p, text, color, placed) {
   let x = p.x + 9;
   let y = p.y - h - 7;
 
+  // a kép szélén ne lógjon ki a jel
+  const clamp = () => {
+    if (!bounds) return;
+    x = Math.max(2, Math.min(x, bounds.w - w - 2));
+    y = Math.max(2, Math.min(y, bounds.h - h - 2));
+  };
+  clamp();
+
   // ne takarják egymást: ha ütközik egy korábbival, csúsztassuk lejjebb
   for (let tries = 0; tries < 8; tries++) {
     const clash = placed.some((b) =>
       x < b.x + b.w + 3 && x + w + 3 > b.x && y < b.y + b.h + 3 && y + h + 3 > b.y);
     if (!clash) break;
     y += h + 4;
+    clamp();
   }
   placed.push({ x, y, w, h });
 
@@ -835,6 +864,7 @@ function drawBadge(ctx, p, text, color, placed) {
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x + w / 2, y + h / 2 + 0.5);
   ctx.restore();
+  return { x, y, w, h };
 }
 
 function drawArrowHead(ctx, a, b, size) {

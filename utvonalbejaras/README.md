@@ -136,6 +136,21 @@ kézzel elhúzod vagy csippented, a követés kikapcsol — a 📍 gombbal bárm
 visszakérhető, a ⤢ gomb pedig a teljes útvonalat mutatja. A térképi jelölésre
 koppintva előjön az ott rögzített anyag.
 
+### Pontos nyomvonal térképen (önálló térképfájl)
+
+A bejárás adatlapján a **🗺️ Pontos nyomvonal térképen** gomb egy **önálló
+HTML-térképet** készít és nyit meg: a ténylegesen bejárt vonal utcákkal,
+településekkel, nagyítható és mozgatható, a rögzített elemek számozott
+pöttyként — koppintásra kiírja, mi van ott, és merre nézett a kamera.
+
+A fájl elküldhető (e-mailben, pendrive-on), és bármelyik böngészőben
+megnyílik. Az adat nem megy át idegen kiszolgálón: csak a térképcsempék
+töltődnek le, ugyanonnan, ahonnan az appban is.
+
+> Korábban ez a gomb a geojson.io oldalra vitte át az adatot a hivatkozásban.
+> Az külső oldal: hosszabb nyomvonalnál elvágta az adatot
+> („Unterminated string in JSON…”), ezért készít most az app saját fájlt.
+
 ### HTML-jegyzőkönyv a közút felé
 
 A *Riport (HTML)* gomb **egyetlen, önálló fájlt** készít: térképpel, a
@@ -156,8 +171,9 @@ készül. Az alkalmazás a kép elkészítése előtt bevárja az alaptérkép c
 pár másodpercig. Ha nincs hálózat és korábban sem töltődött le a terület, a
 jegyzőkönyv ezt **kiírja a térkép alá** — így nem marad észrevétlen.
 
-**A számok megmutatják, hol vannak.** A táblázatok sorszámai rajta vannak a
-térképen is, ugyanazzal a jelöléssel:
+**A számok megmutatják, hol vannak, és kattinthatók.** A táblázatok sorszámai
+rajta vannak a térképen is, ugyanazzal a jelöléssel — a térképi számra
+kattintva a jegyzőkönyv a megfelelő sorra ugrik (és kiemeli):
 
 | Jel | Mit jelöl |
 |---|---|
@@ -165,8 +181,17 @@ térképen is, ugyanazzal a jelöléssel:
 | narancs **E1**, **E2**, … | elvetett szakasz |
 | zöld **B1**, **B2**, … | berajzolt szakasz |
 
-Az elvetett és berajzolt szakaszok táblázatában a koordináta is szerepel, így
-a térképi jel mellett számszerűen is visszakereshető a hely.
+A táblázatokban a koordináta is szerepel, így a térképi jel mellett
+számszerűen is visszakereshető a hely.
+
+**Minden elemhez helyszínrajz tartozik**: a fotó mellett egy kis
+térképkivágat mutatja, hol készült, és — ha az app tudta az irányt — merre
+nézett a kamera (kék nyíl). Ez a jegyzőkönyv készítésekor kikapcsolható
+(*Helyszínrajzok* → *Kihagyva*), ha gyorsabban kell elkészülnie.
+
+**A fotók kisebb méretben jelennek meg, kattintásra teljes képernyőn
+nyílnak** — a jegyzőkönyvben nem kell görgetni a nagy képek között.
+Nyomtatáskor (PDF) a kisebb méret kerül a lapra.
 
 ### Élő kísérés a valós szállítás során
 
@@ -239,9 +264,9 @@ Ami ilyenkor a helyére kerül:
 - a bejárás adatlapján felsorolva látszik minden elvetett szakasz az
   indoklásával;
 - a **Pontos nyomvonal térképen** gomb a ténylegesen bejárt vonalat nyitja
-  meg térképnézőben, utcákkal (a Google Maps útvonaltervezője ezzel szemben
-  csak pontokat kap és maga tervez utat — ezért az külön, *közelítő*
-  jelöléssel szerepel);
+  meg egy önálló térképfájlban, utcákkal (a Google Maps útvonaltervezője
+  ezzel szemben csak pontokat kap és maga tervez utat — ezért az külön,
+  *közelítő* jelöléssel szerepel);
 - a **GPX** fő nyomvonala csak az érvényes útvonalat tartalmazza (ott, ahol
   elvetett szakasz szakítja meg, új `trkseg` kezdődik), az elvetett részek
   pedig külön, elnevezett nyomvonalként maradnak a fájlban (`<type>rejected</type>`),
@@ -350,7 +375,7 @@ Ez két különböző dolog, és érdemes szétválasztani:
 | Cél | Eszköz | Pontkorlát |
 |---|---|---|
 | A bejárt vonal megnézése az appban | beépített OSM-alaptérkép | nincs |
-| A bejárt vonal megosztása, nagy képernyőn | *Pontos nyomvonal térképen* (GeoJSON) | nincs |
+| A bejárt vonal megosztása, nagy képernyőn | *Pontos nyomvonal térképen* (önálló HTML-térkép) | nincs |
 | Navigáció a bejárt vonal mentén, terepen | **GPX export** → OsmAnd, Organic Maps | nincs |
 | Új útvonal terveztetése | *Útvonalterv Google Maps* | **max. 9 köztes pont**, és újratervez |
 
@@ -461,11 +486,10 @@ a licencsáv → Licenckulcs**. Internet nem kell hozzá, és a készüléken ma
   ne törölje a felvételeket helyszűke esetén.
 - A fotók mentés előtt max. 2000 képpontra zsugorodnak (kb. 300–600 kB / kép),
   hogy egy hosszabb bejárás is elférjen.
-- Külső hálózati hívás csak akkor történik, ha Ön kéri: a *Pontos nyomvonal
-  térképen* (geojson.io), az *Útvonalterv Google Maps* és az elemek
-  *Térképen* gombja nyit külső oldalt. A geojson.io esetében az adat a
-  hivatkozás horgony részében utazik, amit a böngésző nem küld el a
-  kiszolgálónak — az app előtte rákérdez.
+- Külső oldalt csak az *Útvonalterv Google Maps* és az elemek *Térképen*
+  gombja nyit — ezek koordinátákat adnak át a Google-nek. A *Pontos nyomvonal
+  térképen* saját fájlt készít, az adat nem hagyja el a készüléket; onnan
+  csak a térképcsempék töltődnek le (ugyanonnan, ahonnan az appban is).
 - A böngészőadatok törlése a bejárásokat is törli — fontos anyagot mentsen ki
   JSON-ba vagy GPX-be.
 
@@ -488,6 +512,7 @@ utvonalbejaras/
     ├── report.js           önálló HTML-jegyzőkönyv összeállítása
     ├── kiseres.js          élő kísérés a szállítás során (közelségi riasztás)
     ├── terkepnezet.js      nagyítás/mozgatás a térképes vásznakon
+    ├── terkepfajl.js       önálló, nagyítható HTML-térkép a nyomvonalról
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés
 ```

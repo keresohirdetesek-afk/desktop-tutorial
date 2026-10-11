@@ -15,6 +15,7 @@ import { TrackEditor } from './trackedit.js';
 import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
 import { MapView } from './terkepnezet.js';
 import { buildReport } from './report.js';
+import { buildMapPage } from './terkepfajl.js';
 import { EscortMode } from './kiseres.js';
 import {
   licence, licencingConfigured, saveLicence, clearLicence, canCreateSession, reportLicence,
@@ -1555,36 +1556,34 @@ function renderBackupStatus() {
  * útvonaltervezője csak pontokat kap és maga tervez utat — ez viszont magát
  * a vonalat adja át, az elvetett és a berajzolt szakaszokkal együtt.
  */
+/**
+ * Pontos nyomvonal térképen: saját, önálló HTML-térképfájl.
+ *
+ * Korábban a geojson.io oldalra vittük az adatot a hivatkozás horgonyában,
+ * de az külső oldal: hosszabb nyomvonalnál elvágta az adatot, és hibát írt
+ * ki. A saját fájl nagyítható, elküldhető, és az adat sem hagyja el a gépet.
+ */
 async function openTrackOnMap() {
-  const build = (tolerance) =>
-    JSON.stringify(toGeoJSON(state.session, state.points, state.items, { tolerance }));
-
-  let tolerance = 0.00004;
-  let json = build(tolerance);
-  if (JSON.parse(json).features.length === 0) {
+  if (!state.points.some((p) => p.lat != null) && !(state.session.drawn || []).length) {
     toast('Nincs megjeleníthető nyomvonal.', 'error');
     return;
   }
-  // hosszú bejárásnál ritkítunk, hogy elférjen a hivatkozásban
-  while (json.length > 30000 && tolerance < 0.002) {
-    tolerance *= 2;
-    json = build(tolerance);
+
+  const html = buildMapPage(state.session, state.points, state.items);
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const name = `${slug(state.session.name)}-terkep.html`;
+
+  // új lapon nyitjuk; ha a böngésző nem engedi (felugró ablak tiltás), mentjük
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (win) {
+    toast('Térkép megnyitva új lapon. A fájl a „Letöltés” gombbal is elmenthető.');
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+    return;
   }
-
-  const ok = await modal({
-    title: 'Megnyitás térképnézőben',
-    text: 'A nyomvonal a geojson.io oldalon jelenik meg, utcákkal és településekkel. '
-      + 'Az adat a hivatkozás horgony részében utazik, amit a böngésző nem küld el a kiszolgálónak — '
-      + 'de ez akkor is egy külső oldal. Megnyitjuk?',
-    okText: 'Megnyitás',
-  });
-  if (!ok) return;
-
-  window.open(
-    'https://geojson.io/#data=data:application/json,' + encodeURIComponent(json),
-    '_blank',
-    'noopener'
-  );
+  URL.revokeObjectURL(url);
+  download(blob, name);
+  toast('A térképfájl letöltve — bármelyik böngészőben megnyitható.');
 }
 
 /**
@@ -1612,6 +1611,13 @@ async function exportHTML() {
         options: [{ value: 'yes', label: 'Beágyazva' }, { value: 'no', label: 'Kihagyva' }],
       },
       {
+        name: 'places', label: 'Helyszínrajzok', type: 'select', value: 'yes',
+        options: [
+          { value: 'yes', label: 'Kis térkép minden elemhez (ajánlott)' },
+          { value: 'no', label: 'Kihagyva (gyorsabb)' },
+        ],
+      },
+      {
         name: 'video', label: 'Videók', type: 'select', value: hasVideo && videoMb < 60 ? 'yes' : 'no',
         options: [
           { value: 'no', label: hasVideo ? `Kihagyva (${videoMb.toFixed(0)} MB-ot spórol)` : 'Nincs videó' },
@@ -1630,6 +1636,7 @@ async function exportHTML() {
         photos: res.photos === 'full',
         audio: res.audio === 'yes',
         video: res.video === 'yes',
+        places: res.places !== 'no',
         licence: await reportLicence(),
       },
       (msg) => toast(msg)

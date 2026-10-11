@@ -2302,13 +2302,24 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
     minX = Math.min(minX, m.x); maxX = Math.max(maxX, m.x);
     minY = Math.min(minY, m.y); maxY = Math.max(maxY, m.y);
   }
+  // kivágat egy pont köré (jegyzőkönyv: hol készült egy-egy fotó)
+  if (opts.focus && opts.focus.lat != null) {
+    const c = mercator(opts.focus.lat, opts.focus.lon);
+    const metersPerWorld = 40075016.686 * Math.cos((opts.focus.lat * Math.PI) / 180);
+    const r = Math.max(20, opts.focus.radius || 150) / Math.max(1, metersPerWorld);
+    minX = c.x - r; maxX = c.x + r;
+    minY = c.y - r; maxY = c.y + r;
+  }
+
   const spanX = Math.max(maxX - minX, 1e-9);
   const spanY = Math.max(maxY - minY, 1e-9);
-  const pad = 22;
+  const pad = opts.focus ? 0 : 22;      // kivágatnál a megadott sugár pontos legyen
   const scale = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY);
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
-  const midLat = (Math.max(...all.map((p) => p.lat)) + Math.min(...all.map((p) => p.lat))) / 2;
+  const midLat = opts.focus
+    ? opts.focus.lat
+    : (Math.max(...all.map((p) => p.lat)) + Math.min(...all.map((p) => p.lat))) / 2;
 
   // a nagyítás/mozgatás az illesztett nézetre ül rá
   const view = opts.view || { k: 1, tx: 0, ty: 0 };
@@ -2469,6 +2480,7 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
   // saját pozíció (élő kísérésnél): irányjelző kúp + pont
   if (opts.here && opts.here.lat != null) {
     const p = project(opts.here.lat, opts.here.lon);
+    const hereColor = opts.here.color || '#4da3ff';
     if (opts.here.heading != null && isFinite(opts.here.heading)) {
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -2479,17 +2491,20 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
       ctx.lineTo(0, 3);
       ctx.lineTo(9, 8);
       ctx.closePath();
-      ctx.fillStyle = 'rgba(77,163,255,0.85)';
+      ctx.fillStyle = hereColor;
+      ctx.globalAlpha = 0.85;
       ctx.fill();
+      ctx.globalAlpha = 1;
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1.5;
       ctx.stroke();
       ctx.restore();
     }
-    dot(ctx, p, 7, '#4da3ff', '#ffffff');
+    dot(ctx, p, 7, hereColor, '#ffffff');
   }
 
   // számozott jelölések (jegyzőkönyv): a táblázatok sorszámai a térképen
+  const labelBoxes = [];
   if (opts.labels && opts.labels.length) {
     const placed = [];
     for (const lab of opts.labels) {
@@ -2497,7 +2512,9 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
       const p = project(lab.lat, lab.lon);
       if (p.x < -40 || p.y < -40 || p.x > w + 40 || p.y > h + 40) continue;
       dot(ctx, p, 4, lab.color || '#13202e', '#ffffff');
-      drawBadge(ctx, p, String(lab.text), lab.color || '#13202e', placed);
+      const box = drawBadge(ctx, p, String(lab.text), lab.color || '#13202e', placed, { w, h });
+      // a riport ezekre tesz átlátszó hivatkozást: a térképi szám kattintható
+      labelBoxes.push({ ...box, text: String(lab.text), href: lab.href || null, w: box.w, h: box.h });
     }
   }
 
@@ -2531,7 +2548,10 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
     return best ? { ...best, distance: bestD } : { distance: Infinity };
   };
 
-  return { project, unproject, hitboxes, nearest, nearestDrawn, coords, tiles: tileStats };
+  return {
+    project, unproject, hitboxes, nearest, nearestDrawn, coords,
+    tiles: tileStats, labelBoxes, width: w, height: h,
+  };
 }
 
 /* ------------------------------------------------------------- GeoJSON
@@ -2659,7 +2679,7 @@ function dot(ctx, p, r, fill, stroke) {
  * Számozott jelölés a térképen (jegyzőkönyvhöz): a táblázatok sorszámai
  * így mutatják meg, hol is vannak valójában.
  */
-function drawBadge(ctx, p, text, color, placed) {
+function drawBadge(ctx, p, text, color, placed, bounds) {
   ctx.save();
   ctx.font = 'bold 13px system-ui, sans-serif';
   const w = Math.max(22, ctx.measureText(text).width + 14);
@@ -2667,12 +2687,21 @@ function drawBadge(ctx, p, text, color, placed) {
   let x = p.x + 9;
   let y = p.y - h - 7;
 
+  // a kép szélén ne lógjon ki a jel
+  const clamp = () => {
+    if (!bounds) return;
+    x = Math.max(2, Math.min(x, bounds.w - w - 2));
+    y = Math.max(2, Math.min(y, bounds.h - h - 2));
+  };
+  clamp();
+
   // ne takarják egymást: ha ütközik egy korábbival, csúsztassuk lejjebb
   for (let tries = 0; tries < 8; tries++) {
     const clash = placed.some((b) =>
       x < b.x + b.w + 3 && x + w + 3 > b.x && y < b.y + b.h + 3 && y + h + 3 > b.y);
     if (!clash) break;
     y += h + 4;
+    clamp();
   }
   placed.push({ x, y, w, h });
 
@@ -2703,6 +2732,7 @@ function drawBadge(ctx, p, text, color, placed) {
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x + w / 2, y + h / 2 + 0.5);
   ctx.restore();
+  return { x, y, w, h };
 }
 
 function drawArrowHead(ctx, a, b, size) {
@@ -3545,12 +3575,39 @@ const dt = (t) => {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Megvárja, amíg a csempeletöltések befejeződnek (vagy lejár a türelmi idő). */
+async function waitForTiles(budgetMs) {
+  const deadline = Date.now() + budgetMs;
+  let quiet = 0;
+  while (Date.now() < deadline) {
+    await wait(200);
+    if (pendingTiles() === 0) {
+      quiet += 1;
+      if (quiet >= 2) return;
+    } else {
+      quiet = 0;
+    }
+  }
+}
+
 /**
- * Térképkép a riporthoz: ugyanaz a rajzoló, csak kép-méretben, számozott
- * jelölésekkel. Az alaptérkép csempéit megvárjuk — a vaktérkép (csak a
- * vonal, utcák nélkül) a közút felé használhatatlan.
+ * Kép mentése a vászonról rögzített felbontásban. A vászon a készülék
+ * képpontsűrűségével rajzol (telefonon 3×), ettől a riport fölöslegesen
+ * nagyra hízna — ezért mindig ugyanakkora képet mentünk.
  */
-async function mapImage(session, points, items, labels, width = 1100, height = 740) {
+function snapshot(canvas, cssW, cssH, scale, quality) {
+  const out = document.createElement('canvas');
+  out.width = Math.round(cssW * scale);
+  out.height = Math.round(cssH * scale);
+  const g = out.getContext('2d');
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(canvas, 0, 0, out.width, out.height);
+  return out.toDataURL('image/jpeg', quality);
+}
+
+/** Rajzvászon a képernyőn kívül, a riport képeihez. */
+function offscreen(width, height) {
   const holder = document.createElement('div');
   holder.style.cssText = `position:fixed;left:-99999px;top:0;width:${width}px;height:${height}px`;
   const canvas = document.createElement('canvas');
@@ -3558,11 +3615,16 @@ async function mapImage(session, points, items, labels, width = 1100, height = 7
   canvas.style.height = height + 'px';
   holder.appendChild(canvas);
   document.body.appendChild(holder);
+  return { canvas, done: () => holder.remove() };
+}
 
-  // a riporthoz akkor is kell az alaptérkép, ha a szerkesztőben vázlatra
-  // volt kapcsolva — utána visszaállítjuk
-  const tilesWere = tilesEnabled();
-  setTilesEnabled(true);
+/**
+ * Térképkép a riporthoz: ugyanaz a rajzoló, csak kép-méretben, számozott
+ * jelölésekkel. Az alaptérkép csempéit megvárjuk — a vaktérkép (csak a
+ * vonal, utcák nélkül) a közút felé használhatatlan.
+ */
+async function mapImage(session, points, items, labels, width = 1100, height = 740) {
+  const { canvas, done } = offscreen(width, height);
   try {
     // a riport világos lapra kerül: a térképvázlat is ahhoz igazodjon
     const style = {
@@ -3573,24 +3635,56 @@ async function mapImage(session, points, items, labels, width = 1100, height = 7
     // az első rajzolás indítja el a csempék letöltését; megvárjuk őket.
     // Hosszú útvonalhoz több csempe kell, ezért a türelmi idő ahhoz igazodik.
     const wanted = (res.tiles && res.tiles.wanted) || 0;
-    const deadline = Date.now() + Math.min(45000, 8000 + wanted * 300);
-    let quiet = 0;
-    while (Date.now() < deadline) {
-      await wait(250);
-      quiet = pendingTiles() === 0 ? quiet + 1 : 0;
-      if (quiet >= 2) {
-        // minden kérés lefutott — de egy újrarajzolás kérhet újabb csempéket
-        res = renderTrack(canvas, points, items, style);
-        if (pendingTiles() === 0) break;
-        quiet = 0;
-      }
-    }
+    await waitForTiles(Math.min(45000, 8000 + wanted * 300));
     res = renderTrack(canvas, points, items, style);
-    return { url: canvas.toDataURL('image/jpeg', 0.85), tiles: res.tiles || { wanted: 0, drawn: 0 } };
+    return {
+      url: snapshot(canvas, width, height, 2, 0.85),
+      tiles: res.tiles || { wanted: 0, drawn: 0 },
+      boxes: res.labelBoxes || [],
+      w: res.width || width,
+      h: res.height || height,
+    };
   } finally {
-    setTilesEnabled(tilesWere);
-    holder.remove();
+    done();
   }
+}
+
+/**
+ * Kis térképkivágat minden elemhez: hol készült, és — ha tudjuk — merre
+ * nézett a kamera. A koordinátánál ez sokkal többet mond.
+ *
+ * Kétmenetes: először minden kivágatot megrajzolunk (ettől indulnak el a
+ * csempeletöltések), egyszer megvárjuk mindet, majd újrarajzolva mentjük.
+ */
+async function itemMaps(session, points, ordered, progress) {
+  const out = new Map();
+  const withPos = ordered.map((it, i) => ({ it, i })).filter((x) => x.it.lat != null);
+  if (!withPos.length) return out;
+
+  const W = 420, H = 300;
+  const { canvas, done } = offscreen(W, H);
+  const style = (it) => ({
+    drawn: session.drawn || [],
+    focus: { lat: it.lat, lon: it.lon, radius: 160 },
+    here: { lat: it.lat, lon: it.lon, heading: it.heading == null ? null : it.heading },
+    lineWidth: 3, bg: '#eef2f7', dim: '#5d6b7d',
+  });
+  try {
+    progress('Helyszínrajzok készítése…');
+    for (const { it } of withPos) renderTrack(canvas, points, [], style(it));
+    await waitForTiles(Math.min(45000, 6000 + withPos.length * 900));
+
+    for (let k = 0; k < withPos.length; k++) {
+      const { it, i } = withPos[k];
+      progress(`Helyszínrajzok készítése… (${k + 1}/${withPos.length})`);
+      renderTrack(canvas, points, [], style(it));
+      out.set(i, snapshot(canvas, W, H, 2, 0.72));
+      if (k % 6 === 5) await wait(0);   // ne fagyjon be a felület
+    }
+  } finally {
+    done();
+  }
+  return out;
 }
 
 /** Egy szakasz közepe — ide kerül a sorszámozott jelölés. */
@@ -3615,25 +3709,49 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   // a térképi jelölések és a táblázatok sorszámai ugyanazok
   const labels = [];
   ordered.forEach((it, i) => {
-    if (it.lat != null) labels.push({ lat: it.lat, lon: it.lon, text: String(i + 1), color: MARK_ITEM });
+    if (it.lat != null) {
+      labels.push({ lat: it.lat, lon: it.lon, text: String(i + 1), color: MARK_ITEM, href: `#elem-${i + 1}` });
+    }
   });
   rejected.forEach((r, i) => {
     const m = midPoint(points.slice(r.from, r.to + 1));
-    if (m) labels.push({ lat: m.lat, lon: m.lon, text: 'E' + (i + 1), color: MARK_REJECTED });
+    if (m) labels.push({ lat: m.lat, lon: m.lon, text: 'E' + (i + 1), color: MARK_REJECTED, href: `#elvetett-${i + 1}` });
   });
   drawn.forEach((d, i) => {
     const m = midPoint(d.pts || []);
-    if (m) labels.push({ lat: m.lat, lon: m.lon, text: 'B' + (i + 1), color: MARK_DRAWN });
+    if (m) labels.push({ lat: m.lat, lon: m.lon, text: 'B' + (i + 1), color: MARK_DRAWN, href: `#berajzolt-${i + 1}` });
   });
 
   progress('Térképkép készítése… (alaptérkép letöltése)');
   let map = '';
   let mapTiles = { wanted: 0, drawn: 0 };
+  let mapLinks = '';
+  let places = new Map();
+
+  // a riporthoz akkor is kell az alaptérkép, ha a szerkesztőben vázlatra
+  // volt kapcsolva — utána visszaállítjuk
+  const tilesWere = tilesEnabled();
+  setTilesEnabled(true);
   try {
     const res = await mapImage(session, points, items, labels);
     map = res.url;
     mapTiles = res.tiles;
+    // átlátszó hivatkozások a térképi számokra: a jegyzőkönyv megfelelő
+    // sorára ugranak
+    mapLinks = res.boxes.filter((b) => b.href).map((b) => {
+      const pc = (n, total) => (Math.max(0, n) / total * 100).toFixed(3);
+      return `<a class="maphit" href="${b.href}" title="${rEsc(b.text)}" aria-label="${rEsc(b.text)}"`
+        + ` style="left:${pc(b.x, res.w)}%;top:${pc(b.y, res.h)}%;`
+        + `width:${pc(b.w, res.w)}%;height:${pc(b.h, res.h)}%"></a>`;
+    }).join('');
   } catch (_) { /* térkép nélkül is érvényes a riport */ }
+
+  if (include.places !== false) {
+    try {
+      places = await itemMaps(session, points, ordered, progress);
+    } catch (_) { /* helyszínrajz nélkül is teljes a riport */ }
+  }
+  setTilesEnabled(tilesWere);
 
   const media = [];
   for (let i = 0; i < ordered.length; i++) {
@@ -3681,14 +3799,38 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
       ? `<a class="maplink" href="https://www.google.com/maps/search/?api=1&amp;query=${it.lat},${it.lon}" target="_blank" rel="noopener">Megnyitás térképen</a>`
       : '';
 
-    return `<section class="item${it.type === 'condition' ? ' sev-' + rEsc(it.severity || '') : ''}" id="elem-${idx + 1}">
-  <h3><span class="num">${idx + 1}</span> ${rEsc(it.title || typeLabel(it.type))}
+    const n = idx + 1;
+    const place = places.get(idx);
+    // a fotó kisebb méretben jelenik meg; rákattintva teljes képernyőn
+    // nyílik ki (szkript nélkül, csak CSS-sel)
+    const photo = m.img ? `<figure class="zoom" id="kep-${n}">
+      <a class="zoom-close" href="#elem-${n}" aria-label="Kép bezárása"></a>
+      <a class="zoom-open" href="#kep-${n}"><img class="shot" src="${m.img}" alt="${rEsc(it.title || 'fotó')}"></a>
+      <figcaption class="zoom-hint">Kattintásra nagyítható</figcaption>
+      <span class="zoom-x">✕ Bezárás</span>
+    </figure>` : '';
+
+    // ha nincs felvétel, a helyszínrajz ne szoruljon üres oszlop mellé
+    const shots = [
+      photo,
+      m.video ? `<video class="shot" controls preload="none"${m.img ? ` poster="${m.img}"` : ''} src="${m.video}"></video>` : '',
+      !include.video && it.video ? '<p class="muted">Videófelvétel készült — a riportból helytakarékosságból kimaradt.</p>' : '',
+      m.audio ? `<audio controls src="${m.audio}"></audio>` : '',
+      !include.audio && it.audio ? '<p class="muted">Hangjegyzet készült — a riportból kimaradt.</p>' : '',
+    ].filter(Boolean).join('\n      ');
+
+    return `<section class="item${it.type === 'condition' ? ' sev-' + rEsc(it.severity || '') : ''}" id="elem-${n}">
+  <h3><span class="num">${n}</span> ${rEsc(it.title || typeLabel(it.type))}
     <span class="kind">${rEsc(typeLabel(it.type))}</span></h3>
-  ${m.img ? `<img class="shot" src="${m.img}" alt="${rEsc(it.title || 'fotó')}">` : ''}
-  ${m.video ? `<video class="shot" controls preload="none"${m.img ? ` poster="${m.img}"` : ''} src="${m.video}"></video>` : ''}
-  ${!include.video && it.video ? '<p class="muted">Videófelvétel készült — a riportból helytakarékosságból kimaradt.</p>' : ''}
-  ${m.audio ? `<audio controls src="${m.audio}"></audio>` : ''}
-  ${!include.audio && it.audio ? '<p class="muted">Hangjegyzet készült — a riportból kimaradt.</p>' : ''}
+  <div class="itembody">
+    ${shots ? `<div class="shots">${shots}</div>` : ''}
+    ${place ? `<figure class="placemap">
+      <img src="${place}" alt="Helyszínrajz: ${rEsc(formatCoord(it.lat, it.lon))}">
+      <figcaption>${rEsc(formatCoord(it.lat, it.lon))}${it.heading != null
+        ? ` · 🧭 a kamera iránya: ${rEsc(formatHeading(it.heading))}`
+        : ''}</figcaption>
+    </figure>` : ''}
+  </div>
   <table class="facts">${facts.map(([k, val]) => `<tr><th>${rEsc(k)}</th><td>${rEsc(val)}</td></tr>`).join('')}</table>
   ${maps}
 </section>`;
@@ -3721,25 +3863,25 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
 
   const rejectedBlock = rejected.length ? `
 <h2>Elvetett szakaszok</h2>
-<p class="muted">A kísérőautó bejárta, de nem része a javasolt útvonalnak.</p>
+<p class="muted">Nem része a javasolt útvonalnak.</p>
 <table class="grid">
   <thead><tr><th>Jel a térképen</th><th>Indoklás</th><th>Hossz</th><th>Hol</th></tr></thead>
   <tbody>${rejected.map((r, i) => {
     const m = midPoint(points.slice(r.from, r.to + 1));
-    return `<tr><td><span class="mark rejected">E${i + 1}</span></td>`
-      + `<td>${rEsc(r.reason || 'nincs indoklás')}</td><td>${rEsc(formatDistance(r.length))}</td>`
+    return `<tr id="elvetett-${i + 1}"><td><span class="mark rejected">E${i + 1}</span></td>`
+      + `<td>${rEsc(r.reason || '—')}</td><td>${rEsc(formatDistance(r.length))}</td>`
       + `<td>${m ? rEsc(formatCoord(m.lat, m.lon)) : '—'}</td></tr>`;
   }).join('')}</tbody>
 </table>` : '';
 
   const drawnBlock = drawn.length ? `
-<h2>Berajzolt szakaszok</h2>
-<p class="muted">Térképen megadott útvonalrész, amelyen a bejáráskor nem haladtunk végig.</p>
+<h2>Az útvonal további szakaszai</h2>
+<p class="muted">Az útvonal térképen megadott szakaszai.</p>
 <table class="grid">
   <thead><tr><th>Jel a térképen</th><th>Megnevezés</th><th>Megjegyzés</th><th>Hossz</th><th>Hol</th></tr></thead>
   <tbody>${drawn.map((d, i) => {
     const m = midPoint(d.pts || []);
-    return `<tr><td><span class="mark drawn">B${i + 1}</span></td><td>${rEsc(d.name || '—')}</td>`
+    return `<tr id="berajzolt-${i + 1}"><td><span class="mark drawn">B${i + 1}</span></td><td>${rEsc(d.name || '—')}</td>`
       + `<td>${rEsc(d.note || '')}</td><td>${rEsc(formatDistance(trackLength(d.pts || [])))}</td>`
       + `<td>${m ? rEsc(formatCoord(m.lat, m.lon)) : '—'}</td></tr>`;
   }).join('')}</tbody>
@@ -3779,8 +3921,15 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   .summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:14px 0; }
   .summary div { border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
   .summary b { display:block; font-size:19px; }
-  .map { width:100%; border:1px solid var(--line); border-radius:8px; }
+  .mapwrap { position:relative; display:block; }
+  .map { width:100%; border:1px solid var(--line); border-radius:8px; display:block; }
+  /* átlátszó kattintófelületek a térképi sorszámokon */
+  .maphit { position:absolute; display:block; border-radius:6px; }
+  .maphit:hover, .maphit:focus { outline:2px solid #13202e; outline-offset:2px; }
   .legend { font-size:13px; color:var(--muted); margin:6px 0 0; }
+  /* amelyik sorra a térképről ugrottunk, kiemelve */
+  tr:target td, section.item:target { background:#fff6d8; }
+  section.item:target { box-shadow:0 0 0 2px #e6c200; }
   .warnbox { border:1px solid #e6c200; background:#fffbe6; color:#6b5200;
              border-radius:8px; padding:8px 11px; margin-top:8px; }
   /* a térképi jelölésekkel azonos jelek a táblázatokban */
@@ -3798,8 +3947,30 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   .num { background:var(--accent); color:#fff; border-radius:999px; min-width:26px;
          height:26px; display:inline-grid; place-items:center; font-size:13px; }
   .kind { font-size:12px; color:var(--muted); font-weight:400; }
-  .shot { width:100%; max-width:720px; border-radius:6px; display:block; margin:0 0 10px; }
-  audio { width:100%; max-width:720px; margin:0 0 10px; }
+  /* elemblokk: bal oldalon a felvételek, jobb oldalon a helyszínrajz */
+  .itembody { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; margin-bottom:8px; }
+  .shots { flex:1 1 300px; min-width:0; }
+  .placemap { flex:0 0 260px; margin:0; }
+  .placemap img { width:100%; border:1px solid var(--line); border-radius:6px; display:block; }
+  .placemap figcaption { font-size:12px; color:var(--muted); margin-top:4px; }
+
+  .shot { width:100%; max-width:420px; border-radius:6px; display:block; margin:0 0 4px; }
+  audio { width:100%; max-width:420px; margin:0 0 10px; }
+
+  /* kép nagyítása kattintásra — szkript nélkül, a :target segítségével */
+  .zoom { margin:0 0 10px; }
+  .zoom-close, .zoom-x { display:none; }
+  .zoom-hint { font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .zoom:target { position:fixed; inset:0; z-index:900; margin:0; padding:20px;
+                 background:rgba(10,14,20,.94); display:flex;
+                 align-items:center; justify-content:center; }
+  .zoom:target .zoom-close { display:block; position:fixed; inset:0; }
+  .zoom:target .zoom-open { position:relative; z-index:1; }
+  .zoom:target .shot { max-width:94vw; max-height:92vh; width:auto; border-radius:4px; }
+  .zoom:target .zoom-hint { display:none; }
+  .zoom:target .zoom-x { display:block; position:fixed; top:14px; right:18px; z-index:2;
+                         color:#fff; font-size:14px; background:rgba(0,0,0,.5);
+                         padding:6px 12px; border-radius:999px; }
   .maplink { font-size:13px; }
   footer { margin-top:34px; padding-top:12px; border-top:1px solid var(--line);
            color:var(--muted); font-size:13px; }
@@ -3818,6 +3989,11 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
     .page { box-shadow:none; max-width:none; padding:0; }
     .item { break-inside:avoid; }
     a { color:inherit; text-decoration:none; }
+    /* nyomtatásban a kinagyított kép is a helyén maradjon */
+    .zoom:target { position:static; background:none; padding:0; display:block; }
+    .zoom:target .shot { max-width:420px; max-height:none; }
+    .zoom:target .zoom-close, .zoom:target .zoom-x { display:none; }
+    .maphit { display:none; }
   }
 </style>
 </head>
@@ -3835,7 +4011,7 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   <h2>Összegzés</h2>
   <div class="summary">
     <div><b>${rEsc(formatDistance(len.ok))}</b>érvényes útvonal</div>
-    ${drawn.length ? `<div><b>${rEsc(formatDistance(drawnLength(drawn)))}</b>berajzolt szakasz</div>` : ''}
+    ${drawn.length ? `<div><b>${rEsc(formatDistance(drawnLength(drawn)))}</b>térképen megadott szakasz</div>` : ''}
     ${rejected.length ? `<div><b>${rEsc(formatDistance(len.rejected))}</b>elvetett szakasz</div>` : ''}
     ${len.gaps ? `<div><b>${rEsc(formatDistance(len.gap))}</b>GPS-kimaradás</div>` : ''}
     <div><b>${counts.photo || 0}</b>fotó</div>
@@ -3846,13 +4022,16 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   ${session.note ? `<p>${rEsc(session.note)}</p>` : ''}
 
   ${map ? `<h2>Útvonal</h2>
-  <img class="map" src="${map}" alt="A bejárt útvonal térképen">
+  <div class="mapwrap">
+    <img class="map" src="${map}" alt="A bejárt útvonal térképen">
+    ${mapLinks}
+  </div>
   <p class="legend">Kék vonal: érvényes útvonal · narancs szaggatott: elvetett szakasz ·
-     zöld: berajzolt szakasz.<br>
-     A térképen lévő számok a táblázatok sorszámai:
+     zöld: térképen megadott szakasz.<br>
+     A térképen lévő számok <b>kattinthatók</b> — a jegyzőkönyv megfelelő sorára ugranak:
      <span class="mark elem">1</span> rögzített elem (fotó, hang, állapot) ·
      <span class="mark rejected">E1</span> elvetett szakasz ·
-     <span class="mark drawn">B1</span> berajzolt szakasz.
+     <span class="mark drawn">B1</span> térképen megadott szakasz.
      ${mapTiles.drawn ? rEsc(ATTRIBUTION_TEXT) : ''}</p>
   ${mapTiles.drawn === 0 ? `<p class="legend warnbox">Az alaptérkép (utcák, települések) nem
      töltődött be — a jegyzőkönyv készítésekor nem volt hálózat, vagy a térképszolgáltató nem
@@ -3876,6 +4055,345 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
     külön melléklet nélkül megnyitható.
   </footer>
 </div>
+</body>
+</html>`;
+}
+
+/* ===== js/terkepfajl.js ===== */
+// Önálló térképfájl a nyomvonalról.
+//
+// A „Pontos nyomvonal térképen” eddig a geojson.io oldalra vitte az adatot a
+// hivatkozás horgonyában. Az külső oldal, a formátuma bármikor változhat —
+// és változott is: a hosszabb nyomvonalat elvágta, hibát írt ki.
+//
+// Ehelyett az app maga készít egy önálló HTML-fájlt: benne a nyomvonal, az
+// elvetett és a térképen megadott szakaszok, a rögzített elemek, alatta
+// OpenStreetMap-alaptérkép. Nagyítható, mozgatható, bármelyik böngészőben
+// megnyitható, és elküldhető — az adat nem megy át idegen kiszolgálón.
+
+
+const mapEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+
+/** Egybefüggő szakaszok állapot szerint (ok / elvetett / kimaradás). */
+function segments(points) {
+  const out = [];
+  let cur = null;
+  for (const p of points) {
+    if (p.lat == null || p.lon == null) continue;
+    const status = isRejected(p) ? REJECTED : p.gap ? 'gap' : 'ok';
+    if (!cur || cur.status !== status) {
+      // a szakaszok érjenek össze: az előző utolsó pontja az új első pontja
+      const prev = cur && cur.pts.length ? cur.pts[cur.pts.length - 1] : null;
+      cur = { status, pts: prev && status !== 'gap' ? [prev] : [] };
+      out.push(cur);
+    }
+    cur.pts.push([Number(p.lat.toFixed(6)), Number(p.lon.toFixed(6))]);
+  }
+  return out.filter((s) => s.pts.length > 1);
+}
+
+function buildMapPage(session, points, items) {
+  const data = {
+    nev: session.name || 'Bejárás',
+    hossz: formatDistance(trackLength(points.filter((p) => !isRejected(p)))),
+    csempe: tileUrlTemplate(),
+    kozeplat: (function () {
+      const ls = points.filter((p) => p.lat != null).map((p) => p.lat);
+      return ls.length ? Number((ls.reduce((a, b) => a + b, 0) / ls.length).toFixed(4)) : 47.5;
+    })(),
+    forras: ATTRIBUTION,
+    vonalak: segments(points).map((s) => ({ allapot: s.status, pts: s.pts })),
+    rajzolt: (session.drawn || []).map((d) => ({
+      nev: d.nev || d.name || '',
+      pts: (d.pts || []).filter((p) => p.lat != null).map((p) => [Number(p.lat.toFixed(6)), Number(p.lon.toFixed(6))]),
+    })).filter((d) => d.pts.length > 1),
+    elemek: items.filter((i) => i.lat != null).map((i, n) => ({
+      n: n + 1,
+      lat: Number(i.lat.toFixed(6)),
+      lon: Number(i.lon.toFixed(6)),
+      tipus: i.type,
+      cim: i.title || typeLabel(i.type),
+      leiras: [i.what, (i.dims || []).join(' · '), i.note].filter(Boolean).join(' · '),
+      irany: i.heading == null ? null : Math.round(i.heading),
+    })),
+  };
+
+  return `<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>${mapEsc(data.nev)} — nyomvonal térképen</title>
+<style>
+  html, body { margin:0; height:100%; background:#eef2f7; color:#13202e;
+               font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  #wrap { position:fixed; inset:0; display:flex; flex-direction:column; }
+  header { padding:8px 12px; background:#fff; border-bottom:1px solid #d7dee8;
+           display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  header b { font-size:15px; }
+  header span { color:#5d6b7d; font-size:13px; }
+  #stage { position:relative; flex:1; min-height:0; }
+  canvas { width:100%; height:100%; display:block; touch-action:none; }
+  .zoom { position:absolute; right:10px; bottom:14px; display:flex; flex-direction:column; gap:6px; }
+  .zoom button { width:40px; height:40px; font-size:19px; border-radius:10px; cursor:pointer;
+                 border:1px solid #c8d2e0; background:rgba(255,255,255,.92); }
+  #info { position:absolute; left:10px; right:60px; bottom:14px; background:rgba(255,255,255,.96);
+          border:1px solid #c8d2e0; border-radius:10px; padding:9px 12px; display:none; }
+  #info.on { display:block; }
+  #info b { display:block; }
+  #info small { color:#5d6b7d; }
+  #info button { float:right; border:0; background:none; font-size:17px; cursor:pointer; }
+  .legend { padding:6px 12px; background:#fff; border-top:1px solid #d7dee8; color:#5d6b7d; font-size:12.5px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header><b>${mapEsc(data.nev)}</b><span>${mapEsc(data.hossz)} érvényes útvonal</span></header>
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div class="zoom">
+      <button id="in" title="Nagyítás" aria-label="Nagyítás">+</button>
+      <button id="out" title="Kicsinyítés" aria-label="Kicsinyítés">−</button>
+      <button id="fit" title="Teljes nyomvonal" aria-label="Teljes nyomvonal">⤢</button>
+    </div>
+    <div id="info"><button id="x" aria-label="Bezárás">✕</button><b></b><small></small></div>
+  </div>
+  <p class="legend">Kék: érvényes útvonal · narancs szaggatott: elvetett szakasz ·
+     zöld: térképen megadott szakasz · pont: rögzített elem (koppintásra megnyílik). Térkép: ${mapEsc(data.forras)}</p>
+</div>
+<script>
+var D = ${JSON.stringify(data)};
+var TS = 256, MINK = 1, MAXK = 2000;
+var c = document.getElementById('c'), g = c.getContext('2d');
+var view = { k: 1, tx: 0, ty: 0 }, hits = [], tiles = {}, pending = 0;
+
+function merc(lat, lon) {
+  var s = Math.sin(lat * Math.PI / 180);
+  s = Math.max(-0.9999, Math.min(0.9999, s));
+  return { x: (lon + 180) / 360, y: 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI) };
+}
+function allPts() {
+  var a = [];
+  D.vonalak.forEach(function (v) { a = a.concat(v.pts); });
+  D.rajzolt.forEach(function (v) { a = a.concat(v.pts); });
+  D.elemek.forEach(function (e) { a.push([e.lat, e.lon]); });
+  return a;
+}
+var box = (function () {
+  var p = allPts(), b = { x0: 1, x1: 0, y0: 1, y1: 0 };
+  if (!p.length) return { x0: 0, x1: 1, y0: 0, y1: 1 };
+  p.forEach(function (q) {
+    var m = merc(q[0], q[1]);
+    b.x0 = Math.min(b.x0, m.x); b.x1 = Math.max(b.x1, m.x);
+    b.y0 = Math.min(b.y0, m.y); b.y1 = Math.max(b.y1, m.y);
+  });
+  return b;
+})();
+
+var W = 0, H = 0, scale = 1, cx = 0, cy = 0;
+function layout() {
+  var dpr = window.devicePixelRatio || 1;
+  W = c.clientWidth; H = c.clientHeight;
+  c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  var sx = Math.max(box.x1 - box.x0, 1e-9), sy = Math.max(box.y1 - box.y0, 1e-9);
+  scale = Math.min((W - 44) / sx, (H - 44) / sy);
+  cx = (box.x0 + box.x1) / 2; cy = (box.y0 + box.y1) / 2;
+}
+function w2s(x, y) {
+  return { x: (W / 2 + (x - cx) * scale) * view.k + view.tx,
+           y: (H / 2 + (y - cy) * scale) * view.k + view.ty };
+}
+function s2w(x, y) {
+  return { x: cx + ((x - view.tx) / view.k - W / 2) / scale,
+           y: cy + ((y - view.ty) / view.k - H / 2) / scale };
+}
+function pr(lat, lon) { var m = merc(lat, lon); return w2s(m.x, m.y); }
+
+function tile(z, x, y) {
+  var n = Math.pow(2, z);
+  if (y < 0 || y >= n) return null;
+  var wx = ((x % n) + n) % n, key = z + '/' + wx + '/' + y, t = tiles[key];
+  if (t) return t.ok ? t.img : null;
+  var url = D.csempe.replace('{z}', z).replace('{x}', wx).replace('{y}', y);
+  var img = new Image();
+  tiles[key] = { img: img, ok: false };
+  pending++;
+  img.onload = function () { tiles[key].ok = true; pending--; draw(); };
+  // CORS-szal kérjük (így a vászon nem szennyeződik), de ha a csempeszerver
+  // nem küld CORS-fejlécet, egyszer megpróbáljuk anélkül is
+  img.onerror = function () {
+    pending--;
+    if (img.crossOrigin) {
+      var plain = new Image();
+      tiles[key] = { img: plain, ok: false };
+      pending++;
+      plain.onload = function () { tiles[key].ok = true; pending--; draw(); };
+      plain.onerror = function () { pending--; };
+      plain.src = url;
+    }
+  };
+  img.crossOrigin = 'anonymous';
+  img.src = url;
+  return null;
+}
+function paintTiles(px) {
+  var z = Math.max(0, Math.min(19, Math.round(Math.log2(px / TS))));
+  var n = Math.pow(2, z), tp = px / n;
+  if (!isFinite(tp) || tp < 1) return;
+  var a = s2w(0, 0), b = s2w(W, H);
+  var x0 = Math.floor(a.x * n), x1 = Math.ceil(b.x * n);
+  var y0 = Math.max(0, Math.floor(a.y * n)), y1 = Math.min(n - 1, Math.ceil(b.y * n));
+  if ((x1 - x0) * (y1 - y0) > 400) return;
+  for (var x = x0; x <= x1; x++) {
+    for (var y = y0; y <= y1; y++) {
+      var img = tile(z, x, y);
+      if (!img) continue;
+      var p = w2s(x / n, y / n);
+      g.drawImage(img, Math.floor(p.x), Math.floor(p.y), Math.ceil(tp) + 1, Math.ceil(tp) + 1);
+    }
+  }
+}
+function stroke(pts, color, width, dash) {
+  if (pts.length < 2) return;
+  g.save();
+  g.strokeStyle = color; g.lineWidth = width; g.lineJoin = 'round'; g.lineCap = 'round';
+  g.setLineDash(dash || []);
+  g.beginPath();
+  for (var i = 0; i < pts.length; i++) {
+    var p = pr(pts[i][0], pts[i][1]);
+    if (i) g.lineTo(p.x, p.y); else g.moveTo(p.x, p.y);
+  }
+  g.stroke();
+  g.restore();
+}
+function marker(p, r, fill) {
+  g.beginPath(); g.arc(p.x, p.y, r, 0, Math.PI * 2);
+  g.fillStyle = fill; g.fill();
+  g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke();
+}
+function scalebar(px) {
+  var mPerPx = 40075016.686 * Math.cos((D.kozeplat || 47.5) * Math.PI / 180) / px;
+  var target = 90 * mPerPx, pow = Math.pow(10, Math.floor(Math.log10(target)));
+  var nice = [1, 2, 5, 10].map(function (f) { return f * pow; })
+    .filter(function (v) { return v >= target * 0.6; })[0] || pow;
+  var w = nice / mPerPx;
+  g.save();
+  g.strokeStyle = '#1b1b1b'; g.fillStyle = '#1b1b1b'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(14, H - 14); g.lineTo(14 + w, H - 14);
+  g.moveTo(14, H - 19); g.lineTo(14, H - 9);
+  g.moveTo(14 + w, H - 19); g.lineTo(14 + w, H - 9);
+  g.stroke();
+  g.font = '12px system-ui, sans-serif';
+  g.fillText(nice >= 1000 ? (nice / 1000) + ' km' : nice + ' m', 14, H - 22);
+  g.restore();
+}
+function draw() {
+  layout();
+  g.fillStyle = '#eef2f7'; g.fillRect(0, 0, W, H);
+  var px = scale * view.k;
+  paintTiles(px);
+  var lw = Math.max(3, Math.min(8, 4 * Math.sqrt(view.k)));
+  D.vonalak.forEach(function (v) {
+    if (v.allapot === 'ok') stroke(v.pts, '#0a6ed1', lw);
+    else if (v.allapot === '${REJECTED}') stroke(v.pts, '#c2410c', lw * 0.85, [lw * 2, lw * 1.6]);
+    else stroke(v.pts, '#8b98a9', lw * 0.5, [1.5, lw * 1.8]);
+  });
+  D.rajzolt.forEach(function (v) { stroke(v.pts, '#1a7f45', lw); });
+  hits = [];
+  D.elemek.forEach(function (e) {
+    var p = pr(e.lat, e.lon);
+    if (e.irany != null) {
+      g.save(); g.translate(p.x, p.y); g.rotate(e.irany * Math.PI / 180);
+      g.beginPath(); g.moveTo(0, -20); g.lineTo(-8, 7); g.lineTo(0, 3); g.lineTo(8, 7);
+      g.closePath(); g.globalAlpha = 0.8; g.fillStyle = '#0a6ed1'; g.fill();
+      g.globalAlpha = 1; g.lineWidth = 1.2; g.strokeStyle = '#fff'; g.stroke(); g.restore();
+    }
+    marker(p, 7, '#0a6ed1');
+    g.fillStyle = '#fff'; g.font = 'bold 11px system-ui, sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(e.n), p.x, p.y + 0.5);
+    g.textAlign = 'start'; g.textBaseline = 'alphabetic';
+    hits.push({ x: p.x, y: p.y, r: 15, e: e });
+  });
+  scalebar(px);
+}
+
+/* ------------------------------------------- nagyítás, mozgatás */
+function zoomAt(ax, ay, k) {
+  k = Math.max(MINK, Math.min(MAXK, k));
+  var r = k / view.k;
+  view.tx = ax - (ax - view.tx) * r;
+  view.ty = ay - (ay - view.ty) * r;
+  view.k = k;
+  draw();
+}
+var ptrs = {}, count = 0, pinch = null, start = null, moved = false;
+function local(e) { var r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+c.addEventListener('pointerdown', function (e) {
+  c.setPointerCapture(e.pointerId);
+  ptrs[e.pointerId] = local(e); count++;
+  if (count === 2) {
+    var k = Object.keys(ptrs), a = ptrs[k[0]], b = ptrs[k[1]];
+    pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), k: view.k }; moved = true;
+  } else { start = local(e); moved = false; var v = view; pinch = null; start.tx = v.tx; start.ty = v.ty; }
+});
+c.addEventListener('pointermove', function (e) {
+  if (!ptrs[e.pointerId]) return;
+  ptrs[e.pointerId] = local(e);
+  var k = Object.keys(ptrs);
+  if (count === 2 && pinch) {
+    var a = ptrs[k[0]], b = ptrs[k[1]];
+    var d = Math.hypot(a.x - b.x, a.y - b.y);
+    zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, pinch.k * (d / (pinch.d || 1)));
+    return;
+  }
+  if (!start) return;
+  var p = local(e), dx = p.x - start.x, dy = p.y - start.y;
+  if (Math.hypot(dx, dy) > 7) moved = true;
+  if (moved) { view.tx = start.tx + dx; view.ty = start.ty + dy; draw(); }
+});
+function up(e) {
+  var p = ptrs[e.pointerId];
+  delete ptrs[e.pointerId]; count = Math.max(0, count - 1);
+  if (count < 2) pinch = null;
+  if (count === 0) {
+    if (!moved && p) pick(p);
+    start = null;
+  }
+}
+c.addEventListener('pointerup', up);
+c.addEventListener('pointercancel', up);
+c.addEventListener('wheel', function (e) {
+  e.preventDefault();
+  var p = local(e);
+  zoomAt(p.x, p.y, view.k * (e.deltaY < 0 ? 1.25 : 1 / 1.25));
+}, { passive: false });
+c.addEventListener('dblclick', function (e) { var p = local(e); zoomAt(p.x, p.y, view.k * 2); });
+
+function pick(p) {
+  var best = null, bd = 1e9;
+  hits.forEach(function (h) {
+    var d = Math.hypot(h.x - p.x, h.y - p.y);
+    if (d < h.r && d < bd) { bd = d; best = h.e; }
+  });
+  var box = document.getElementById('info');
+  if (!best) { box.className = ''; return; }
+  box.querySelector('b').textContent = best.n + '. ' + best.cim;
+  box.querySelector('small').textContent =
+    [best.leiras, best.lat.toFixed(6) + ', ' + best.lon.toFixed(6),
+     best.irany != null ? 'kameairány: ' + best.irany + '°' : ''].filter(Boolean).join(' · ');
+  box.className = 'on';
+}
+document.getElementById('x').onclick = function () { document.getElementById('info').className = ''; };
+document.getElementById('in').onclick = function () { zoomAt(W / 2, H / 2, view.k * 1.6); };
+document.getElementById('out').onclick = function () { zoomAt(W / 2, H / 2, view.k / 1.6); };
+document.getElementById('fit').onclick = function () { view = { k: 1, tx: 0, ty: 0 }; draw(); };
+window.addEventListener('resize', draw);
+draw();
+<\/script>
 </body>
 </html>`;
 }
@@ -7328,36 +7846,34 @@ function renderBackupStatus() {
  * útvonaltervezője csak pontokat kap és maga tervez utat — ez viszont magát
  * a vonalat adja át, az elvetett és a berajzolt szakaszokkal együtt.
  */
+/**
+ * Pontos nyomvonal térképen: saját, önálló HTML-térképfájl.
+ *
+ * Korábban a geojson.io oldalra vittük az adatot a hivatkozás horgonyában,
+ * de az külső oldal: hosszabb nyomvonalnál elvágta az adatot, és hibát írt
+ * ki. A saját fájl nagyítható, elküldhető, és az adat sem hagyja el a gépet.
+ */
 async function openTrackOnMap() {
-  const build = (tolerance) =>
-    JSON.stringify(toGeoJSON(state.session, state.points, state.items, { tolerance }));
-
-  let tolerance = 0.00004;
-  let json = build(tolerance);
-  if (JSON.parse(json).features.length === 0) {
+  if (!state.points.some((p) => p.lat != null) && !(state.session.drawn || []).length) {
     toast('Nincs megjeleníthető nyomvonal.', 'error');
     return;
   }
-  // hosszú bejárásnál ritkítunk, hogy elférjen a hivatkozásban
-  while (json.length > 30000 && tolerance < 0.002) {
-    tolerance *= 2;
-    json = build(tolerance);
+
+  const html = buildMapPage(state.session, state.points, state.items);
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const name = `${slug(state.session.name)}-terkep.html`;
+
+  // új lapon nyitjuk; ha a böngésző nem engedi (felugró ablak tiltás), mentjük
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (win) {
+    toast('Térkép megnyitva új lapon. A fájl a „Letöltés” gombbal is elmenthető.');
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+    return;
   }
-
-  const ok = await modal({
-    title: 'Megnyitás térképnézőben',
-    text: 'A nyomvonal a geojson.io oldalon jelenik meg, utcákkal és településekkel. '
-      + 'Az adat a hivatkozás horgony részében utazik, amit a böngésző nem küld el a kiszolgálónak — '
-      + 'de ez akkor is egy külső oldal. Megnyitjuk?',
-    okText: 'Megnyitás',
-  });
-  if (!ok) return;
-
-  window.open(
-    'https://geojson.io/#data=data:application/json,' + encodeURIComponent(json),
-    '_blank',
-    'noopener'
-  );
+  URL.revokeObjectURL(url);
+  download(blob, name);
+  toast('A térképfájl letöltve — bármelyik böngészőben megnyitható.');
 }
 
 /**
@@ -7385,6 +7901,13 @@ async function exportHTML() {
         options: [{ value: 'yes', label: 'Beágyazva' }, { value: 'no', label: 'Kihagyva' }],
       },
       {
+        name: 'places', label: 'Helyszínrajzok', type: 'select', value: 'yes',
+        options: [
+          { value: 'yes', label: 'Kis térkép minden elemhez (ajánlott)' },
+          { value: 'no', label: 'Kihagyva (gyorsabb)' },
+        ],
+      },
+      {
         name: 'video', label: 'Videók', type: 'select', value: hasVideo && videoMb < 60 ? 'yes' : 'no',
         options: [
           { value: 'no', label: hasVideo ? `Kihagyva (${videoMb.toFixed(0)} MB-ot spórol)` : 'Nincs videó' },
@@ -7403,6 +7926,7 @@ async function exportHTML() {
         photos: res.photos === 'full',
         audio: res.audio === 'yes',
         video: res.video === 'yes',
+        places: res.places !== 'no',
         licence: await reportLicence(),
       },
       (msg) => toast(msg)
