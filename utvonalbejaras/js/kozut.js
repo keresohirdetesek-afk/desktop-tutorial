@@ -189,15 +189,27 @@ export class KozutDocs {
       }));
     }
     for (const d of this.docs) {
+      const summary = this.previewOf(d.type);
       list.appendChild(el('div', { class: 'kozut-doc' }, [
-        el('div', {}, [
+        el('div', { class: 'kozut-doc-main' }, [
           el('b', { text: typeName(d.type) }),
           el('span', { class: 'muted small block', text: d.name }),
+          el('span', {
+            class: 'kozut-prev small',
+            text: summary.length ? 'Bekerül: ' + summary.join(' · ') : 'Ehhez most nincs kitölthető adat.',
+          }),
+          d.status ? el('span', { class: 'kozut-done small', text: d.status }) : null,
         ]),
-        el('button', {
-          class: 'btn ghost tiny', type: 'button', text: 'Eltávolítás',
-          onclick: () => { this.docs = this.docs.filter((x) => x !== d); this.save(); this.render(); },
-        }),
+        el('div', { class: 'kozut-doc-actions' }, [
+          el('button', {
+            class: 'btn primary tiny', type: 'button', text: '📥 Kitöltés',
+            onclick: () => this.fillOne(d),
+          }),
+          el('button', {
+            class: 'btn ghost tiny', type: 'button', text: 'Eltávolítás',
+            onclick: () => { this.docs = this.docs.filter((x) => x !== d); this.save(); this.render(); },
+          }),
+        ]),
       ]));
     }
 
@@ -263,6 +275,20 @@ export class KozutDocs {
           input('utszam', 'Útszám'),
           input('km', 'km szelvény'),
         ]),
+        // egy bejárás rendszerint ugyanazon az úton halad: elég egyszer beírni
+        el('button', {
+          class: 'btn ghost tiny', type: 'button', text: '⤓ Település és útszám a többi üres sorba',
+          onclick: () => {
+            for (const other of rows) {
+              if (other === it) continue;
+              if (!other.kozut.telepules) other.kozut.telepules = k.telepules || '';
+              if (!other.kozut.utszam) other.kozut.utszam = k.utszam || '';
+            }
+            this.save();
+            this.renderRows();
+            toast('Átmásolva az üres sorokba.');
+          },
+        }),
         input('munka', 'Elvégzendő munka / leírás (részletező)'),
         el('label', { class: 'check-row' }, [
           el('input', {
@@ -393,28 +419,76 @@ export class KozutDocs {
     return touched;
   }
 
+  /** Előnézet: mi kerül bele ebbe a dokumentumba. */
+  previewOf(id) {
+    const f = this.form;
+    const out = [];
+    const jegyzek = this.jegyzekRows().length;
+    const munka = this.munkaRows().length;
+    if (id === 'jegyzek' && jegyzek) out.push(`${jegyzek} sor a jegyzékbe`);
+    if (id === 'reszletezo') {
+      if (munka) out.push(`${munka} sor az elvégzendő munkákhoz`);
+      if (jegyzek) out.push(`${jegyzek} sor a jegyzékbe`);
+    }
+    if (id === 'bejaras') {
+      if (f.nevek) out.push('bejárást végzők');
+      if (f.feltetelek) out.push('bejárási nyilatkozat');
+      if (f.kritikus) out.push('kritikus helyszínek');
+    }
+    if (id === 'itiner') {
+      const n = ['kiindulo', 'indulas', 'vasut', 'megallok', 'mogottes', 'erkezes', 'cel', 'zarasi']
+        .filter((k) => f[k]).length;
+      if (n) out.push(`${n} itiner-mező`);
+    }
+    if (id === 'rendkivuli') {
+      const n = this.items.filter((i) => i.phase === 'transport').length;
+      if (n) out.push(`${n} szállítás közbeni esemény`);
+      else if (f.rendkivuli) out.push('megjegyzés');
+    }
+    if (f.datum && id !== 'ismeretlen') out.push('dátum');
+    return out;
+  }
+
+  /** Egy dokumentum kitöltése és letöltése. */
+  async fillOne(d) {
+    this.save();
+    try {
+      const files = await unzip(await d.blob.arrayBuffer());
+      const main = files.find((f) => f.name === 'word/document.xml');
+      if (!main) throw new Error('nem Word-dokumentum');
+      const doc = parseDocumentXml(main.data);
+      const touched = this.fillDoc(d.type, doc);
+      main.data = serializeDocumentXml(doc);
+      const blob = await zipFiles(files);
+      download(blob, d.name.replace(/\.docx$/i, '') + ' - kitoltve.docx');
+      d.status = touched
+        ? `✓ kitöltve (${touched} helyen) — a letöltések között`
+        : '✓ letöltve, de nem volt mit beleírni';
+      this.render();
+      return true;
+    } catch (err) {
+      d.status = '✕ ' + err.message;
+      this.render();
+      toast(`${d.name}: ${err.message}`, 'error');
+      return false;
+    }
+  }
+
   async fillAll() {
     if (!this.docs.length) {
       toast('Előbb töltse be a Közúttól kapott .docx fájlokat.', 'error');
       return;
     }
-    this.save();
     let ok = 0;
     for (const d of this.docs) {
-      try {
-        const files = await unzip(await d.blob.arrayBuffer());
-        const main = files.find((f) => f.name === 'word/document.xml');
-        const doc = parseDocumentXml(main.data);
-        const touched = this.fillDoc(d.type, doc);
-        main.data = serializeDocumentXml(doc);
-        const blob = await zipFiles(files);
-        download(blob, d.name.replace(/\.docx$/i, '') + ' - kitoltve.docx');
-        ok += 1;
-        if (!touched) toast(`${typeName(d.type)}: nem találtam kitölthető helyet.`, 'error');
-      } catch (err) {
-        toast(`${d.name}: ${err.message}`, 'error');
-      }
+      if (await this.fillOne(d)) ok += 1;
+      // a böngészők egymás után érkező letöltéseket blokkolhatnak; a kis
+      // szünet és a külön kérés után rendre átmennek
+      await new Promise((r) => setTimeout(r, 700));
     }
-    if (ok) toast(`${ok} dokumentum kitöltve és letöltve.`);
+    if (ok) {
+      toast(`${ok} dokumentum kitöltve. Ha a böngésző rákérdez, engedélyezze `
+        + 'a több fájl letöltését — vagy töltse le őket egyesével.');
+    }
   }
 }

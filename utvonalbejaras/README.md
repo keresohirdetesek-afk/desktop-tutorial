@@ -163,7 +163,12 @@ A bejárás adatlapján a **📋 Közút dokumentumok kitöltése** gomb nyitja 
    megadható. A beírt értékek a bejáráshoz mentődnek, legközelebb már ott
    vannak.
 
-A **Kitöltés és letöltés** minden betöltött űrlapot kitölt és lement:
+Minden dokumentum kártyáján látszik, **mi fog belekerülni** („Bekerül: 2 sor
+az elvégzendő munkákhoz · dátum”), és ott a saját **Kitöltés** gombja: egy
+koppintás, egy letöltés. (A böngészők az egymás után érkező letöltéseket
+blokkolhatják, ezért érdemes egyesével; a *Mind kitöltése* gomb is megvan, de
+ilyenkor engedélyezni kell a több fájl letöltését.) Kitöltés után a kártya
+kiírja, hány helyen írt bele az app.
 
 | Dokumentum | Mi kerül bele automatikusan |
 |---|---|

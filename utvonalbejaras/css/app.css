@@ -788,15 +788,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ------------------------------------------- Közút dokumentumok */
 
 .kozut-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+/* görgethető oszlopban a szövegek nem zsugorodhatnak össze (egymásra csúsznának) */
+.kozut-body > * { flex: none; }
 .kozut-foot { padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); background: var(--surface); }
 .section-head { margin: 12px 0 2px; font-size: 14px; font-weight: 650; }
 
 .kozut-list { display: flex; flex-direction: column; gap: 8px; }
 .kozut-doc {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px; padding: 9px 12px;
+  border-radius: 12px; padding: 10px 12px;
 }
+.kozut-doc-main { min-width: 0; flex: 1; }
+.kozut-doc-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.kozut-prev { display: block; color: var(--muted); margin-top: 3px; }
+.kozut-done { display: block; color: var(--ok, #3ddc84); margin-top: 3px; }
 .block { display: block; }
 
 .kozut-fields { display: flex; flex-direction: column; gap: 10px; }
