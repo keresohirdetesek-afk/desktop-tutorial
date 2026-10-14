@@ -351,3 +351,97 @@ export function fillDots(el, text, minDots = 6) {
   }
   return false;
 }
+
+/* --------------------------------------------------------- képek */
+
+const EMU_PER_PX = 9525;
+const MAX_W_EMU = 5040000;   // kb. 14 cm — belefér a lap tükrébe
+const MAX_H_EMU = 3600000;   // kb. 10 cm
+
+const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
+
+/** Egy fájl tartalma szövegként a kibontott listából. */
+function partText(files, name) {
+  const f = files.find((x) => x.name === name);
+  return f ? new TextDecoder().decode(f.data) : null;
+}
+function setPart(files, name, text) {
+  const f = files.find((x) => x.name === name);
+  const data = new TextEncoder().encode(text);
+  if (f) f.data = data;
+  else files.push({ name, data });
+}
+
+/** Kiterjesztés bejegyzése a [Content_Types].xml-be, ha még nincs. */
+export function ensureContentType(files, ext, type) {
+  const name = '[Content_Types].xml';
+  const text = partText(files, name);
+  if (!text || new RegExp(`Extension="${ext}"`, 'i').test(text)) return;
+  setPart(files, name, text.replace(/<Types([^>]*)>/,
+    `<Types$1><Default Extension="${ext}" ContentType="${type}"/>`));
+}
+
+/** Új kapcsolat a document.xml-hez (kép beszúrásához). */
+export function addRelationship(files, id, target, type) {
+  const name = 'word/_rels/document.xml.rels';
+  const text = partText(files, name);
+  if (!text) throw new Error('hiányzik a dokumentum kapcsolatlistája');
+  setPart(files, name, text.replace(/<\/Relationships>\s*$/,
+    `<Relationship Id="${id}" Type="${type}" Target="${target}"/></Relationships>`));
+}
+
+/**
+ * Kép beszúrása a dokumentumba, a megadott bekezdés után.
+ *
+ * @param {Array} files      a kibontott .docx részei (ide kerül a kép is)
+ * @param {Element} after    ez után a bekezdés után
+ * @param {object} image     { bytes, ext, width, height }
+ * @param {number} index     sorszám (az azonosítók egyediségéhez)
+ */
+export function insertImageAfter(files, after, image, index) {
+  const doc = after.ownerDocument;
+  const file = `kep${index}.${image.ext}`;
+  const relId = `rIdFoto${index}`;
+
+  ensureContentType(files, image.ext, image.ext === 'png' ? 'image/png' : 'image/jpeg');
+  files.push({ name: 'word/media/' + file, data: image.bytes });
+  addRelationship(files, relId, 'media/' + file,
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image');
+
+  let w = (image.width || 800) * EMU_PER_PX;
+  let h = (image.height || 600) * EMU_PER_PX;
+  const scale = Math.min(MAX_W_EMU / w, MAX_H_EMU / h, 1);
+  w = Math.round(w * scale);
+  h = Math.round(h * scale);
+  const id = 9000 + index;
+
+  // a w, r és wp névtér a gyökéren van; az a és pic itt, helyben
+  const xml = `<w:p xmlns:w="${WNS}"
+      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+      xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+      xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+  <w:pPr><w:jc w:val="center"/></w:pPr>
+  <w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">
+    <wp:extent cx="${w}" cy="${h}"/>
+    <wp:effectExtent l="0" t="0" r="0" b="0"/>
+    <wp:docPr id="${id}" name="Kep${index}"/>
+    <wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>
+    <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+      <pic:pic>
+        <pic:nvPicPr><pic:cNvPr id="${id}" name="${file}"/><pic:cNvPicPr/></pic:nvPicPr>
+        <pic:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+        <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+      </pic:pic>
+    </a:graphicData></a:graphic>
+  </wp:inline></w:drawing></w:r>
+</w:p>`;
+
+  const parsed = new DOMParser().parseFromString(xml, 'application/xml');
+  if (parsed.querySelector('parsererror')) throw new Error('a kép beillesztése nem sikerült');
+  const node = doc.importNode(parsed.documentElement, true);
+  after.parentNode.insertBefore(node, after.nextSibling);
+  return node;
+}

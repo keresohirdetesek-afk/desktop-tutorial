@@ -4960,6 +4960,100 @@ function fillDots(el, text, minDots = 6) {
   return false;
 }
 
+/* --------------------------------------------------------- képek */
+
+const EMU_PER_PX = 9525;
+const MAX_W_EMU = 5040000;   // kb. 14 cm — belefér a lap tükrébe
+const MAX_H_EMU = 3600000;   // kb. 10 cm
+
+const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
+
+/** Egy fájl tartalma szövegként a kibontott listából. */
+function partText(files, name) {
+  const f = files.find((x) => x.name === name);
+  return f ? new TextDecoder().decode(f.data) : null;
+}
+function setPart(files, name, text) {
+  const f = files.find((x) => x.name === name);
+  const data = new TextEncoder().encode(text);
+  if (f) f.data = data;
+  else files.push({ name, data });
+}
+
+/** Kiterjesztés bejegyzése a [Content_Types].xml-be, ha még nincs. */
+function ensureContentType(files, ext, type) {
+  const name = '[Content_Types].xml';
+  const text = partText(files, name);
+  if (!text || new RegExp(`Extension="${ext}"`, 'i').test(text)) return;
+  setPart(files, name, text.replace(/<Types([^>]*)>/,
+    `<Types$1><Default Extension="${ext}" ContentType="${type}"/>`));
+}
+
+/** Új kapcsolat a document.xml-hez (kép beszúrásához). */
+function addRelationship(files, id, target, type) {
+  const name = 'word/_rels/document.xml.rels';
+  const text = partText(files, name);
+  if (!text) throw new Error('hiányzik a dokumentum kapcsolatlistája');
+  setPart(files, name, text.replace(/<\/Relationships>\s*$/,
+    `<Relationship Id="${id}" Type="${type}" Target="${target}"/></Relationships>`));
+}
+
+/**
+ * Kép beszúrása a dokumentumba, a megadott bekezdés után.
+ *
+ * @param {Array} files      a kibontott .docx részei (ide kerül a kép is)
+ * @param {Element} after    ez után a bekezdés után
+ * @param {object} image     { bytes, ext, width, height }
+ * @param {number} index     sorszám (az azonosítók egyediségéhez)
+ */
+function insertImageAfter(files, after, image, index) {
+  const doc = after.ownerDocument;
+  const file = `kep${index}.${image.ext}`;
+  const relId = `rIdFoto${index}`;
+
+  ensureContentType(files, image.ext, image.ext === 'png' ? 'image/png' : 'image/jpeg');
+  files.push({ name: 'word/media/' + file, data: image.bytes });
+  addRelationship(files, relId, 'media/' + file,
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image');
+
+  let w = (image.width || 800) * EMU_PER_PX;
+  let h = (image.height || 600) * EMU_PER_PX;
+  const scale = Math.min(MAX_W_EMU / w, MAX_H_EMU / h, 1);
+  w = Math.round(w * scale);
+  h = Math.round(h * scale);
+  const id = 9000 + index;
+
+  // a w, r és wp névtér a gyökéren van; az a és pic itt, helyben
+  const xml = `<w:p xmlns:w="${WNS}"
+      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+      xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+      xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+  <w:pPr><w:jc w:val="center"/></w:pPr>
+  <w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">
+    <wp:extent cx="${w}" cy="${h}"/>
+    <wp:effectExtent l="0" t="0" r="0" b="0"/>
+    <wp:docPr id="${id}" name="Kep${index}"/>
+    <wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>
+    <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+      <pic:pic>
+        <pic:nvPicPr><pic:cNvPr id="${id}" name="${file}"/><pic:cNvPicPr/></pic:nvPicPr>
+        <pic:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+        <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+      </pic:pic>
+    </a:graphicData></a:graphic>
+  </wp:inline></w:drawing></w:r>
+</w:p>`;
+
+  const parsed = new DOMParser().parseFromString(xml, 'application/xml');
+  if (parsed.querySelector('parsererror')) throw new Error('a kép beillesztése nem sikerült');
+  const node = doc.importNode(parsed.documentElement, true);
+  after.parentNode.insertBefore(node, after.nextSibling);
+  return node;
+}
+
 /* ===== js/kozut.js ===== */
 // A Magyar Közút bejárási dokumentumainak kitöltése a bejárás adataiból.
 //
@@ -4996,7 +5090,7 @@ const timeHu = (t) => {
   return `${dateHu(t)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-/** Egy elem leírása a dokumentumokba. */
+/** Egy elem leírása a dokumentumokba — minden, amit róla tudunk. */
 function describeForDoc(it) {
   const bits = [];
   if (it.type === 'condition') {
@@ -5005,10 +5099,10 @@ function describeForDoc(it) {
     if (it.condition) bits.push(conditionLabel(it.condition));
     if (it.severity) bits.push(severityLabel(it.severity));
   } else {
-    if (it.title) bits.push(it.title);
-    else bits.push(typeLabel(it.type));
+    bits.push(it.title || typeLabel(it.type));
   }
   if ((it.dims || []).length) bits.push(it.dims.join(' · '));
+  if ((it.texts || []).length) bits.push(it.texts.join(' · '));   // a fotóra írt feliratok
   if (it.note) bits.push(it.note);
   return bits.filter(Boolean).join(' – ');
 }
@@ -5090,7 +5184,10 @@ class KozutDocs {
     for (const it of this.items) {
       it.kozut = Object.assign({
         telepules: '', utszam: '', km: '',
-        munka: it.type === 'condition' ? describeForDoc(it) : '',
+        // minden rögzített helyszín bekerül a részletezőbe — a fotók is,
+        // nemcsak az állapotbejegyzések; ami nem kell, az kivehető
+        munka: describeForDoc(it),
+        reszletezo: true,
         jegyzek: it.type === 'condition' && it.category === 'tabla',
         megnevezes: it.type === 'condition' ? (it.what || categoryLabel(it.category)) : (it.title || ''),
         ideiglenes: '', vegleges: '', technologia: '', jovahagyas: '',
@@ -5213,6 +5310,16 @@ class KozutDocs {
       wrap.appendChild(el('p', { class: 'hint', text: 'Nincs rögzített helyszín a bejárásban.' }));
       return;
     }
+    const setAll = (on) => {
+      for (const it of rows) it.kozut.reszletezo = on;
+      this.save();
+      this.render();
+    };
+    wrap.appendChild(el('div', { class: 'editor-row' }, [
+      el('span', { class: 'muted small', text: `${rows.length} helyszín` }),
+      el('button', { class: 'btn ghost tiny', type: 'button', text: 'Mind a részletezőbe', onclick: () => setAll(true) }),
+      el('button', { class: 'btn ghost tiny', type: 'button', text: 'Egyik se', onclick: () => setAll(false) }),
+    ]));
     rows.forEach((it, idx) => {
       const k = it.kozut;
       const input = (name, label, width) => el('label', { class: 'field tiny' + (width ? ' ' + width : '') }, [
@@ -5250,6 +5357,14 @@ class KozutDocs {
         el('label', { class: 'check-row' }, [
           el('input', {
             type: 'checkbox',
+            checked: k.reszletezo !== false,
+            onchange: (e) => { k.reszletezo = e.target.checked; this.render(); },
+          }),
+          el('span', { text: 'Kerüljön a részletezőbe' }),
+        ]),
+        el('label', { class: 'check-row' }, [
+          el('input', {
+            type: 'checkbox',
             checked: !!k.jegyzek,
             onchange: (e) => { k.jegyzek = e.target.checked; this.renderRows(); },
           }),
@@ -5270,12 +5385,22 @@ class KozutDocs {
 
   /* ------------------------------------------------- kitöltés */
 
+  /** Ha a helyszín rovatok üresek, a koordináta kerüljön a leírás végére. */
+  withPlace(it, k, text) {
+    const known = k.telepules || k.utszam || k.km;
+    if (known || it.lat == null) return text;
+    return `${text} (${formatCoord(it.lat, it.lon)})`;
+  }
+
   munkaRows() {
     const out = [];
     this.items.forEach((it) => {
       const k = it.kozut || {};
-      if (!k.munka) return;
-      out.push([String(out.length + 1), k.telepules || '', k.utszam || '', k.km || '', k.munka]);
+      if (k.reszletezo === false || !k.munka) return;
+      out.push([
+        String(out.length + 1), k.telepules || '', k.utszam || '', k.km || '',
+        this.withPlace(it, k, k.munka),
+      ]);
     });
     return out;
   }
@@ -5287,10 +5412,47 @@ class KozutDocs {
       if (!k.jegyzek) return;
       out.push([
         String(out.length + 1), k.telepules || '', k.utszam || '', k.km || '',
-        k.megnevezes || describeForDoc(it), k.ideiglenes || '', k.vegleges || '',
-        k.technologia || '', k.jovahagyas || '',
+        this.withPlace(it, k, k.megnevezes || describeForDoc(it)),
+        k.ideiglenes || '', k.vegleges || '', k.technologia || '', k.jovahagyas || '',
       ]);
     });
+    return out;
+  }
+
+  /** Melyik elemek fotói kerüljenek a részletezőbe. */
+  photoItems() {
+    return this.items.filter((it) => (it.kozut || {}).reszletezo !== false && (it.flat || it.photo))
+      .slice(0, 30);
+  }
+
+  /**
+   * A fotók előkészítése a Word-dokumentumhoz: kisebb méret, hogy a fájl
+   * elküldhető maradjon, és a képpontméret, amiből a Word a helyet számolja.
+   */
+  async preparePhotos() {
+    const out = [];
+    for (const it of this.photoItems()) {
+      const blob = it.flat || it.photo;
+      try {
+        const bitmap = await createImageBitmap(blob);
+        const scale = Math.min(1, 1100 / Math.max(bitmap.width, bitmap.height));
+        const w = Math.round(bitmap.width * scale);
+        const h = Math.round(bitmap.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+        if (bitmap.close) bitmap.close();
+        const small = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.78));
+        out.push({
+          item: it,
+          bytes: new Uint8Array(await (small || blob).arrayBuffer()),
+          ext: 'jpeg',
+          width: w,
+          height: h,
+        });
+      } catch (_) { /* ezt a képet kihagyjuk */ }
+    }
     return out;
   }
 
@@ -5310,7 +5472,7 @@ class KozutDocs {
     return bits.join('\n');
   }
 
-  fillDoc(id, doc) {
+  fillDoc(id, doc, files, photos) {
     const f = this.form;
     const tableWith = (needle) => tablesOf(doc).find((t) => textOf(t).includes(needle));
     let touched = 0;
@@ -5322,6 +5484,24 @@ class KozutDocs {
     if (id === 'reszletezo') {
       const t = tableWith('Elvégzendő munka');
       if (t) touched += fillTable(t, this.munkaRows());
+
+      // „Fényképfelvétel a kritikus helyszínekről és a jelenlegi
+      // állapotokról” — ide kerülnek a bejáráson készült fotók
+      const head = findLeafParagraphs(doc, 'Fényképfelvétel')[0];
+      if (head && photos && photos.length) {
+        let anchor = head;
+        photos.forEach((photo, i) => {
+          const k = photo.item.kozut || {};
+          const it = photo.item;
+          const hely = [k.telepules, k.utszam, k.km].filter(Boolean).join(', ')
+            || (it.lat != null ? formatCoord(it.lat, it.lon) : '');
+          const ido = it.created ? ' · ' + timeHu(it.created) : '';
+          const cim = `${i + 1}. ${hely ? hely + ' — ' : ''}${k.munka || describeForDoc(it)}${ido}`;
+          anchor = addParagraphAfter(anchor, cim, { plain: true });
+          anchor = insertImageAfter(files, anchor, photo, i + 1);
+          touched += 1;
+        });
+      }
     }
     if (id === 'bejaras') {
       if (f.nevek) {
@@ -5386,6 +5566,8 @@ class KozutDocs {
     if (id === 'reszletezo') {
       if (munka) out.push(`${munka} sor az elvégzendő munkákhoz`);
       if (jegyzek) out.push(`${jegyzek} sor a jegyzékbe`);
+      const fotok = this.photoItems().length;
+      if (fotok) out.push(`${fotok} fénykép`);
     }
     if (id === 'bejaras') {
       if (f.nevek) out.push('bejárást végzők');
@@ -5414,7 +5596,8 @@ class KozutDocs {
       const main = files.find((f) => f.name === 'word/document.xml');
       if (!main) throw new Error('nem Word-dokumentum');
       const doc = parseDocumentXml(main.data);
-      const touched = this.fillDoc(d.type, doc);
+      const photos = d.type === 'reszletezo' ? await this.preparePhotos() : [];
+      const touched = this.fillDoc(d.type, doc, files, photos);
       main.data = serializeDocumentXml(doc);
       const blob = await zipFiles(files);
       download(blob, d.name.replace(/\.docx$/i, '') + ' - kitoltve.docx');

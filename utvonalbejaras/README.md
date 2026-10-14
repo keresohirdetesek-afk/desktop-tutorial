@@ -156,12 +156,16 @@ A bejárás adatlapján a **📋 Közút dokumentumok kitöltése** gomb nyitja 
    mögöttes forgalom elengedése, érkezés, célállomás, zárási terv). Amit a
    bejárásból tudni lehet — időpontok, kiinduló és célkoordináta, a bejárt
    hossz, a kritikus helyszínek száma —, az előre ki van töltve.
-3. **Helyszínek** — minden rögzített elem egy sor: település, útszám, km
-   szelvény (ezek a GPS-ből nem derülnek ki, itt adhatók meg), az elvégzendő
-   munka leírása, és egy jelölő, hogy a *Jegyzékbe* is kerüljön-e (elbontandó
-   tábla, érintett közúti jelzés) — ott a helyreállítás technológiája is
-   megadható. A beírt értékek a bejáráshoz mentődnek, legközelebb már ott
-   vannak.
+3. **Helyszínek** — **minden rögzített elem egy sor**: a fotók is, nemcsak az
+   állapotbejegyzések. Soronként: település, útszám, km szelvény (ezek a
+   GPS-ből nem derülnek ki, itt adhatók meg — egy gombbal átmásolhatók a
+   többi üres sorba), a leírás (a címből, a mért értékekből, a képre írt
+   feliratokból és a megjegyzésből összeállítva), valamint két jelölő:
+   *Kerüljön a részletezőbe* és *Jegyzékbe* (elbontandó tábla, érintett
+   közúti jelzés — ott a helyreállítás technológiája is megadható). A beírt
+   értékek a bejáráshoz mentődnek, legközelebb már ott vannak.
+   Ha egy sorhoz nincs megadva település/útszám, a leírás végére a
+   **koordináta** kerül, hogy a helyszín akkor is beazonosítható legyen.
 
 Minden dokumentum kártyáján látszik, **mi fog belekerülni** („Bekerül: 2 sor
 az elvégzendő munkákhoz · dátum”), és ott a saját **Kitöltés** gombja: egy
@@ -173,7 +177,7 @@ kiírja, hány helyen írt bele az app.
 | Dokumentum | Mi kerül bele automatikusan |
 |---|---|
 | Útvonal bejárás | a bejárást végzők neve, a bejárási nyilatkozat, a kritikus helyszínek vizsgálata, dátum |
-| Részletező | az *Elvégzendő munka* táblázat és a *Jegyzék* táblázat sorai a rögzített helyszínekből |
+| Részletező | az *Elvégzendő munka* és a *Jegyzék* táblázat sorai, és a **fényképek** a „Fényképfelvétel a kritikus helyszínekről” rész alá, sorszámmal, helyszínnel, időponttal |
 | Jegyzék | az elbontandó táblák, jelzések sorai (helyszín, megnevezés, technológia) |
 | Itiner | kiinduló állomás, indulás és érkezés időpontja, megállók, zárási terv |
 | Rendkívüli jegyzék | a **szállítás közben** (élő kísérésben) rögzített események: helyszín, időpont, leírás, jelleg |
