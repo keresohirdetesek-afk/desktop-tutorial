@@ -167,6 +167,10 @@ A bejárás adatlapján a **📋 Közút dokumentumok kitöltése** gomb nyitja 
    Ha egy sorhoz nincs megadva település/útszám, a leírás végére a
    **koordináta** kerül, hogy a helyszín akkor is beazonosítható legyen.
 
+   **Ha betöltötte az úthálózati adatot** (lásd a következő pontot), az
+   útszám és a km szelvény magától megjelenik minden sornál, és egy gombbal
+   beírható. Enélkül kézi úton:
+
    Az útszám és a szelvény kikereséséhez soronként ott a **🔎 Útszám és
    szelvény keresése** gomb. A Magyar Közút
    [útszámkeresője](https://utszamkereso.kozut.hu/) a *Koordinátakeresőben*
@@ -183,6 +187,26 @@ A bejárás adatlapján a **📋 Közút dokumentumok kitöltése** gomb nyitja 
    > útszámkereső saját adatán ellenőrizve az eltérés **10 cm alatti** — ezt
    > teszt is őrzi. Automatikus lekérdezés nincs: az útszámkeresőnek nincs
    > nyilvános, böngészőből hívható felülete.
+
+#### Úthálózati adat (NAP) — az útszám és a szelvény magától
+
+A [Nemzeti Adathozzáférési Pontról](https://napportal.kozut.hu/) (az EU által
+előírt, országos adatkapu a közúti adatokhoz) regisztráció után ingyen
+letölthető az **országos úthálózat vonalas állománya**, többek között GeoJSON
+formátumban. A *Közút dokumentumok* képernyőn betöltve az app minden
+rögzített ponthoz kiírja, melyik út melyik szelvényénél van:
+
+- a fájl lehet **WGS84** vagy **EOV** vetületű — az app felismeri és
+  átszámítja (ZIP-be csomagolt GeoJSON-t is elfogad);
+- a mezőneveket (útszám, kezdő és vég szelvény, település) megpróbálja
+  kitalálni — `KEZDOSZELVENY`, `km szelvény -tól`, `szelv_kezd`, `km_from`
+  mind megy —, és a *Mezők módosítása* gombbal felül lehet bírálni;
+- a szelvény a szakasz kezdő és vég szelvénye közé arányosan osztva, a
+  ponthoz legközelebbi útszakaszon mérve adódik („27 km + 387 m”), a sorban
+  az is látszik, hány méterre van a pont az úttól;
+- egy gombbal minden üres mező kitölthető, soronként is beírható;
+- a feldolgozott hálózat a készüléken marad (egyszer kell betölteni, nem
+  bejárásonként), és **hálózat nélkül is működik**.
 
 Minden dokumentum kártyáján látszik, **mi fog belekerülni** („Bekerül: 2 sor
 az elvégzendő munkákhoz · dátum”), és ott a saját **Kitöltés** gombja: egy
@@ -598,7 +622,8 @@ utvonalbejaras/
     ├── terkepnezet.js      nagyítás/mozgatás a térképes vásznakon
     ├── terkepfajl.js       önálló, nagyítható HTML-térkép a nyomvonalról
     ├── docx.js             Word-fájlok (.docx) kibontása, kitöltése, mentése
-    ├── eov.js              GPS → EOV átszámítás az útszámkeresőhöz
+    ├── eov.js              GPS ↔ EOV átszámítás (EPSG:23700)
+    ├── uthalozat.js        NAP úthálózati adat: betöltés, útszám- és szelvénykeresés
     ├── kozut.js            a Közút űrlapjainak kitöltése a bejárás adataiból
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés
