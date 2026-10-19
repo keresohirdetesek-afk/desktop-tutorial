@@ -40,6 +40,34 @@ const timeHu = (t) => {
   return `${dateHu(t)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
+/**
+ * A Magyar Közút útszámkeresője. A GPS-ből az útszám és a km szelvény nem
+ * derül ki, de ezen az oldalon a koordináta alapján kikereshető.
+ */
+const UTSZAM_KERESO = 'https://utszamkereso.kozut.hu/';
+
+/** Szöveg a vágólapra — hogy a keresőbe csak be kelljen illeszteni. */
+async function toClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_) { /* jöhet a tartalék */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (_) {
+    return false;
+  }
+}
+
 /** Egy elem leírása a dokumentumokba — minden, amit róla tudunk. */
 function describeForDoc(it) {
   const bits = [];
@@ -289,6 +317,23 @@ export class KozutDocs {
           input('utszam', 'Útszám'),
           input('km', 'km szelvény'),
         ]),
+        // a Közút útszámkeresője koordináta alapján megmondja az útszámot és
+        // a szelvényt; a koordinátát a vágólapra tesszük, hogy csak be
+        // kelljen illeszteni
+        it.lat != null ? el('button', {
+          class: 'btn ghost tiny', type: 'button',
+          text: '🔎 Útszám keresése ezzel a koordinátával',
+          onclick: async (e) => {
+            const coord = `${it.lat.toFixed(6)}, ${it.lon.toFixed(6)}`;
+            const copied = await toClipboard(coord);
+            // ugyanabban a fülben nyílik meg, nem szaporodnak a lapok
+            window.open(UTSZAM_KERESO, 'utszamkereso');
+            toast(copied
+              ? `${coord} a vágólapon — illessze be a kereső mezőjébe, majd írja ide az útszámot és a szelvényt.`
+              : `Keresse meg ezt a pontot: ${coord}`);
+            e.preventDefault();
+          },
+        }) : null,
         // egy bejárás rendszerint ugyanazon az úton halad: elég egyszer beírni
         el('button', {
           class: 'btn ghost tiny', type: 'button', text: '⤓ Település és útszám a többi üres sorba',

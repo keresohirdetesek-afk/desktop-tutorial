@@ -167,6 +167,14 @@ A bejárás adatlapján a **📋 Közút dokumentumok kitöltése** gomb nyitja 
    Ha egy sorhoz nincs megadva település/útszám, a leírás végére a
    **koordináta** kerül, hogy a helyszín akkor is beazonosítható legyen.
 
+   Az útszám és a szelvény kikereséséhez soronként ott a **🔎 Útszám
+   keresése** gomb: a koordinátát a vágólapra teszi, és megnyitja a Magyar
+   Közút [útszámkeresőjét](https://utszamkereso.kozut.hu/) (mindig ugyanabban
+   a fülben). Ott beillesztve leolvasható az útszám és a km szelvény, amit
+   ide visszaírva a bejáráshoz mentődik. Automatikus lekérdezés nincs: az
+   útszámkereső nem kínál nyilvános lekérdezési felületet, amit az app a
+   böngészőből hívhatna.
+
 Minden dokumentum kártyáján látszik, **mi fog belekerülni** („Bekerül: 2 sor
 az elvégzendő munkákhoz · dátum”), és ott a saját **Kitöltés** gombja: egy
 koppintás, egy letöltés. (A böngészők az egymás után érkező letöltéseket
