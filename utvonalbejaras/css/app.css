@@ -819,3 +819,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .field.tiny input { padding: 8px 10px; font-size: 14px; }
 
 .kozut-eov { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.kozut-net { display: flex; flex-direction: column; gap: 6px; }
+.kozut-net .net-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
+}
+.kozut-hit { color: var(--accent); font-size: 12.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

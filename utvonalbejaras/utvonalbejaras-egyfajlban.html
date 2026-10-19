@@ -831,6 +831,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .kozut-eov { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+.kozut-net { display: flex; flex-direction: column; gap: 6px; }
+.kozut-net .net-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
+}
+.kozut-hit { color: var(--accent); font-size: 12.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
 </style>
 
 <header id="topbar">
@@ -1070,7 +1077,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
     <h3 class="section-head">2. Közös adatok</h3>
     <div id="kozut-form" class="kozut-fields"></div>
 
-    <h3 class="section-head">3. Helyszínek (a jegyzékhez és a részletezőhöz)</h3>
+    <h3 class="section-head">3. Úthálózati adat (NAP) — nem kötelező</h3>
+    <p class="hint">
+      A <a href="https://napportal.kozut.hu/" target="_blank" rel="noopener">Nemzeti
+      Adathozzáférési Pontról</a> (regisztráció után, ingyen) letölthető az országos
+      úthálózat <b>GeoJSON</b> állománya. Ha betölti, az app minden ponthoz magától
+      kiírja az útszámot — és ha az adat tartalmazza a szelvényezést, a km szelvényt is.
+      Az adat a készüléken marad, hálózat nélkül is működik.
+    </p>
+    <div id="kozut-net" class="kozut-net"></div>
+    <input id="kozut-net-file" type="file" hidden accept=".geojson,.json,.zip,application/geo+json,application/json,application/zip">
+    <button id="kozut-net-add" class="btn ghost small block">🛣️ Úthálózati fájl betöltése</button>
+
+    <h3 class="section-head">4. Helyszínek (a jegyzékhez és a részletezőhöz)</h3>
     <p class="hint">
       A település, az útszám és a km szelvény nem derül ki a GPS-ből. Soronként
       a <b>🔎 Útszám keresése</b> gomb a vágólapra teszi a koordinátát és megnyitja
@@ -1423,7 +1442,7 @@ const db = (() => {
 // IndexedDB réteg — bejárások, nyomvonalpontok, elemek (fotó / hang / jegyzet)
 
 const DB_NAME = 'utvonalbejaras';
-const DB_VER = 1;
+const DB_VER = 2;
 
 let dbPromise = null;
 
@@ -1447,6 +1466,10 @@ function open() {
         const p = db.createObjectStore('points', { keyPath: 'id', autoIncrement: true });
         p.createIndex('sessionId', 'sessionId');
         p.createIndex('sessionTime', ['sessionId', 't']);
+      }
+      // az országos úthálózati adat (NAP) feldolgozott változata
+      if (!db.objectStoreNames.contains('net')) {
+        db.createObjectStore('net');
       }
       if (!db.objectStoreNames.contains('items')) {
         const i = db.createObjectStore('items', { keyPath: 'id' });
@@ -1594,6 +1617,20 @@ async function deleteItem(id) {
 
 /* ------------------------------------------------------------ statisztika */
 
+/* ------------------------------------------------- úthálózati adat */
+
+function saveNetwork(index) {
+  return tx('net', 'readwrite', (n) => wrap(n.put(index, 'uthalozat')));
+}
+
+function getNetwork() {
+  return tx('net', 'readonly', (n) => wrap(n.get('uthalozat')));
+}
+
+function clearNetwork() {
+  return tx('net', 'readwrite', (n) => wrap(n.delete('uthalozat')));
+}
+
 async function storageEstimate() {
   if (!navigator.storage || !navigator.storage.estimate) return null;
   try {
@@ -1602,7 +1639,7 @@ async function storageEstimate() {
     return null;
   }
 }
-return { uid, createSession, saveSession, getSession, listSessions, deleteSession, addPoint, addPoints, updatePoints, deletePoints, getPoints, saveItem, getItem, getItems, allItems, deleteItem, storageEstimate };
+return { uid, createSession, saveSession, getSession, listSessions, deleteSession, addPoint, addPoints, updatePoints, deletePoints, getPoints, saveItem, getItem, getItems, allItems, deleteItem, storageEstimate, saveNetwork, getNetwork, clearNetwork };
 })();
 
 /* ===== js/tiles.js ===== */
@@ -5136,6 +5173,353 @@ function formatEov(lat, lon) {
   return `${p.y.toFixed(2)}, ${p.x.toFixed(2)}`;
 }
 
+/**
+ * Visszafelé: EOV → WGS84. A NAP úthálózati állományai gyakran EOV-ban
+ * vannak, a bejárás viszont GPS-koordinátákkal dolgozik.
+ */
+function eovToWgs84(y, x) {
+  const a = 6378160.0;
+  const f = 1 / 298.247167427;
+  const e2 = f * (2 - f);
+  const e = Math.sqrt(e2);
+  const lat0 = 47.14439372222222 * RAD;
+  const lon0 = 19.04857177777778 * RAD;
+  const k0 = 0.99993;
+
+  const c = Math.sqrt(1 + (e2 * Math.cos(lat0) ** 4) / (1 - e2));
+  const b0 = Math.asin(Math.sin(lat0) / c);
+  const iso = (p0) => Math.log(Math.tan(Math.PI / 4 + p0 / 2))
+    - (e / 2) * Math.log((1 + e * Math.sin(p0)) / (1 - e * Math.sin(p0)));
+  const K = Math.log(Math.tan(Math.PI / 4 + b0 / 2)) - c * iso(lat0);
+  const R = (k0 * a * Math.sqrt(1 - e2)) / (1 - e2 * Math.sin(lat0) ** 2);
+
+  // a hengerről vissza a Gauss-gömbre
+  const j = 2 * (Math.atan(Math.exp((x - 200000) / R)) - Math.PI / 4);
+  const I = (y - 650000) / R;
+  const b = Math.asin(Math.cos(b0) * Math.sin(j) + Math.sin(b0) * Math.cos(j) * Math.cos(I));
+  const L = Math.atan2(Math.sin(I), Math.cos(b0) * Math.cos(I) - Math.sin(b0) * Math.tan(j));
+
+  // gömbi szélességből ellipszoidi (iterációval)
+  const target = (Math.log(Math.tan(Math.PI / 4 + b / 2)) - K) / c;
+  let phi = b;
+  for (let i = 0; i < 12; i++) {
+    const d = iso(phi) - target;
+    const dd = 1 / Math.cos(phi) / (1 - e2 * Math.sin(phi) ** 2) * (1 - e2);
+    phi -= d / (dd || 1);
+  }
+  const lam = lon0 + L / c;
+
+  // HD72 → WGS84 (az eltolás visszafelé)
+  const sl = Math.sin(phi);
+  const N = a / Math.sqrt(1 - e2 * sl * sl);
+  const X = N * Math.cos(phi) * Math.cos(lam) + 52.17;
+  const Y = N * Math.cos(phi) * Math.sin(lam) - 71.82;
+  const Z = N * (1 - e2) * sl - 14.9;
+
+  const aW = 6378137.0;
+  const e2W = (1 / 298.257223563) * (2 - 1 / 298.257223563);
+  const p = Math.hypot(X, Y);
+  let lat = Math.atan2(Z, p * (1 - e2W));
+  for (let i = 0; i < 6; i++) {
+    const s = Math.sin(lat);
+    const Nn = aW / Math.sqrt(1 - e2W * s * s);
+    const h = p / Math.cos(lat) - Nn;
+    lat = Math.atan2(Z, p * (1 - (e2W * Nn) / (Nn + h)));
+  }
+  return { lat: lat / RAD, lon: Math.atan2(Y, X) / RAD };
+}
+
+/* ===== js/uthalozat.js ===== */
+// Országos úthálózati adat (NAP) betöltése és lekérdezése.
+//
+// A Nemzeti Adathozzáférési Pont (napportal.kozut.hu) regisztráció után
+// közzéteszi az országos úthálózat vonalas állományát — többek között
+// GeoJSON formátumban. Ha ezt egyszer betöltjük, a bejárás minden pontjához
+// helyben, hálózat nélkül megmondható az útszám és — ha az adat tartalmazza
+// a szelvényezést — a km szelvény is.
+//
+// Az állomány mezőneveit nem ismerjük előre (és verziónként változhatnak),
+// ezért az app megpróbálja kitalálni, melyik mező mit jelent, és a
+// felhasználó felül tudja bírálni.
+
+
+/** Mezőnév-tippek szerepenként (ékezet és elválasztók nélkül hasonlítunk). */
+const FIELD_HINTS = {
+  utszam: ['utszam', 'utszama', 'utszamozas', 'utjel', 'jel', 'szam', 'ref', 'road', 'roadnumber', 'roadref', 'kozutszam'],
+  kmKezd: ['kezdoszelveny', 'kezdoszelv', 'szelvenykezd', 'kmkezd', 'kezdokm', 'kmtol', 'fromkm', 'kmfrom', 'kezdo', 'start'],
+  kmVeg: ['vegszelveny', 'vegszelv', 'szelvenyveg', 'kmveg', 'vegkm', 'kmig', 'tokm', 'kmto', 'veg', 'end'],
+  telepules: ['telepules', 'telepulesnev', 'helyseg', 'varos', 'kozigegyseg', 'settlement', 'city', 'town'],
+};
+
+const norm = (s) => String(s).toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]/g, '');
+
+/**
+ * Melyik mező melyik szerepre a legjobb tipp.
+ *
+ * A szelvénymezők neve sokféle lehet („KEZDOSZELVENY”, „km szelvény -tól”,
+ * „szelv_kezd”), ezért a szelvényre utaló szavak mellett a kezdetre/végre
+ * utaló toldalékot is nézzük.
+ */
+function guessFields(sample) {
+  const keys = Object.keys(sample || {});
+  const out = {};
+  for (const [role, hints] of Object.entries(FIELD_HINTS)) {
+    let best = null;
+    let bestScore = 0;
+    for (const key of keys) {
+      const n = norm(key);
+      let score = 0;
+      for (let i = 0; i < hints.length; i++) {
+        const h = hints[i];
+        const sc = n === h ? 100 - i : n.includes(h) ? 50 - i : 0;
+        if (sc > score) score = sc;
+      }
+      // „szelvény” vagy „km” + kezdet/vég jelölés
+      if ((role === 'kmKezd' || role === 'kmVeg') && (n.includes('szelv') || n.includes('km'))) {
+        const kezd = /(tol|kezd|from|start|eleje|^km$)/.test(n);
+        const veg = /(ig|veg|end|vege)$/.test(n) || n.includes('tokm') || n.includes('kmig');
+        if (role === 'kmKezd' && kezd && score < 40) score = 40;
+        if (role === 'kmVeg' && veg && !kezd && score < 40) score = 40;
+      }
+      if (score > bestScore) { bestScore = score; best = key; }
+    }
+    if (best) out[role] = best;
+  }
+  // ugyanaz a mező ne legyen a kezdet és a vég is
+  if (out.kmKezd && out.kmKezd === out.kmVeg) delete out.kmVeg;
+  return out;
+}
+
+/** Szelvényérték méterben: „27+387”, „27,387 km”, 27387, 27.387 is lehet. */
+function toMeters(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') {
+    // a 10 000-nél nagyobb szám biztosan méter, az alatta lévő inkább km
+    return value > 10000 ? value : value * 1000;
+  }
+  const s = String(value).trim().replace(/\s+/g, '');
+  let m = /^(\d+)\+(\d+)$/.exec(s);                        // 27+387
+  if (m) return Number(m[1]) * 1000 + Number(m[2]);
+  m = /^(\d+)[.,](\d+)$/.exec(s);                          // 27,387 (km)
+  if (m) return Number(m[1]) * 1000 + Number(m[2].padEnd(3, '0').slice(0, 3));
+  const n = Number(s.replace(',', '.'));
+  if (!isFinite(n)) return null;
+  return n > 10000 ? n : n * 1000;
+}
+
+/** „27 km + 387 m” — ahogy az útszámkereső is kiírja. */
+function formatSzelveny(meters) {
+  if (meters == null || !isFinite(meters)) return '';
+  const total = Math.round(meters);          // előbb kerekítünk, különben
+  const km = Math.floor(total / 1000);       // „27 km + 1000 m” lenne
+  return `${km} km + ${total - km * 1000} m`;
+}
+
+const EARTH = 6371008.8;
+const DEG = Math.PI / 180;
+
+/** Két pont távolsága méterben (síkbeli közelítés — pár km-en belül pontos). */
+function metersBetween(latA, lonA, latB, lonB) {
+  const k = Math.cos(((latA + latB) / 2) * DEG);
+  return Math.hypot((latA - latB) * DEG * EARTH, (lonA - lonB) * DEG * EARTH * k);
+}
+
+/** A ponthoz legközelebbi pont a szakaszon, és a szakasz elejétől mért táv. */
+function projectToSegment(lat, lon, aLat, aLon, bLat, bLon) {
+  const k = Math.cos(lat * DEG);
+  const ax = aLon * k, ay = aLat, bx = bLon * k, by = bLat, px = lon * k, py = lat;
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const cLat = ay + t * dy;
+  const cLon = (ax + t * dx) / (k || 1);
+  return { t, distance: metersBetween(lat, lon, cLat, cLon) };
+}
+
+/* ------------------------------------------------------- betöltés */
+
+const isZip = (buf) => buf.byteLength > 4 && new Uint8Array(buf, 0, 2)[0] === 0x50
+  && new Uint8Array(buf, 0, 2)[1] === 0x4b;
+
+/** GeoJSON kinyerése: sima fájl vagy ZIP, amiben benne van. */
+async function readGeoJson(file) {
+  const buf = await file.arrayBuffer();
+  if (isZip(buf)) {
+    const parts = await unzip(buf);
+    const hit = parts.find((p) => /\.(geojson|json)$/i.test(p.name));
+    if (!hit) {
+      throw new Error('a ZIP-ben nincs GeoJSON (a Shape formátumot az app nem olvassa)');
+    }
+    return JSON.parse(new TextDecoder().decode(hit.data));
+  }
+  return JSON.parse(new TextDecoder().decode(buf));
+}
+
+/** EOV-nak látszik-e a koordináta (a GeoJSON [x, y] sorrendben tárol). */
+function looksLikeEov(c) {
+  return Math.abs(c[0]) > 1000 && c[0] > 300000 && c[0] < 1000000
+    && c[1] > 20000 && c[1] < 400000;
+}
+
+/**
+ * Úthálózat feldolgozása keresésre alkalmas, tömör alakra.
+ *
+ * @param {File|Blob} file   GeoJSON (vagy ZIP, benne GeoJSON)
+ * @param {object} [fields]  mezőhozzárendelés; ha nincs, az app tippel
+ * @param {(msg: string) => void} [progress]
+ */
+async function buildNetwork(file, fields, progress = () => {}) {
+  progress('Úthálózati adat beolvasása…');
+  const data = await readGeoJson(file);
+  const features = data && (data.features || (data.type === 'Feature' ? [data] : null));
+  if (!features || !features.length) throw new Error('nincs benne úthálózati vonal');
+
+  const sample = (features.find((f) => f.properties) || {}).properties || {};
+  const map = Object.assign(guessFields(sample), fields || {});
+  if (!map.utszam) throw new Error('nem találtam útszám mezőt az adatban');
+
+  // vetület: EOV vagy már WGS84
+  let eov = false;
+  for (const f of features) {
+    const c = firstCoord(f.geometry);
+    if (c) { eov = looksLikeEov(c); break; }
+  }
+
+  const roads = [];
+  const roadIndex = new Map();
+  const aLat = []; const aLon = []; const bLat = []; const bLon = [];
+  const segRoad = []; const segKm = []; const segLen = [];
+  let skipped = 0;
+
+  features.forEach((f, n) => {
+    if (n % 5000 === 0) progress(`Úthálózat feldolgozása… (${n}/${features.length})`);
+    const g = f.geometry;
+    if (!g) return;
+    const lines = g.type === 'LineString' ? [g.coordinates]
+      : g.type === 'MultiLineString' ? g.coordinates : null;
+    if (!lines) { skipped += 1; return; }
+
+    const props = f.properties || {};
+    const utszam = props[map.utszam];
+    if (utszam == null || utszam === '') { skipped += 1; return; }
+    const name = String(utszam).trim();
+    let ri = roadIndex.get(name);
+    if (ri == null) { ri = roads.length; roads.push(name); roadIndex.set(name, ri); }
+
+    const kmFrom = map.kmKezd ? toMeters(props[map.kmKezd]) : null;
+    const kmTo = map.kmVeg ? toMeters(props[map.kmVeg]) : null;
+
+    for (const line of lines) {
+      const pts = line.map((c) => (eov ? eovToWgs84(c[0], c[1]) : { lat: c[1], lon: c[0] }));
+      // a vonal hossza a szelvény szétosztásához
+      let total = 0;
+      for (let i = 1; i < pts.length; i++) {
+        total += metersBetween(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon);
+      }
+      let run = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const d = metersBetween(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon);
+        if (!d) continue;
+        aLat.push(pts[i - 1].lat); aLon.push(pts[i - 1].lon);
+        bLat.push(pts[i].lat); bLon.push(pts[i].lon);
+        segRoad.push(ri);
+        segLen.push(d);
+        // a szakasz elejéhez tartozó szelvény (ha van mihez viszonyítani)
+        segKm.push(kmFrom == null ? null
+          : kmTo != null && total > 0 ? kmFrom + ((kmTo - kmFrom) * run) / total
+            : kmFrom + run);
+        run += d;
+      }
+    }
+  });
+
+  if (!segRoad.length) throw new Error('nem találtam vonalas útszakaszt az adatban');
+
+  // rácsos index: 0,02 fok ~ 1,5–2 km, így pár tucat szakaszt kell nézni
+  const cells = new Map();
+  for (let i = 0; i < segRoad.length; i++) {
+    const key = cellKey(aLat[i], aLon[i]);
+    let arr = cells.get(key);
+    if (!arr) { arr = []; cells.set(key, arr); }
+    arr.push(i);
+    const key2 = cellKey(bLat[i], bLon[i]);
+    if (key2 !== key) {
+      arr = cells.get(key2);
+      if (!arr) { arr = []; cells.set(key2, arr); }
+      arr.push(i);
+    }
+  }
+
+  progress('Úthálózat mentése…');
+  return {
+    version: 1,
+    created: Date.now(),
+    name: file.name || 'úthálózat',
+    fields: map,
+    sampleKeys: Object.keys(sample),
+    roads,
+    aLat: Float64Array.from(aLat),
+    aLon: Float64Array.from(aLon),
+    bLat: Float64Array.from(bLat),
+    bLon: Float64Array.from(bLon),
+    segRoad: Int32Array.from(segRoad),
+    segKm: Float64Array.from(segKm.map((v) => (v == null ? NaN : v))),
+    segLen: Float64Array.from(segLen),
+    cells,
+    count: segRoad.length,
+    skipped,
+    hasSzelveny: segKm.some((v) => v != null),
+  };
+}
+
+function firstCoord(g) {
+  if (!g) return null;
+  if (g.type === 'LineString') return g.coordinates[0];
+  if (g.type === 'MultiLineString') return g.coordinates[0] && g.coordinates[0][0];
+  if (g.type === 'Point') return g.coordinates;
+  return null;
+}
+
+const CELL = 0.02;
+const cellKey = (lat, lon) => `${Math.round(lat / CELL)}|${Math.round(lon / CELL)}`;
+
+/* ------------------------------------------------------ lekérdezés */
+
+/**
+ * Melyik út melyik szelvényénél van ez a pont.
+ * @returns {{utszam: string, szelveny: string, meters: number|null, distance: number}|null}
+ */
+function lookupRoad(net, lat, lon, maxDistance = 120) {
+  if (!net || !net.count) return null;
+  let best = -1;
+  let bestD = Infinity;
+  let bestT = 0;
+
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const arr = net.cells.get(cellKey(lat + dy * CELL, lon + dx * CELL));
+      if (!arr) continue;
+      for (const i of arr) {
+        const p = projectToSegment(lat, lon, net.aLat[i], net.aLon[i], net.bLat[i], net.bLon[i]);
+        if (p.distance < bestD) { bestD = p.distance; best = i; bestT = p.t; }
+      }
+    }
+  }
+  if (best < 0 || bestD > maxDistance) return null;
+
+  const km = net.segKm[best];
+  const meters = isFinite(km) ? km + bestT * net.segLen[best] : null;
+  return {
+    utszam: net.roads[net.segRoad[best]],
+    szelveny: formatSzelveny(meters),
+    meters,
+    distance: Math.round(bestD),
+  };
+}
+
 /* ===== js/kozut.js ===== */
 // A Magyar Közút bejárási dokumentumainak kitöltése a bejárás adataiból.
 //
@@ -5233,6 +5617,13 @@ class KozutDocs {
       this.addFiles(files);
     });
     $('#kozut-fill', this.root).addEventListener('click', () => this.fillAll());
+
+    $('#kozut-net-add', this.root).addEventListener('click', () => $('#kozut-net-file', this.root).click());
+    $('#kozut-net-file', this.root).addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      e.target.value = '';
+      if (f) this.loadNetwork(f);
+    });
   }
 
   async open({ session, points, items, onSave }) {
@@ -5261,6 +5652,14 @@ class KozutDocs {
     this.root.hidden = false;
     document.body.classList.add('modal-open');
     this.render();
+
+    // a korábban betöltött úthálózati adat a készüléken marad
+    if (!this.net) {
+      try {
+        this.net = await db.getNetwork();
+      } catch (_) { /* nincs tárolt hálózat */ }
+      if (this.net) this.render();
+    }
   }
 
   close() {
@@ -5340,6 +5739,114 @@ class KozutDocs {
     return hit ? hit.id : 'ismeretlen';
   }
 
+  /* ------------------------------------------- úthálózati adat (NAP) */
+
+  async loadNetwork(file, fields) {
+    this.netFile = file;
+    toast('Úthálózati adat feldolgozása… ez nagyobb fájlnál eltarthat egy percig.');
+    try {
+      const net = await buildNetwork(file, fields, (msg) => toast(msg));
+      this.net = net;
+      await db.saveNetwork(net);
+      toast(`Úthálózat betöltve: ${net.roads.length} útszám, ${net.count} szakasz`
+        + (net.hasSzelveny ? ', szelvényezéssel.' : ' (szelvény nincs benne).'));
+    } catch (err) {
+      toast('Az úthálózati adat nem olvasható: ' + err.message, 'error');
+    }
+    this.render();
+  }
+
+  async dropNetwork() {
+    this.net = null;
+    this.netFile = null;
+    try { await db.clearNetwork(); } catch (_) {}
+    this.render();
+  }
+
+  /** Mezőhozzárendelés módosítása — ha rosszat tippelt az app. */
+  async remapNetwork() {
+    if (!this.netFile) {
+      toast('A mezők módosításához töltse be újra a fájlt.', 'error');
+      $('#kozut-net-file', this.root).click();
+      return;
+    }
+    const keys = this.net.sampleKeys || [];
+    const options = [{ value: '', label: '— nincs —' }]
+      .concat(keys.map((k) => ({ value: k, label: k })));
+    const res = await modal({
+      title: 'Melyik mező mit jelent?',
+      text: 'Az úthálózati fájl oszlopai közül válassza ki a megfelelőt.',
+      fields: [
+        { name: 'utszam', label: 'Útszám', type: 'select', value: this.net.fields.utszam || '', options },
+        { name: 'kmKezd', label: 'Kezdő szelvény', type: 'select', value: this.net.fields.kmKezd || '', options },
+        { name: 'kmVeg', label: 'Vég szelvény', type: 'select', value: this.net.fields.kmVeg || '', options },
+        { name: 'telepules', label: 'Település', type: 'select', value: this.net.fields.telepules || '', options },
+      ],
+      okText: 'Újrafeldolgozás',
+    });
+    if (!res) return;
+    const fields = {};
+    for (const [k, v] of Object.entries(res)) if (v) fields[k] = v;
+    await this.loadNetwork(this.netFile, fields);
+  }
+
+  /** Egy sor adatai az úthálózatból. */
+  netHit(it) {
+    if (!this.net || it.lat == null) return null;
+    return lookupRoad(this.net, it.lat, it.lon);
+  }
+
+  /** Üres mezők kitöltése a hálózatból. */
+  fillFromNetwork(only) {
+    if (!this.net) return;
+    let n = 0;
+    for (const it of this.items) {
+      if (only && it !== only) continue;
+      const hit = this.netHit(it);
+      if (!hit) continue;
+      const k = it.kozut;
+      if (!k.utszam) { k.utszam = hit.utszam; n += 1; }
+      if (!k.km && hit.szelveny) { k.km = hit.szelveny; n += 1; }
+    }
+    this.save();
+    this.render();
+    toast(n ? `${n} mező kitöltve az úthálózatból.` : 'Nem volt mit kitölteni.');
+  }
+
+  renderNetwork() {
+    const box = $('#kozut-net', this.root);
+    box.innerHTML = '';
+    if (!this.net) {
+      box.appendChild(el('p', { class: 'hint', text: 'Nincs betöltve úthálózati adat.' }));
+      return;
+    }
+    const n = this.net;
+    const fields = Object.entries(n.fields).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    box.appendChild(el('div', { class: 'net-card' }, [
+      el('b', { text: n.name }),
+      el('span', {
+        class: 'muted small',
+        text: `${n.roads.length} útszám · ${n.count} szakasz · `
+          + (n.hasSzelveny ? 'szelvényezéssel' : 'szelvény nélkül'),
+      }),
+      el('span', { class: 'muted small', text: 'Mezők — ' + fields }),
+      el('div', { class: 'editor-row' }, [
+        el('button', {
+          class: 'btn primary tiny', type: 'button', text: '⤵ Üres mezők kitöltése',
+          onclick: () => this.fillFromNetwork(),
+        }),
+        el('button', {
+          class: 'btn ghost tiny', type: 'button', text: 'Mezők módosítása',
+          onclick: () => this.remapNetwork(),
+        }),
+        el('button', {
+          class: 'btn ghost tiny', type: 'button', text: 'Eltávolítás',
+          onclick: () => this.dropNetwork(),
+        }),
+      ]),
+    ]));
+  }
+
   /* ------------------------------------------------------- felület */
 
   render() {
@@ -5409,6 +5916,7 @@ class KozutDocs {
     field('zarasi', 'Zárási terv', { multiline: true, rows: 4 });
     field('rendkivuli', 'Rendkívüli jegyzék — további megjegyzés', { multiline: true, rows: 2 });
 
+    this.renderNetwork();
     this.renderRows();
   }
 
@@ -5452,6 +5960,23 @@ class KozutDocs {
         // a Közút útszámkeresője koordináta alapján megmondja az útszámot és
         // a szelvényt; a koordinátát a vágólapra tesszük, hogy csak be
         // kelljen illeszteni
+        // amit az úthálózati adat mond erre a pontra
+        (() => {
+          const hit = this.netHit(it);
+          if (!hit) return null;
+          return el('div', { class: 'kozut-hit' }, [
+            el('span', { text: `🛣️ ${hit.utszam}${hit.szelveny ? ' · ' + hit.szelveny : ''} (${hit.distance} m-re)` }),
+            el('button', {
+              class: 'btn ghost tiny', type: 'button', text: '⤵ beírom',
+              onclick: () => {
+                k.utszam = hit.utszam;
+                if (hit.szelveny) k.km = hit.szelveny;
+                this.save();
+                this.render();
+              },
+            }),
+          ]);
+        })(),
         it.lat != null ? el('div', { class: 'kozut-eov' }, [
           el('button', {
             class: 'btn ghost tiny', type: 'button',

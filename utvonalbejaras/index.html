@@ -252,7 +252,19 @@
     <h3 class="section-head">2. Közös adatok</h3>
     <div id="kozut-form" class="kozut-fields"></div>
 
-    <h3 class="section-head">3. Helyszínek (a jegyzékhez és a részletezőhöz)</h3>
+    <h3 class="section-head">3. Úthálózati adat (NAP) — nem kötelező</h3>
+    <p class="hint">
+      A <a href="https://napportal.kozut.hu/" target="_blank" rel="noopener">Nemzeti
+      Adathozzáférési Pontról</a> (regisztráció után, ingyen) letölthető az országos
+      úthálózat <b>GeoJSON</b> állománya. Ha betölti, az app minden ponthoz magától
+      kiírja az útszámot — és ha az adat tartalmazza a szelvényezést, a km szelvényt is.
+      Az adat a készüléken marad, hálózat nélkül is működik.
+    </p>
+    <div id="kozut-net" class="kozut-net"></div>
+    <input id="kozut-net-file" type="file" hidden accept=".geojson,.json,.zip,application/geo+json,application/json,application/zip">
+    <button id="kozut-net-add" class="btn ghost small block">🛣️ Úthálózati fájl betöltése</button>
+
+    <h3 class="section-head">4. Helyszínek (a jegyzékhez és a részletezőhöz)</h3>
     <p class="hint">
       A település, az útszám és a km szelvény nem derül ki a GPS-ből. Soronként
       a <b>🔎 Útszám keresése</b> gomb a vágólapra teszi a koordinátát és megnyitja

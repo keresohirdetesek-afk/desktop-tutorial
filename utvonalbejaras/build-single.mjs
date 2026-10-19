@@ -17,7 +17,7 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(dir, p), 'utf8');
 
 // a betöltési sorrend számít: az app.js indítja el a többit
-const MODULES = ['js/ui.js', 'js/db.js', 'js/tiles.js', 'js/terkepnezet.js', 'js/geo.js', 'js/media.js', 'js/compass.js', 'js/licenc-kulcs.js', 'js/licenc.js', 'js/report.js', 'js/terkepfajl.js', 'js/docx.js', 'js/eov.js', 'js/kozut.js', 'js/kiseres.js', 'js/editor.js', 'js/trackedit.js', 'js/app.js'];
+const MODULES = ['js/ui.js', 'js/db.js', 'js/tiles.js', 'js/terkepnezet.js', 'js/geo.js', 'js/media.js', 'js/compass.js', 'js/licenc-kulcs.js', 'js/licenc.js', 'js/report.js', 'js/terkepfajl.js', 'js/docx.js', 'js/eov.js', 'js/uthalozat.js', 'js/kozut.js', 'js/kiseres.js', 'js/editor.js', 'js/trackedit.js', 'js/app.js'];
 
 // az app.js `db.valami()` alakban hivatkozik a tárolóra, ezért a modulok
 // összefűzése után össze kell raknunk neki ezt a névteret
@@ -25,6 +25,7 @@ const DB_EXPORTS = [
   'uid', 'createSession', 'saveSession', 'getSession', 'listSessions', 'deleteSession',
   'addPoint', 'addPoints', 'updatePoints', 'deletePoints', 'getPoints',
   'saveItem', 'getItem', 'getItems', 'allItems', 'deleteItem', 'storageEstimate',
+  'saveNetwork', 'getNetwork', 'clearNetwork',
 ];
 
 /**
@@ -34,6 +35,15 @@ const DB_EXPORTS = [
  */
 function checkModuleList() {
   const missing = new Set();
+  // az átnevezett import (import { a as b }) az összefűzött változatban nem
+  // működne: ott minden modul ugyanabban a névtérben van
+  for (const file of MODULES) {
+    const renamed = read(file).match(/^import \{[^}]*\bas\b[^}]*\} from/m);
+    if (renamed) {
+      console.error(`Átnevezett import ${file}-ban — az egyfájlos változatban nem működik:\n  ${renamed[0]}`);
+      process.exit(1);
+    }
+  }
   for (const file of MODULES) {
     for (const m of read(file).matchAll(/from\s*'\.\/([\w.-]+\.js)'/g)) {
       if (!MODULES.includes('js/' + m[1])) missing.add(`${m[1]} (kell ide: ${file})`);

@@ -16,6 +16,8 @@ import {
 } from './docx.js';
 import { formatCoord, formatDistance, typeLabel, categoryLabel, conditionLabel, severityLabel, isRejected, trackLength } from './geo.js';
 import { formatEov } from './eov.js';
+import { buildNetwork, lookupRoad } from './uthalozat.js';
+import * as db from './db.js';
 import { $, el, toast, modal, download, formatDateTime } from './ui.js';
 
 /** A felismert dokumentumtípusok — a sorrend számít (az első találat nyer). */
@@ -102,6 +104,13 @@ export class KozutDocs {
       this.addFiles(files);
     });
     $('#kozut-fill', this.root).addEventListener('click', () => this.fillAll());
+
+    $('#kozut-net-add', this.root).addEventListener('click', () => $('#kozut-net-file', this.root).click());
+    $('#kozut-net-file', this.root).addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      e.target.value = '';
+      if (f) this.loadNetwork(f);
+    });
   }
 
   async open({ session, points, items, onSave }) {
@@ -130,6 +139,14 @@ export class KozutDocs {
     this.root.hidden = false;
     document.body.classList.add('modal-open');
     this.render();
+
+    // a korábban betöltött úthálózati adat a készüléken marad
+    if (!this.net) {
+      try {
+        this.net = await db.getNetwork();
+      } catch (_) { /* nincs tárolt hálózat */ }
+      if (this.net) this.render();
+    }
   }
 
   close() {
@@ -209,6 +226,114 @@ export class KozutDocs {
     return hit ? hit.id : 'ismeretlen';
   }
 
+  /* ------------------------------------------- úthálózati adat (NAP) */
+
+  async loadNetwork(file, fields) {
+    this.netFile = file;
+    toast('Úthálózati adat feldolgozása… ez nagyobb fájlnál eltarthat egy percig.');
+    try {
+      const net = await buildNetwork(file, fields, (msg) => toast(msg));
+      this.net = net;
+      await db.saveNetwork(net);
+      toast(`Úthálózat betöltve: ${net.roads.length} útszám, ${net.count} szakasz`
+        + (net.hasSzelveny ? ', szelvényezéssel.' : ' (szelvény nincs benne).'));
+    } catch (err) {
+      toast('Az úthálózati adat nem olvasható: ' + err.message, 'error');
+    }
+    this.render();
+  }
+
+  async dropNetwork() {
+    this.net = null;
+    this.netFile = null;
+    try { await db.clearNetwork(); } catch (_) {}
+    this.render();
+  }
+
+  /** Mezőhozzárendelés módosítása — ha rosszat tippelt az app. */
+  async remapNetwork() {
+    if (!this.netFile) {
+      toast('A mezők módosításához töltse be újra a fájlt.', 'error');
+      $('#kozut-net-file', this.root).click();
+      return;
+    }
+    const keys = this.net.sampleKeys || [];
+    const options = [{ value: '', label: '— nincs —' }]
+      .concat(keys.map((k) => ({ value: k, label: k })));
+    const res = await modal({
+      title: 'Melyik mező mit jelent?',
+      text: 'Az úthálózati fájl oszlopai közül válassza ki a megfelelőt.',
+      fields: [
+        { name: 'utszam', label: 'Útszám', type: 'select', value: this.net.fields.utszam || '', options },
+        { name: 'kmKezd', label: 'Kezdő szelvény', type: 'select', value: this.net.fields.kmKezd || '', options },
+        { name: 'kmVeg', label: 'Vég szelvény', type: 'select', value: this.net.fields.kmVeg || '', options },
+        { name: 'telepules', label: 'Település', type: 'select', value: this.net.fields.telepules || '', options },
+      ],
+      okText: 'Újrafeldolgozás',
+    });
+    if (!res) return;
+    const fields = {};
+    for (const [k, v] of Object.entries(res)) if (v) fields[k] = v;
+    await this.loadNetwork(this.netFile, fields);
+  }
+
+  /** Egy sor adatai az úthálózatból. */
+  netHit(it) {
+    if (!this.net || it.lat == null) return null;
+    return lookupRoad(this.net, it.lat, it.lon);
+  }
+
+  /** Üres mezők kitöltése a hálózatból. */
+  fillFromNetwork(only) {
+    if (!this.net) return;
+    let n = 0;
+    for (const it of this.items) {
+      if (only && it !== only) continue;
+      const hit = this.netHit(it);
+      if (!hit) continue;
+      const k = it.kozut;
+      if (!k.utszam) { k.utszam = hit.utszam; n += 1; }
+      if (!k.km && hit.szelveny) { k.km = hit.szelveny; n += 1; }
+    }
+    this.save();
+    this.render();
+    toast(n ? `${n} mező kitöltve az úthálózatból.` : 'Nem volt mit kitölteni.');
+  }
+
+  renderNetwork() {
+    const box = $('#kozut-net', this.root);
+    box.innerHTML = '';
+    if (!this.net) {
+      box.appendChild(el('p', { class: 'hint', text: 'Nincs betöltve úthálózati adat.' }));
+      return;
+    }
+    const n = this.net;
+    const fields = Object.entries(n.fields).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    box.appendChild(el('div', { class: 'net-card' }, [
+      el('b', { text: n.name }),
+      el('span', {
+        class: 'muted small',
+        text: `${n.roads.length} útszám · ${n.count} szakasz · `
+          + (n.hasSzelveny ? 'szelvényezéssel' : 'szelvény nélkül'),
+      }),
+      el('span', { class: 'muted small', text: 'Mezők — ' + fields }),
+      el('div', { class: 'editor-row' }, [
+        el('button', {
+          class: 'btn primary tiny', type: 'button', text: '⤵ Üres mezők kitöltése',
+          onclick: () => this.fillFromNetwork(),
+        }),
+        el('button', {
+          class: 'btn ghost tiny', type: 'button', text: 'Mezők módosítása',
+          onclick: () => this.remapNetwork(),
+        }),
+        el('button', {
+          class: 'btn ghost tiny', type: 'button', text: 'Eltávolítás',
+          onclick: () => this.dropNetwork(),
+        }),
+      ]),
+    ]));
+  }
+
   /* ------------------------------------------------------- felület */
 
   render() {
@@ -278,6 +403,7 @@ export class KozutDocs {
     field('zarasi', 'Zárási terv', { multiline: true, rows: 4 });
     field('rendkivuli', 'Rendkívüli jegyzék — további megjegyzés', { multiline: true, rows: 2 });
 
+    this.renderNetwork();
     this.renderRows();
   }
 
@@ -321,6 +447,23 @@ export class KozutDocs {
         // a Közút útszámkeresője koordináta alapján megmondja az útszámot és
         // a szelvényt; a koordinátát a vágólapra tesszük, hogy csak be
         // kelljen illeszteni
+        // amit az úthálózati adat mond erre a pontra
+        (() => {
+          const hit = this.netHit(it);
+          if (!hit) return null;
+          return el('div', { class: 'kozut-hit' }, [
+            el('span', { text: `🛣️ ${hit.utszam}${hit.szelveny ? ' · ' + hit.szelveny : ''} (${hit.distance} m-re)` }),
+            el('button', {
+              class: 'btn ghost tiny', type: 'button', text: '⤵ beírom',
+              onclick: () => {
+                k.utszam = hit.utszam;
+                if (hit.szelveny) k.km = hit.szelveny;
+                this.save();
+                this.render();
+              },
+            }),
+          ]);
+        })(),
         it.lat != null ? el('div', { class: 'kozut-eov' }, [
           el('button', {
             class: 'btn ghost tiny', type: 'button',

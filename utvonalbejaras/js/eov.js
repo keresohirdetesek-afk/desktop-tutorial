@@ -72,3 +72,59 @@ export function formatEov(lat, lon) {
   const p = wgs84ToEov(lat, lon);
   return `${p.y.toFixed(2)}, ${p.x.toFixed(2)}`;
 }
+
+/**
+ * Visszafelé: EOV → WGS84. A NAP úthálózati állományai gyakran EOV-ban
+ * vannak, a bejárás viszont GPS-koordinátákkal dolgozik.
+ */
+export function eovToWgs84(y, x) {
+  const a = 6378160.0;
+  const f = 1 / 298.247167427;
+  const e2 = f * (2 - f);
+  const e = Math.sqrt(e2);
+  const lat0 = 47.14439372222222 * RAD;
+  const lon0 = 19.04857177777778 * RAD;
+  const k0 = 0.99993;
+
+  const c = Math.sqrt(1 + (e2 * Math.cos(lat0) ** 4) / (1 - e2));
+  const b0 = Math.asin(Math.sin(lat0) / c);
+  const iso = (p0) => Math.log(Math.tan(Math.PI / 4 + p0 / 2))
+    - (e / 2) * Math.log((1 + e * Math.sin(p0)) / (1 - e * Math.sin(p0)));
+  const K = Math.log(Math.tan(Math.PI / 4 + b0 / 2)) - c * iso(lat0);
+  const R = (k0 * a * Math.sqrt(1 - e2)) / (1 - e2 * Math.sin(lat0) ** 2);
+
+  // a hengerről vissza a Gauss-gömbre
+  const j = 2 * (Math.atan(Math.exp((x - 200000) / R)) - Math.PI / 4);
+  const I = (y - 650000) / R;
+  const b = Math.asin(Math.cos(b0) * Math.sin(j) + Math.sin(b0) * Math.cos(j) * Math.cos(I));
+  const L = Math.atan2(Math.sin(I), Math.cos(b0) * Math.cos(I) - Math.sin(b0) * Math.tan(j));
+
+  // gömbi szélességből ellipszoidi (iterációval)
+  const target = (Math.log(Math.tan(Math.PI / 4 + b / 2)) - K) / c;
+  let phi = b;
+  for (let i = 0; i < 12; i++) {
+    const d = iso(phi) - target;
+    const dd = 1 / Math.cos(phi) / (1 - e2 * Math.sin(phi) ** 2) * (1 - e2);
+    phi -= d / (dd || 1);
+  }
+  const lam = lon0 + L / c;
+
+  // HD72 → WGS84 (az eltolás visszafelé)
+  const sl = Math.sin(phi);
+  const N = a / Math.sqrt(1 - e2 * sl * sl);
+  const X = N * Math.cos(phi) * Math.cos(lam) + 52.17;
+  const Y = N * Math.cos(phi) * Math.sin(lam) - 71.82;
+  const Z = N * (1 - e2) * sl - 14.9;
+
+  const aW = 6378137.0;
+  const e2W = (1 / 298.257223563) * (2 - 1 / 298.257223563);
+  const p = Math.hypot(X, Y);
+  let lat = Math.atan2(Z, p * (1 - e2W));
+  for (let i = 0; i < 6; i++) {
+    const s = Math.sin(lat);
+    const Nn = aW / Math.sqrt(1 - e2W * s * s);
+    const h = p / Math.cos(lat) - Nn;
+    lat = Math.atan2(Z, p * (1 - (e2W * Nn) / (Nn + h)));
+  }
+  return { lat: lat / RAD, lon: Math.atan2(Y, X) / RAD };
+}
