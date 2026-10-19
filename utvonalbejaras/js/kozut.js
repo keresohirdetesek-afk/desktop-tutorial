@@ -15,6 +15,7 @@ import {
   insertImageAfter,
 } from './docx.js';
 import { formatCoord, formatDistance, typeLabel, categoryLabel, conditionLabel, severityLabel, isRejected, trackLength } from './geo.js';
+import { formatEov } from './eov.js';
 import { $, el, toast, modal, download, formatDateTime } from './ui.js';
 
 /** A felismert dokumentumtípusok — a sorrend számít (az első találat nyer). */
@@ -320,20 +321,25 @@ export class KozutDocs {
         // a Közút útszámkeresője koordináta alapján megmondja az útszámot és
         // a szelvényt; a koordinátát a vágólapra tesszük, hogy csak be
         // kelljen illeszteni
-        it.lat != null ? el('button', {
-          class: 'btn ghost tiny', type: 'button',
-          text: '🔎 Útszám keresése ezzel a koordinátával',
-          onclick: async (e) => {
-            const coord = `${it.lat.toFixed(6)}, ${it.lon.toFixed(6)}`;
-            const copied = await toClipboard(coord);
-            // ugyanabban a fülben nyílik meg, nem szaporodnak a lapok
-            window.open(UTSZAM_KERESO, 'utszamkereso');
-            toast(copied
-              ? `${coord} a vágólapon — illessze be a kereső mezőjébe, majd írja ide az útszámot és a szelvényt.`
-              : `Keresse meg ezt a pontot: ${coord}`);
-            e.preventDefault();
-          },
-        }) : null,
+        it.lat != null ? el('div', { class: 'kozut-eov' }, [
+          el('button', {
+            class: 'btn ghost tiny', type: 'button',
+            text: '🔎 Útszám és szelvény keresése',
+            onclick: async (e) => {
+              e.preventDefault();
+              // az útszámkereső koordinátakeresője EOV Y–X értéket vár
+              const eov = formatEov(it.lat, it.lon);
+              const copied = await toClipboard(eov);
+              // ugyanabban a fülben nyílik meg, nem szaporodnak a lapok
+              window.open(UTSZAM_KERESO, 'utszamkereso');
+              toast(copied
+                ? 'EOV koordináta a vágólapon. A Koordinátakeresőben: Beilleszt → Keres. '
+                  + 'A jobb oldali panelből írja ide az útszámot és a szelvényt.'
+                : `Koordinátakereső, EOV: ${eov}`);
+            },
+          }),
+          el('span', { class: 'muted small', text: 'EOV: ' + formatEov(it.lat, it.lon) }),
+        ]) : null,
         // egy bejárás rendszerint ugyanazon az úton halad: elég egyszer beírni
         el('button', {
           class: 'btn ghost tiny', type: 'button', text: '⤓ Település és útszám a többi üres sorba',

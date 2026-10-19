@@ -167,13 +167,22 @@ A bejárás adatlapján a **📋 Közút dokumentumok kitöltése** gomb nyitja 
    Ha egy sorhoz nincs megadva település/útszám, a leírás végére a
    **koordináta** kerül, hogy a helyszín akkor is beazonosítható legyen.
 
-   Az útszám és a szelvény kikereséséhez soronként ott a **🔎 Útszám
-   keresése** gomb: a koordinátát a vágólapra teszi, és megnyitja a Magyar
-   Közút [útszámkeresőjét](https://utszamkereso.kozut.hu/) (mindig ugyanabban
-   a fülben). Ott beillesztve leolvasható az útszám és a km szelvény, amit
-   ide visszaírva a bejáráshoz mentődik. Automatikus lekérdezés nincs: az
-   útszámkereső nem kínál nyilvános lekérdezési felületet, amit az app a
-   böngészőből hívhatna.
+   Az útszám és a szelvény kikereséséhez soronként ott a **🔎 Útszám és
+   szelvény keresése** gomb. A Magyar Közút
+   [útszámkeresője](https://utszamkereso.kozut.hu/) a *Koordinátakeresőben*
+   **EOV** (Y, X) koordinátát vár, a telefon GPS-e viszont WGS84 szerinti
+   szélességet és hosszúságot ad — az app ezért **átszámítja EOV-ba**, a
+   vágólapra teszi, és megnyitja a keresőt (mindig ugyanabban a fülben).
+   Ott: *Beilleszt* → *Keres*, és a jobb oldali panelen megjelenik az
+   **Útszám** és a **Szelvény** (pl. „81” és „27 km + 387 m”), amit ide
+   visszaírva a bejáráshoz mentődik. Az EOV koordináta a sorban is ott van,
+   ha kézzel kell beírni.
+
+   > Az átszámítás az EPSG:23700 szokásos paramétereivel dolgozik
+   > (somerc vetület, GRS67 ellipszoid, 3 paraméteres HD72-eltolás). Az
+   > útszámkereső saját adatán ellenőrizve az eltérés **10 cm alatti** — ezt
+   > teszt is őrzi. Automatikus lekérdezés nincs: az útszámkeresőnek nincs
+   > nyilvános, böngészőből hívható felülete.
 
 Minden dokumentum kártyáján látszik, **mi fog belekerülni** („Bekerül: 2 sor
 az elvégzendő munkákhoz · dátum”), és ott a saját **Kitöltés** gombja: egy
@@ -589,6 +598,7 @@ utvonalbejaras/
     ├── terkepnezet.js      nagyítás/mozgatás a térképes vásznakon
     ├── terkepfajl.js       önálló, nagyítható HTML-térkép a nyomvonalról
     ├── docx.js             Word-fájlok (.docx) kibontása, kitöltése, mentése
+    ├── eov.js              GPS → EOV átszámítás az útszámkeresőhöz
     ├── kozut.js            a Közút űrlapjainak kitöltése a bejárás adataiból
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés
