@@ -1,0 +1,112 @@
+# Az atlagsebesseg.hu automatikus kiadása.
+#
+# MIÉRT KELL EZ
+#
+# A domain nem a GitHubra mutat, hanem a cPanel-es tárhelyre
+# (public_html/atlagsebesseg). Ezért a `git push` önmagában NEM frissíti
+# az éles oldalt — a fájlokat külön fel kell tölteni FTP-n. Ez a
+# munkafolyamat ezt a lépést veszi át: ami a `main` ágra kerül, az
+# magától kimegy a tárhelyre is.
+#
+# EGYSZERI BEÁLLÍTÁS
+#
+# A repó Settings → Secrets and variables → Actions oldalán három titkot
+# kell felvenni. Ezeket csak te látod; a munkafolyamat olvassa, a naplóba
+# nem íródnak ki, és senki más nem fér hozzájuk:
+#
+#   FTP_SERVER     a tárhely FTP-címe (pl. ftp.atlagsebesseg.hu vagy a
+#                  cPanelben megadott kiszolgálónév)
+#   FTP_USERNAME   az FTP-felhasználó
+#   FTP_PASSWORD   az FTP-jelszó
+#
+# Amíg ezek nincsenek felvéve, a munkafolyamat nem hibára fut, hanem
+# kiírja, hogy nincs beállítva, és kilép.
+#
+# Ha a tárhely más könyvtárba teszi az FTP-gyökeret, a SERVER_DIR
+# értékét kell átírni lent.
+
+name: Kiadás a tárhelyre
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'atlagsebesseg/**'
+  # Kézzel is indítható a repó Actions fülén.
+  workflow_dispatch:
+
+concurrency:
+  # Egyszerre csak egy feltöltés fusson, különben félkész állapot
+  # kerülhet ki a tárhelyre.
+  group: kiadas-atlagsebesseg
+  cancel-in-progress: false
+
+env:
+  # Az FTP-gyökérhez képest. cPanelnél a bejelentkezés /home/<fiók>-ba
+  # érkezik, az oldal pedig a public_html alatt van.
+  SERVER_DIR: /public_html/atlagsebesseg/
+
+jobs:
+  kiadas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Titkok ellenőrzése
+        id: titkok
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        run: |
+          if [ -z "$FTP_SERVER" ]; then
+            echo "van=nem" >> "$GITHUB_OUTPUT"
+            echo "::notice::Az FTP-titkok nincsenek beállítva, a feltöltés kimarad."
+          else
+            echo "van=igen" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A tárhelyre csak az éles fájlok mennek ki. A teszt, a médiaanyag
+      # és a dokumentáció a repóban marad: élesben semmit nem csinálnak,
+      # viszont a `teszt/` kint egy nyilvánosan letölthető mappa lenne.
+      - name: Feltöltendő csomag összeállítása
+        if: steps.titkok.outputs.van == 'igen'
+        run: |
+          set -euo pipefail
+          mkdir -p kiadas
+          cd atlagsebesseg
+          cp .htaccess index.html adatvedelem.html manifest.webmanifest \
+             sw.js robots.txt sitemap.xml ../kiadas/
+          cp -r css js icons vendor ../kiadas/
+          cd ..
+          echo "Feltöltendő fájlok: $(find kiadas -type f | wc -l)"
+          find kiadas -type f | sort
+
+      # A `sw.js` gyorsítótárnevének minden kiadásnál emelkednie kell,
+      # különben a már telepített alkalmazásokban a régi fájlok maradnak.
+      # Ez csak figyelmeztet, nem állítja meg a kiadást.
+      - name: Gyorsítótárnév ellenőrzése
+        if: steps.titkok.outputs.van == 'igen'
+        run: |
+          UJ=$(grep -o "atlagsebesseg-v[0-9]*" atlagsebesseg/sw.js | head -1)
+          REGI=$(git show HEAD~1:atlagsebesseg/sw.js 2>/dev/null \
+                 | grep -o "atlagsebesseg-v[0-9]*" | head -1 || echo "")
+          echo "Gyorsítótár: $REGI -> $UJ"
+          if [ -n "$REGI" ] && [ "$REGI" = "$UJ" ]; then
+            echo "::warning::A sw.js gyorsítótárneve nem változott ($UJ). A már telepített alkalmazások a régi fájlokat tarthatják meg."
+          fi
+
+      - name: Feltöltés FTP-n
+        if: steps.titkok.outputs.van == 'igen'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          # Titkosított FTP. Ha a tárhely nem támogatja, `ftp`-re kell
+          # írni — de akkor a jelszó titkosítatlanul utazik.
+          protocol: ftps
+          local-dir: ./kiadas/
+          server-dir: ${{ env.SERVER_DIR }}
+          # A művelet csak a megváltozott fájlokat tölti fel; ehhez egy
+          # állapotfájlt tart a tárhelyen.
+          state-name: .kiadas-allapot.json
+          dangerous-clean-slate: false
