@@ -49,6 +49,27 @@ const timeHu = (t) => {
  */
 const UTSZAM_KERESO = 'https://utszamkereso.kozut.hu/';
 
+/**
+ * Az útszámkereső jobb oldali paneljéből kimásolt szöveg feldolgozása.
+ * Elég a panelt kijelölni és másolni — ebből kiszedjük, ami kell.
+ */
+export function parseKeresoSzoveg(text) {
+  const t = String(text || '').replace(/\s+/g, ' ');
+  const out = {};
+  const ut = /[ÚUÚ]tsz[áa]m\s*:?\s*([A-Za-z0-9][A-Za-z0-9./-]*)/i.exec(t);
+  if (ut) out.utszam = ut[1];
+  const sz = /Szelv[ée]ny\s*:?\s*(\d+)\s*km\s*\+\s*(\d+)\s*m/i.exec(t)
+    || /(\d+)\s*km\s*\+\s*(\d+)\s*m/i.exec(t);
+  if (sz) out.szelveny = `${Number(sz[1])} km + ${Number(sz[2])} m`;
+  else {
+    const plus = /\b(\d{1,3})\s*\+\s*(\d{1,3})\b/.exec(t);      // „27+387”
+    if (plus) out.szelveny = `${Number(plus[1])} km + ${Number(plus[2])} m`;
+  }
+  const hely = /Telep[üu]l[ée]s\s*:?\s*([^·|,;]+)/i.exec(t);
+  if (hely) out.telepules = hely[1].trim();
+  return out;
+}
+
 /** Szöveg a vágólapra — hogy a keresőbe csak be kelljen illeszteni. */
 async function toClipboard(text) {
   try {
@@ -277,6 +298,44 @@ export class KozutDocs {
     await this.loadNetwork(this.netFile, fields);
   }
 
+  /**
+   * Az útszámkeresőből kimásolt panel feldolgozása egy sorba.
+   * Először a vágólapot nézzük; ha nem megy (a böngésző nem engedi), kérünk
+   * egy beillesztő mezőt.
+   */
+  async pasteFromKereso(it, k) {
+    let text = '';
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        text = await navigator.clipboard.readText();
+      }
+    } catch (_) { /* jöhet a kézi beillesztés */ }
+
+    let data = parseKeresoSzoveg(text);
+    if (!data.utszam && !data.szelveny) {
+      const res = await modal({
+        title: 'Beillesztés az útszámkeresőből',
+        text: 'Az útszámkeresőben a találatra kattintva megjelenik a jobb oldali panel '
+          + '(Útszám, Szelvény). Jelölje ki és másolja ki a panel szövegét, majd illessze be ide.',
+        fields: [{ name: 'szoveg', label: 'Kimásolt szöveg', type: 'textarea', value: '' }],
+        okText: 'Feldolgozás',
+      });
+      if (!res) return;
+      data = parseKeresoSzoveg(res.szoveg);
+    }
+
+    if (!data.utszam && !data.szelveny) {
+      toast('Ebből nem tudtam kiolvasni útszámot vagy szelvényt.', 'error');
+      return;
+    }
+    if (data.utszam) k.utszam = data.utszam;
+    if (data.szelveny) k.km = data.szelveny;
+    if (data.telepules && !k.telepules) k.telepules = data.telepules;
+    this.save();
+    this.render();
+    toast(`Beírva: ${[data.utszam, data.szelveny].filter(Boolean).join(' · ')}`);
+  }
+
   /** Egy sor adatai az úthálózatból. */
   netHit(it) {
     if (!this.net || it.lat == null) return null;
@@ -481,20 +540,30 @@ export class KozutDocs {
                 : `Koordinátakereső, EOV: ${eov}`);
             },
           }),
+          el('button', {
+            class: 'btn ghost tiny', type: 'button',
+            text: '📋 Beillesztés a keresőből',
+            onclick: (e) => { e.preventDefault(); this.pasteFromKereso(it, k); },
+          }),
           el('span', { class: 'muted small', text: 'EOV: ' + formatEov(it.lat, it.lon) }),
         ]) : null,
         // egy bejárás rendszerint ugyanazon az úton halad: elég egyszer beírni
         el('button', {
           class: 'btn ghost tiny', type: 'button', text: '⤓ Település és útszám a többi üres sorba',
           onclick: () => {
+            if (!k.telepules && !k.utszam) {
+              toast('Előbb töltse ki ebben a sorban a települést vagy az útszámot.', 'error');
+              return;
+            }
+            let n = 0;
             for (const other of rows) {
               if (other === it) continue;
-              if (!other.kozut.telepules) other.kozut.telepules = k.telepules || '';
-              if (!other.kozut.utszam) other.kozut.utszam = k.utszam || '';
+              if (!other.kozut.telepules && k.telepules) { other.kozut.telepules = k.telepules; n += 1; }
+              if (!other.kozut.utszam && k.utszam) { other.kozut.utszam = k.utszam; n += 1; }
             }
             this.save();
             this.renderRows();
-            toast('Átmásolva az üres sorokba.');
+            toast(n ? `Átmásolva ${n} mezőbe.` : 'Minden sor ki volt már töltve.');
           },
         }),
         input('munka', 'Elvégzendő munka / leírás (részletező)'),

@@ -171,8 +171,18 @@ A bejárás adatlapján a **📋 Közút dokumentumok kitöltése** gomb nyitja 
    útszám és a km szelvény magától megjelenik minden sornál, és egy gombbal
    beírható. Enélkül kézi úton:
 
-   Az útszám és a szelvény kikereséséhez soronként ott a **🔎 Útszám és
-   szelvény keresése** gomb. A Magyar Közút
+   Úthálózati adat nélkül, az útszámkeresővel három lépés soronként:
+
+   1. **🔎 Útszám és szelvény keresése** — a koordináta a vágólapra kerül
+      (EOV-ban, mert a kereső azt várja), és megnyílik a kereső.
+   2. A *Koordinátakeresőben*: **Beilleszt → Keres**, majd **rá kell
+      kattintani a megjelölt pontra** — csak ekkor jön elő jobb oldalt az
+      *Útszám* és a *Szelvény*.
+   3. A panel szövegét kijelölve és kimásolva itt a **📋 Beillesztés a
+      keresőből** gomb kiszedi belőle az útszámot és a szelvényt (ha a
+      böngésző nem engedi a vágólap olvasását, kér egy beillesztő mezőt).
+
+   A gombról bővebben: A Magyar Közút
    [útszámkeresője](https://utszamkereso.kozut.hu/) a *Koordinátakeresőben*
    **EOV** (Y, X) koordinátát vár, a telefon GPS-e viszont WGS84 szerinti
    szélességet és hosszúságot ad — az app ezért **átszámítja EOV-ba**, a
