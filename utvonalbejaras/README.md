@@ -135,8 +135,22 @@ galériája), a teljes anyag utólag, otthon is összerakható:
    méretek a fotókon, iránytű, állapotok és táblák, **jegyzőkönyv**,
    **térképfájl**, **Közút-űrlapok**.
 
-> A rajzolás közben a térkép nem ugrik el: az éppen rajzolt vonal nem
-> mozdítja a nézetet, és egyetlen pont körül is értelmes nagyítás marad.
+#### Útpontok felvétele és szerkesztése a térképen
+
+A nyomvonal-szerkesztőben minden megvan, amit a terepen is tennél:
+
+| Mit szeretne | Hogyan |
+|---|---|
+| **Odaugrani egy helyre** | *🔍 Ugrás helyre* — koordináta (`47.4979, 19.0402`), EOV (`650000, 240000`), útszám szelvénnyel (`81 27+387`) vagy **település neve** (az utóbbi kettőhöz a betöltött úthálózati adat kell) |
+| **Új pontot létrehozni** | *➕ Pont felvétele a térképre* → koppintás a helyére → megnevezés, típus (jegyzet/útpont vagy állapot, tábla), megjegyzés |
+| **Meglévő pontot megnyitni** | koppintson rá a térképen a pöttyre — megnyílik az adatlapja |
+| **Fotót, hangot, jegyzetet hozzáadni** | az elem adatlapján: *📷 Fotó csatolása*, *🎙️ Hangjegyzet*, *📝 Megjegyzés*, *✏️ Jelölés / méretek* |
+| **Pontot áthelyezni** | adatlap → *📍 Hely javítása* → *Kijelölés a térképen* |
+| **Útvonalat rajzolni** | *✏️ Hiányzó szakasz berajzolása* — koppintás pontról pontra |
+
+> A térkép nem ugrik el munka közben: az éppen rajzolt vonal nem mozdítja a
+> nézetet, új pont felvételekor a nagyított kivágat a helyén marad, és
+> egyetlen pont körül is értelmes nagyítás marad.
 
 ### Nagyítható térkép
 

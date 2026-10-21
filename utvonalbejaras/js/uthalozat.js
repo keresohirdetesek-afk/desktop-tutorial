@@ -160,6 +160,9 @@ export async function buildNetwork(file, fields, progress = () => {}) {
 
   const roads = [];
   const roadIndex = new Map();
+  const places = [];
+  const placeIndex = new Map();
+  const segPlace = [];
   const aLat = []; const aLon = []; const bLat = []; const bLon = [];
   const segRoad = []; const segKm = []; const segLen = [];
   let skipped = 0;
@@ -182,6 +185,14 @@ export async function buildNetwork(file, fields, progress = () => {}) {
     const kmFrom = map.kmKezd ? toMeters(props[map.kmKezd]) : null;
     const kmTo = map.kmVeg ? toMeters(props[map.kmVeg]) : null;
 
+    // település (ha van ilyen mező): ide is lehet majd ugrani a térképen
+    let pi = -1;
+    if (map.telepules && props[map.telepules]) {
+      const pn = String(props[map.telepules]).trim();
+      pi = placeIndex.has(pn) ? placeIndex.get(pn) : -1;
+      if (pi < 0) { pi = places.length; places.push(pn); placeIndex.set(pn, pi); }
+    }
+
     for (const line of lines) {
       const pts = line.map((c) => (eov ? eovToWgs84(c[0], c[1]) : { lat: c[1], lon: c[0] }));
       // a vonal hossza a szelvény szétosztásához
@@ -196,6 +207,7 @@ export async function buildNetwork(file, fields, progress = () => {}) {
         aLat.push(pts[i - 1].lat); aLon.push(pts[i - 1].lon);
         bLat.push(pts[i].lat); bLon.push(pts[i].lon);
         segRoad.push(ri);
+        segPlace.push(pi);
         segLen.push(d);
         // a szakasz elejéhez tartozó szelvény (ha van mihez viszonyítani)
         segKm.push(kmFrom == null ? null
@@ -231,6 +243,8 @@ export async function buildNetwork(file, fields, progress = () => {}) {
     fields: map,
     sampleKeys: Object.keys(sample),
     roads,
+    places,
+    segPlace: Int32Array.from(segPlace),
     aLat: Float64Array.from(aLat),
     aLon: Float64Array.from(aLon),
     bLat: Float64Array.from(bLat),
@@ -288,4 +302,61 @@ export function lookupRoad(net, lat, lon, maxDistance = 120) {
     meters,
     distance: Math.round(bestD),
   };
+}
+
+/* ------------------------------------------- keresés a hálózatban */
+
+/** Egy út adott szelvényének helye — „81” + 27387 m. */
+export function pointOnRoad(net, road, meters) {
+  if (!net || !net.count) return null;
+  const name = String(road).trim().toLowerCase();
+  const ri = net.roads.findIndex((r) => String(r).trim().toLowerCase() === name);
+  if (ri < 0) return null;
+
+  let best = -1;
+  let bestDiff = Infinity;
+  let bestT = 0;
+  for (let i = 0; i < net.segRoad.length; i++) {
+    if (net.segRoad[i] !== ri) continue;
+    const km = net.segKm[i];
+    if (!isFinite(km)) continue;
+    const end = km + net.segLen[i];
+    if (meters >= km && meters <= end) {
+      return along(net, i, (meters - km) / (net.segLen[i] || 1), road, meters);
+    }
+    const diff = Math.min(Math.abs(meters - km), Math.abs(meters - end));
+    if (diff < bestDiff) { bestDiff = diff; best = i; bestT = meters < km ? 0 : 1; }
+  }
+  if (best < 0) {
+    // szelvény nélküli adat: legalább az út elejét megmutatjuk
+    const i = net.segRoad.findIndex((r) => r === ri);
+    return i < 0 ? null : along(net, i, 0, road, null);
+  }
+  return along(net, best, bestT, road, meters);
+}
+
+function along(net, i, t, road, meters) {
+  const tt = Math.max(0, Math.min(1, t));
+  return {
+    lat: net.aLat[i] + (net.bLat[i] - net.aLat[i]) * tt,
+    lon: net.aLon[i] + (net.bLon[i] - net.aLon[i]) * tt,
+    cim: `${road}${meters != null ? ' · ' + formatSzelveny(meters) : ''}`,
+  };
+}
+
+/** Település helye a hálózatból (a hozzá tartozó szakaszok közepe). */
+export function findPlace(net, name) {
+  if (!net || !net.places || !net.places.length) return null;
+  const want = String(name).trim().toLowerCase();
+  let pi = net.places.findIndex((p) => String(p).trim().toLowerCase() === want);
+  if (pi < 0) pi = net.places.findIndex((p) => String(p).trim().toLowerCase().startsWith(want));
+  if (pi < 0) return null;
+
+  let sumLat = 0; let sumLon = 0; let n = 0;
+  for (let i = 0; i < net.segPlace.length; i++) {
+    if (net.segPlace[i] !== pi) continue;
+    sumLat += net.aLat[i]; sumLon += net.aLon[i]; n += 1;
+  }
+  if (!n) return null;
+  return { lat: sumLat / n, lon: sumLon / n, cim: net.places[pi], span: 4000 };
 }

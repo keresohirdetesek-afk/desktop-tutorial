@@ -3,7 +3,7 @@
 import * as db from './db.js';
 import {
   TrackRecorder, currentPosition, renderTrack, lengthByStatus, isRejected,
-  rejectedSections, drawnLength, detectGap, formatDistance, formatDuration,
+  rejectedSections, drawnLength, detectGap, formatDistance, formatDuration, rebaseView,
   formatCoord, formatHeading, cardinal, toGPX, toGeoJSON, typeLabel, describeItem,
   CONDITION_CATEGORIES, CONDITION_STATES, SEVERITIES, parseDims,
   categoryLabel, conditionLabel, severityLabel,
@@ -14,6 +14,8 @@ import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
 import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
 import { MapView } from './terkepnezet.js';
+import { pointOnRoad, findPlace } from './uthalozat.js';
+import { eovToWgs84 } from './eov.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs } from './kozut.js';
@@ -52,6 +54,8 @@ const MEDIA_KEYS = ['photo', 'flat', 'thumb', 'audio', 'video'];
 
 let trackHit = null;
 let trackView = null;           // nagyítás/mozgatás a bejárás térképén
+let trackLastFit = null;        // az előző térképillesztés (nézet megtartásához)
+let roadNet;                    // betöltött úthálózati adat (NAP), ha van
 let firstPointAfterStart = false;
 
 /* ------------------------------------------------------------ segédek */
@@ -328,10 +332,19 @@ function updateStats() {
 function drawTrack() {
   const canvas = $('#track-canvas');
   if (!canvas.clientWidth) return;
-  trackHit = renderTrack(canvas, state.points, state.items, {
+  const prevFit = trackLastFit;
+  const opts = {
     drawn: (state.session && state.session.drawn) || [],
     view: trackView ? trackView.view : null,
-  });
+  };
+  trackHit = renderTrack(canvas, state.points, state.items, opts);
+  // új pont felvételekor ne ugorjon el a nagyított térkép
+  if (prevFit && trackView && trackHit.fit
+      && rebaseView(trackView.view, prevFit, trackHit.fit, trackHit.width, trackHit.height)) {
+    trackView.changed();
+    trackHit = renderTrack(canvas, state.points, state.items, opts);
+  }
+  trackLastFit = trackHit.fit;
   if (trackView) $('#track-fit').hidden = !trackView.isZoomed();
   // a csempék később futnak be; amíg ez a képernyő aktív, újrarajzoljuk
   onTileLoad(() => { if (state.screen === 'session') drawTrack(); });
@@ -452,6 +465,9 @@ async function openTrackEditor() {
     points: state.points,
     items: state.items,
     drawn: state.session.drawn || [],
+    onAddPoint: (at) => addPointAt(at),
+    onOpenItem: (id) => { trackEditor.close(); openViewer(id); },
+    resolvePlace: (text) => resolvePlace(text),
     onApply: async ({ updated, deleted, drawn }) => {
       if (updated) await db.updatePoints(updated);
       if (deleted) await db.deletePoints(deleted);
@@ -1054,6 +1070,117 @@ function positionNote(item) {
     parts.push('mérés: ' + formatDateTime(item.posAt));
   }
   return parts.length ? ` (${parts.join(', ')})` : '';
+}
+
+/**
+ * Új pont felvétele a térképre — ugyanaz, mintha a terepen rögzítenénk,
+ * csak a helyet koppintással adjuk meg. Utána a szokásos módon tehető hozzá
+ * fotó, hang, jegyzet.
+ */
+async function addPointAt(at) {
+  const res = await modal({
+    title: 'Új pont a térképen',
+    text: formatCoord(at.lat, at.lon) + ' — mit vegyünk fel ide?',
+    fields: [
+      { name: 'title', label: 'Megnevezés', value: '' },
+      {
+        name: 'type', label: 'Típus', type: 'select', value: 'note',
+        options: [
+          { value: 'note', label: 'Jegyzet / útpont' },
+          { value: 'condition', label: 'Állapot, tábla' },
+        ],
+      },
+      { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2, value: '' },
+    ],
+    okText: 'Felvétel',
+  });
+  if (!res) return;
+
+  const base = {
+    id: db.uid(),
+    sessionId: state.session.id,
+    phase: capturePhase,
+    created: Date.now(),
+    lat: at.lat,
+    lon: at.lon,
+    acc: null,
+    posAt: Date.now(),
+    posSource: 'manual',
+    heading: null,
+    title: res.title.trim(),
+    note: res.note.trim(),
+    dims: [],
+    texts: [],
+    ops: [],
+  };
+  const item = res.type === 'condition'
+    ? { ...base, type: 'condition', category: 'egyeb', condition: 'ep', severity: 'figyelendo', what: res.title.trim() }
+    : { ...base, type: 'note' };
+
+  await db.saveItem(item);
+  state.items.push(item);
+  state.items.sort((a, b) => a.created - b.created);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  // a szerkesztő nyitva marad: így egymás után több pont is felvehető
+  if (trackEditor) trackEditor.draw();
+  toast('Pont felvéve. Fotót, hangot a listából, az elem adatlapján adhat hozzá.');
+}
+
+/**
+ * „Ugrás helyre”: koordináta (GPS vagy EOV), útszám + szelvény, vagy
+ * település — az utóbbi kettőhöz a betöltött úthálózati adat kell.
+ */
+async function resolvePlace(text) {
+  const t = String(text).trim();
+
+  // 47.4979, 19.0402  (vagy pontosvesszővel/szóközzel)
+  const geo = /^(-?\d{1,2}[.,]\d+)\s*[,;\s]\s*(-?\d{1,3}[.,]\d+)$/.exec(t);
+  if (geo) {
+    const lat = Number(geo[1].replace(',', '.'));
+    const lon = Number(geo[2].replace(',', '.'));
+    if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+      return { lat, lon, cim: formatCoord(lat, lon) };
+    }
+  }
+
+  // EOV: 650000, 240000
+  const eov = /^(\d{5,7}(?:[.,]\d+)?)\s*[,;\s]\s*(\d{5,7}(?:[.,]\d+)?)$/.exec(t);
+  if (eov) {
+    const y = Number(eov[1].replace(',', '.'));
+    const x = Number(eov[2].replace(',', '.'));
+    const p = eovToWgs84(y, x);
+    if (isFinite(p.lat) && isFinite(p.lon)) return { ...p, cim: `EOV ${y}, ${x}` };
+  }
+
+  const net = await roadNetwork();
+
+  // útszám + szelvény: „81 27+387”, „M35 12+345”, „81 27”
+  const road = /^([A-Za-z]?\d{1,5}[A-Za-z]?)\s+(\d{1,3})(?:\s*\+\s*(\d{1,3}))?$/.exec(t);
+  if (road && net) {
+    const meters = Number(road[2]) * 1000 + Number(road[3] || 0);
+    const hit = pointOnRoad(net, road[1], meters);
+    if (hit) return hit;
+  }
+
+  // település a hálózatból
+  if (net) {
+    const place = findPlace(net, t);
+    if (place) return place;
+  }
+  return null;
+}
+
+/** A betöltött úthálózati adat (ha van) — a helykereséshez. */
+async function roadNetwork() {
+  if (roadNet !== undefined) return roadNet;
+  try {
+    roadNet = (await db.getNetwork()) || null;
+  } catch (_) {
+    roadNet = null;
+  }
+  return roadNet;
 }
 
 /**

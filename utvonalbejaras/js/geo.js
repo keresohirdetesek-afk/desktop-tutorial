@@ -705,6 +705,8 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   return {
     project, unproject, hitboxes, nearest, nearestDrawn, coords,
     tiles: tileStats, labelBoxes, width: w, height: h,
+    // az illesztés adatai — ebből lehet kiszámolni, hogyan ugorjunk egy helyre
+    fit: { scale, cx, cy },
   };
 }
 
@@ -813,6 +815,32 @@ export function toGeoJSON(session, points, items = [], opts = {}) {
 }
 
 /** Kézzel berajzolt szakaszok együttes hossza. */
+/**
+ * A nagyítás/mozgatás a térkép illesztésére ül rá. Ha az illesztés
+ * megváltozik (új pont kerül fel, vagy berajzolunk egy szakaszt), a nézet
+ * elcsúszna — ez számolja át úgy, hogy ugyanaz a terület maradjon a
+ * képernyőn, ugyanakkora nagyításban.
+ */
+export function rebaseView(view, prev, next, w, h) {
+  if (!view || !prev || !next) return false;
+  // ha a felhasználó nem nagyított és nem mozgatott, hagyjuk, hogy a térkép
+  // magától illeszkedjen az új tartalomra
+  const moved = view.k > 1.02 || Math.abs(view.tx) > 1 || Math.abs(view.ty) > 1;
+  if (!moved) return false;
+  if (prev.scale === next.scale && prev.cx === next.cx && prev.cy === next.cy) return false;
+  if (!isFinite(prev.scale) || !isFinite(next.scale) || !next.scale) return false;
+
+  // a képernyő közepének világkoordinátája a régi illesztéssel
+  const wx = prev.cx + ((w / 2 - view.tx) / view.k - w / 2) / prev.scale;
+  const wy = prev.cy + ((h / 2 - view.ty) / view.k - h / 2) / prev.scale;
+  const px = prev.scale * view.k;          // képpont / világegység: ez marad
+
+  view.k = px / next.scale;
+  view.tx = w / 2 - (w / 2 + (wx - next.cx) * next.scale) * view.k;
+  view.ty = h / 2 - (h / 2 + (wy - next.cy) * next.scale) * view.k;
+  return true;
+}
+
 export function drawnLength(list = []) {
   return list.reduce((sum, s) => sum + trackLength(s.pts || []), 0);
 }
