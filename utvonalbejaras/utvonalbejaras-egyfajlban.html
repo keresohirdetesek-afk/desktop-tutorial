@@ -915,7 +915,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <button id="cap-note" class="cap">
         <span class="cap-icon">📝</span><span>Jegyzet</span>
       </button>
+      <button id="cap-import" class="cap">
+        <span class="cap-icon">📁</span><span>Képek a gépről</span>
+      </button>
       <input id="photo-input" type="file" accept="image/*" capture="environment" hidden multiple>
+      <!-- capture nélkül: meglévő képek behozatalához (otthoni szerkesztés) -->
+      <input id="photo-import-input" type="file" accept="image/*" hidden multiple>
       <input id="video-input" type="file" accept="video/*" capture="environment" hidden>
       <input id="attach-photo-input" type="file" accept="image/*" capture="environment" hidden>
     </div>
@@ -2443,16 +2448,17 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
   const markerPts = markers.filter((m) => m.lat != null && m.lon != null);
   const drawn = opts.drawn || [];        // kézzel berajzolt szakaszok
   const draft = opts.draft || null;      // éppen rajzolt szakasz
-  const drawnPts = drawn.flatMap((s) => s.pts).concat(draft ? draft.pts || [] : []);
+  const drawnPts = drawn.flatMap((s) => s.pts);
+  // az éppen rajzolt vonal szándékosan NEM számít bele a térkép
+  // illesztésébe: különben az első csúcs letétele után a nézet ráugrana, és
+  // a következő koppintás már máshová esne
   const all = coords.concat(markerPts, drawnPts);
 
-  if (!all.length) {
-    ctx.fillStyle = dim;
-    ctx.font = '13px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Nincs rögzített nyomvonal', w / 2, h / 2);
-    return { project: null };
-  }
+  // Nincs még semmi (otthoni szerkesztés GPS nélkül): az ország látszik,
+  // és onnan lehet ráközelíteni a helyszínre. A rajzolás, a koppintás és a
+  // térképcsempék így is működnek.
+  const empty = !all.length;
+  if (empty) all.push({ lat: 45.74, lon: 16.11 }, { lat: 48.59, lon: 22.9 });
 
   // Web Mercator vetítés: ebben dolgoznak a térképcsempék is, így a
   // nyomvonal és az alaptérkép pontosan fedésbe kerül.
@@ -2471,6 +2477,18 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
     minY = c.y - r; maxY = c.y + r;
   }
 
+  // Egyetlen pont (vagy pár méteres nyomvonal) esetén a befoglaló téglalap
+  // egy pontra zsugorodna, és a nagyítás értelmetlenül nagy lenne — ezért
+  // legalább ekkora környezetet mutatunk (kb. 400 m).
+  const MIN_SPAN = 1e-5;
+  if (maxX - minX < MIN_SPAN) {
+    const c = (minX + maxX) / 2;
+    minX = c - MIN_SPAN / 2; maxX = c + MIN_SPAN / 2;
+  }
+  if (maxY - minY < MIN_SPAN) {
+    const c = (minY + maxY) / 2;
+    minY = c - MIN_SPAN / 2; maxY = c + MIN_SPAN / 2;
+  }
   const spanX = Math.max(maxX - minX, 1e-9);
   const spanY = Math.max(maxY - minY, 1e-9);
   const pad = opts.focus ? 0 : 22;      // kivágatnál a megadott sugár pontos legyen
@@ -2501,6 +2519,15 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
   const tileStats = opts.tiles !== false
     ? drawTiles(ctx, w, h, px, worldToScreen, screenToWorld)
     : { wanted: 0, drawn: 0 };
+
+  if (empty) {
+    ctx.save();
+    ctx.fillStyle = tilesEnabled() && opts.tiles !== false ? '#1b1b1b' : dim;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nincs rögzített nyomvonal — nagyítson rá a helyszínre', w / 2, 20);
+    ctx.restore();
+  }
 
   const rejectColor = opts.rejectLine || '#ff8a4d';
   const lineW = (opts.lineWidth || 4) * Math.min(2, Math.max(1, view.k * 0.5 + 0.5));
@@ -5712,7 +5739,9 @@ class KozutDocs {
     }
     if (!this.form.feltetelek) {
       const kritikus = this.items.filter((i) => i.severity === 'kritikus').length;
-      const valid = formatDistance(trackLength(this.points.filter((p) => !isRejected(p))));
+      // a térképen megadott (otthon megrajzolt) szakasz is az útvonal része
+      const drawn = (this.session.drawn || []).reduce((sum, d) => sum + trackLength(d.pts || []), 0);
+      const valid = formatDistance(trackLength(this.points.filter((p) => !isRejected(p))) + drawn);
       this.form.feltetelek = kritikus
         ? `A bejárás ${valid} hosszú útvonalon megtörtént. ${kritikus} kritikus helyszín a részletezőben felsorolva.`
         : `A bejárás ${valid} hosszú útvonalon megtörtént, kritikus helyszín nem merült fel.`;
@@ -7788,11 +7817,19 @@ class TrackEditor {
   /**
    * @returns {Promise<boolean>} true, ha változott a nyomvonal
    */
-  open({ points, items = [], drawn = [], onApply }) {
+  /**
+   * @param {object} o
+   * @param {object} [o.pick]  helyszín kijelölése a térképen: { lat, lon, cim }
+   *   — ilyenkor a szerkesztő egyetlen pont megadására szolgál (GPS nélküli,
+   *   otthoni szerkesztéshez), és a kiválasztott koordinátával tér vissza.
+   */
+  open({ points, items = [], drawn = [], onApply, pick = null }) {
     this.points = points;
     this.items = items;
     this.drawn = drawn;
     this.onApply = onApply;
+    this.pick = pick;
+    this.picked = pick && pick.lat != null ? { lat: pick.lat, lon: pick.lon } : null;
     this.sel = null;
     this.draft = null;        // éppen rajzolt szakasz
     this.selectedDrawn = null;
@@ -7808,6 +7845,8 @@ class TrackEditor {
   }
 
   close() {
+    const bar = $('#trackedit-pickbar', this.root);
+    if (bar) bar.hidden = true;
     onTileLoad(null);
     this.root.hidden = true;
     document.body.classList.remove('modal-open');
@@ -7898,9 +7937,60 @@ class TrackEditor {
     b.title = on ? 'Alaptérkép kikapcsolása' : 'Alaptérkép bekapcsolása';
   }
 
+  /** Egyetlen pont megadása a térképen — GPS nélküli szerkesztéshez. */
+  renderPickPanel() {
+    for (const id of ['#trackedit-drawbar', '#trackedit-normalbar', '#trackedit-draw',
+      '#trackedit-selinfo', '#trackedit-sections-wrap', '#trackedit-drawn-wrap',
+      '#trackedit-turnaround']) {
+      const node = $(id, this.root);
+      if (node) node.hidden = true;
+    }
+    const hint = $('#trackedit-hint', this.root);
+    hint.hidden = false;
+    hint.textContent = this.picked
+      ? `Kijelölve: ${formatCoord(this.picked.lat, this.picked.lon)} — `
+        + 'koppintson máshova, ha módosítja, vagy mentse.'
+      : (this.pick.cim ? `„${this.pick.cim}” helyszíne: ` : '')
+        + 'nagyítson rá a helyre, és koppintson a pontos helyszínre.';
+
+    let bar = $('#trackedit-pickbar', this.root);
+    if (!bar) {
+      bar = el('div', { class: 'editor-row', id: 'trackedit-pickbar' }, [
+        el('button', {
+          id: 'trackedit-pick-save', class: 'btn primary small', type: 'button',
+          text: '✓ Helyszín mentése',
+          onclick: () => {
+            if (!this.picked) { toast('Koppintson a térképen a helyszínre.', 'error'); return; }
+            const r = this._resolve;
+            this._resolve = null;
+            this.pick = null;
+            this.root.hidden = true;
+            document.body.classList.remove('modal-open');
+            onTileLoad(null);
+            if (r) r(this.picked);
+          },
+        }),
+        el('button', {
+          class: 'btn ghost small', type: 'button', text: 'Mégse',
+          onclick: () => { this.pick = null; this.close(); },
+        }),
+      ]);
+      hint.parentNode.insertBefore(bar, hint.nextSibling);
+    }
+    bar.hidden = false;
+    $('#trackedit-pick-save', this.root).disabled = !this.picked;
+  }
+
   /* ------------------------------------------------------------ kijelölés */
 
   tap(p) {
+    if (this.pick) {
+      if (!this.hit || !this.hit.unproject) return;
+      this.picked = this.hit.unproject(p.x, p.y);
+      this.draw();
+      this.renderPanel();
+      return;
+    }
     if (!this.hit || !this.hit.nearest) return;
     if (this.draft) { this.addVertex(p); return; }
 
@@ -8160,6 +8250,7 @@ class TrackEditor {
   draw() {
     if (this.root.hidden) return;
     this.hit = renderTrack(this.canvas, this.points, this.items, {
+      here: this.picked ? { ...this.picked, color: '#ffd60a' } : null,
       view: this.view,
       selection: this.sel,
       drawn: this.drawn,
@@ -8170,6 +8261,10 @@ class TrackEditor {
   }
 
   renderPanel() {
+    if (this.pick) {
+      this.renderPickPanel();
+      return;
+    }
     const len = lengthByStatus(this.points);
     const drawnLen = drawnLength(this.drawn);
     $('#te-ok', this.root).textContent = formatDistance(len.ok);
@@ -8690,9 +8785,10 @@ async function stopRecording(silent = false) {
  * jóváhagyandó útvonal, ezért szakaszonként elvethető vagy törölhető.
  */
 async function openTrackEditor() {
-  if (state.points.length < 2) {
-    toast('Ehhez a bejáráshoz még nincs elég rögzített nyomvonalpont.', 'error');
-    return;
+  // GPS-pont nélkül is megnyitható: így otthon, utólag is meg lehet rajzolni
+  // az útvonalat a térképen (ld. „Hiányzó szakasz berajzolása”)
+  if (!state.points.length && !(state.session.drawn || []).length) {
+    toast('Nincs rögzített nyomvonal — nagyítson rá a helyszínre, és rajzolja meg az útvonalat.');
   }
   if (state.recording) {
     const ok = await modal({
@@ -8894,8 +8990,8 @@ async function onPhotoSelected(e) {
   if (noPos) {
     toast(
       noPos === files.length
-        ? 'Nincs helyadat a fotó(k)hoz — a részleteknél kézzel megadható.'
-        : `${noPos} fotóhoz nincs helyadat — a részleteknél kézzel megadható.`,
+        ? 'Nincs helyadat a fotó(k)hoz — koppintson az elemre, és jelölje ki a térképen.'
+        : `${noPos} fotóhoz nincs helyadat — koppintson az elemre, és jelölje ki a térképen.`,
       'error'
     );
   }
@@ -9265,6 +9361,7 @@ function itemCard(item, extraSub) {
   if (item.type === 'video' && item.videoDuration) sub.push(formatDuration(item.videoDuration));
   if (item.type === 'condition') sub.push(categoryLabel(item.category));
   if (item.lat != null) sub.push(formatCoord(item.lat, item.lon));
+  else sub.push('📍 nincs helyszín');
 
   const tags = [];
   for (const d of item.dims || []) tags.push(el('span', { class: 'tag dim', text: '↔ ' + d }));
@@ -9312,6 +9409,21 @@ function positionNote(item) {
   return parts.length ? ` (${parts.join(', ')})` : '';
 }
 
+/**
+ * Helyszín kijelölése a térképen. GPS nélkül, utólag ez az egyetlen mód
+ * megadni, hol készült egy fotó — a térképre koppintva.
+ */
+async function pickOnMap(item) {
+  if (!trackEditor) trackEditor = new TrackEditor($('#trackedit'));
+  closeViewer();
+  return trackEditor.open({
+    points: state.points,
+    items: state.items.filter((i) => i.lat != null && i !== item),
+    drawn: (state.session && state.session.drawn) || [],
+    pick: { lat: item.lat, lon: item.lon, cim: item.title || typeLabel(item.type) },
+  });
+}
+
 /** Helyadat pótlása vagy javítása: nyomvonalról, friss méréssel, vagy kézzel. */
 async function editItemPosition(item) {
   const res = await modal({
@@ -9326,6 +9438,7 @@ async function editItemPosition(item) {
         name: 'mode', label: 'Vagy vegye át innen', type: 'select', value: '',
         options: [
           { value: '', label: '— a fenti koordinátát használom —' },
+          { value: 'map', label: 'Kijelölés a térképen' },
           { value: 'now', label: 'Friss GPS-mérés most' },
           { value: 'track', label: 'A nyomvonal időben legközelebbi pontja' },
         ],
@@ -9336,7 +9449,11 @@ async function editItemPosition(item) {
   if (!res) return;
 
   let next = null;
-  if (res.mode === 'now') {
+  if (res.mode === 'map') {
+    const picked = await pickOnMap(item);
+    if (!picked) return;
+    next = { lat: picked.lat, lon: picked.lon, acc: null, posAt: Date.now(), posSource: 'manual' };
+  } else if (res.mode === 'now') {
     const p = await positionNow();
     if (p.lat == null) { toast('Nem sikerült helyadatot mérni.', 'error'); return; }
     next = p;
@@ -10033,6 +10150,9 @@ function bind() {
     $('#photo-input').click();
   });
   $('#photo-input').addEventListener('change', onPhotoSelected);
+  // meglévő (nem az appal készült) képek behozatala — otthoni szerkesztéshez
+  $('#cap-import').addEventListener('click', () => $('#photo-import-input').click());
+  $('#photo-import-input').addEventListener('change', onPhotoSelected);
   $('#cap-video').addEventListener('click', () => $('#video-input').click());
   $('#video-input').addEventListener('change', onVideoSelected);
   $('#attach-photo-input').addEventListener('change', onAttachPhoto);

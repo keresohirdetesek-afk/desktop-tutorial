@@ -20,6 +20,7 @@ használatra.
 | **Nyomvonal utólagos szerkesztése**: szakasz elvetése indoklással vagy törlése | *Nyomvonal szerkesztése* |
 | **Hiányzó szakasz berajzolása** a térképre, ahol nincs GPS-nyom | *Nyomvonal szerkesztése* → *Hiányzó szakasz berajzolása* |
 | **Fotó** készítése menet közben, automatikus GPS-koordinátával | *Fotó* gomb (a telefon kameráját nyitja) |
+| **Meglévő képek behozatala** (EXIF-ből GPS és idő), helyszín kijelölése a térképen | *Képek a gépről* gomb |
 | **Rajzolás a képernyőn** a fotóra (szabadkéz, keret, jelölő nyíl) | Fotó → *Jelölés / méretek* |
 | **Méretek beírása**: méretvonal két pont közé + beírt érték (m / cm / t) | Szerkesztő → *Méret* eszköz |
 | **Halvány útirány-nyíl** — külön eszköz, saját beállításokkal | Szerkesztő → *Útirány* eszköz |
@@ -114,6 +115,28 @@ A *Videó* gomb a telefon saját kameraalkalmazását nyitja, és a kész felvé
 veszi át (nincs átkódolás, marad az eredeti minőség). Az app bélyegképet
 készít belőle, és rögzíti a hosszát, a pozíciót és a kameairányt. 150 MB
 fölött rákérdez, mert a teljes mentés és a riport is ekkorára nő.
+
+### Otthoni szerkesztés — GPS nélkül, meglévő képekből
+
+Ha a helyszínen nem az appot használták (hagyományos fényképezőgép, telefon
+galériája), a teljes anyag utólag, otthon is összerakható:
+
+1. **Új bejárás** a szerelvény adataival.
+2. **📁 Képek a gépről** — a meglévő fotók behozatala (több is egyszerre). Ha
+   a képben van GPS-adat (EXIF), az app átveszi; ha nincs, az elem
+   *„📍 nincs helyszín”* jelzést kap.
+3. **🗺️ Nyomvonal szerkesztése** — GPS-pont nélkül is megnyílik: az ország
+   látszik, onnan rá lehet nagyítani a helyszínre (alaptérképpel, utcákkal),
+   és a **✏️ Hiányzó szakasz berajzolása** gombbal megrajzolható a bejárt
+   útvonal. Ez lesz a jegyzőkönyvben az útvonal.
+4. **Helyszín a fotókhoz**: az elemre koppintva *📍 Hely megadása* →
+   *Kijelölés a térképen* → ráközelítve koppintson a pontos helyre.
+5. Innentől minden ugyanúgy megy, mint a GPS-es bejárásnál: jelölés és
+   méretek a fotókon, iránytű, állapotok és táblák, **jegyzőkönyv**,
+   **térképfájl**, **Közút-űrlapok**.
+
+> A rajzolás közben a térkép nem ugrik el: az éppen rajzolt vonal nem
+> mozdítja a nézetet, és egyetlen pont körül is értelmes nagyítás marad.
 
 ### Nagyítható térkép
 

@@ -191,7 +191,9 @@ export class KozutDocs {
     }
     if (!this.form.feltetelek) {
       const kritikus = this.items.filter((i) => i.severity === 'kritikus').length;
-      const valid = formatDistance(trackLength(this.points.filter((p) => !isRejected(p))));
+      // a térképen megadott (otthon megrajzolt) szakasz is az útvonal része
+      const drawn = (this.session.drawn || []).reduce((sum, d) => sum + trackLength(d.pts || []), 0);
+      const valid = formatDistance(trackLength(this.points.filter((p) => !isRejected(p))) + drawn);
       this.form.feltetelek = kritikus
         ? `A bejárás ${valid} hosszú útvonalon megtörtént. ${kritikus} kritikus helyszín a részletezőben felsorolva.`
         : `A bejárás ${valid} hosszú útvonalon megtörtént, kritikus helyszín nem merült fel.`;

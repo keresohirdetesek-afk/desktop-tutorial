@@ -432,9 +432,10 @@ async function stopRecording(silent = false) {
  * jóváhagyandó útvonal, ezért szakaszonként elvethető vagy törölhető.
  */
 async function openTrackEditor() {
-  if (state.points.length < 2) {
-    toast('Ehhez a bejáráshoz még nincs elég rögzített nyomvonalpont.', 'error');
-    return;
+  // GPS-pont nélkül is megnyitható: így otthon, utólag is meg lehet rajzolni
+  // az útvonalat a térképen (ld. „Hiányzó szakasz berajzolása”)
+  if (!state.points.length && !(state.session.drawn || []).length) {
+    toast('Nincs rögzített nyomvonal — nagyítson rá a helyszínre, és rajzolja meg az útvonalat.');
   }
   if (state.recording) {
     const ok = await modal({
@@ -636,8 +637,8 @@ async function onPhotoSelected(e) {
   if (noPos) {
     toast(
       noPos === files.length
-        ? 'Nincs helyadat a fotó(k)hoz — a részleteknél kézzel megadható.'
-        : `${noPos} fotóhoz nincs helyadat — a részleteknél kézzel megadható.`,
+        ? 'Nincs helyadat a fotó(k)hoz — koppintson az elemre, és jelölje ki a térképen.'
+        : `${noPos} fotóhoz nincs helyadat — koppintson az elemre, és jelölje ki a térképen.`,
       'error'
     );
   }
@@ -1007,6 +1008,7 @@ function itemCard(item, extraSub) {
   if (item.type === 'video' && item.videoDuration) sub.push(formatDuration(item.videoDuration));
   if (item.type === 'condition') sub.push(categoryLabel(item.category));
   if (item.lat != null) sub.push(formatCoord(item.lat, item.lon));
+  else sub.push('📍 nincs helyszín');
 
   const tags = [];
   for (const d of item.dims || []) tags.push(el('span', { class: 'tag dim', text: '↔ ' + d }));
@@ -1054,6 +1056,21 @@ function positionNote(item) {
   return parts.length ? ` (${parts.join(', ')})` : '';
 }
 
+/**
+ * Helyszín kijelölése a térképen. GPS nélkül, utólag ez az egyetlen mód
+ * megadni, hol készült egy fotó — a térképre koppintva.
+ */
+async function pickOnMap(item) {
+  if (!trackEditor) trackEditor = new TrackEditor($('#trackedit'));
+  closeViewer();
+  return trackEditor.open({
+    points: state.points,
+    items: state.items.filter((i) => i.lat != null && i !== item),
+    drawn: (state.session && state.session.drawn) || [],
+    pick: { lat: item.lat, lon: item.lon, cim: item.title || typeLabel(item.type) },
+  });
+}
+
 /** Helyadat pótlása vagy javítása: nyomvonalról, friss méréssel, vagy kézzel. */
 async function editItemPosition(item) {
   const res = await modal({
@@ -1068,6 +1085,7 @@ async function editItemPosition(item) {
         name: 'mode', label: 'Vagy vegye át innen', type: 'select', value: '',
         options: [
           { value: '', label: '— a fenti koordinátát használom —' },
+          { value: 'map', label: 'Kijelölés a térképen' },
           { value: 'now', label: 'Friss GPS-mérés most' },
           { value: 'track', label: 'A nyomvonal időben legközelebbi pontja' },
         ],
@@ -1078,7 +1096,11 @@ async function editItemPosition(item) {
   if (!res) return;
 
   let next = null;
-  if (res.mode === 'now') {
+  if (res.mode === 'map') {
+    const picked = await pickOnMap(item);
+    if (!picked) return;
+    next = { lat: picked.lat, lon: picked.lon, acc: null, posAt: Date.now(), posSource: 'manual' };
+  } else if (res.mode === 'now') {
     const p = await positionNow();
     if (p.lat == null) { toast('Nem sikerült helyadatot mérni.', 'error'); return; }
     next = p;
@@ -1775,6 +1797,9 @@ function bind() {
     $('#photo-input').click();
   });
   $('#photo-input').addEventListener('change', onPhotoSelected);
+  // meglévő (nem az appal készült) képek behozatala — otthoni szerkesztéshez
+  $('#cap-import').addEventListener('click', () => $('#photo-import-input').click());
+  $('#photo-import-input').addEventListener('change', onPhotoSelected);
   $('#cap-video').addEventListener('click', () => $('#video-input').click());
   $('#video-input').addEventListener('change', onVideoSelected);
   $('#attach-photo-input').addEventListener('change', onAttachPhoto);

@@ -8,7 +8,7 @@
 
 import {
   renderTrack, lengthByStatus, rejectedSections, trackLength, drawnLength, detectTurnaround,
-  formatDistance, formatDuration, REJECTED, isRejected,
+  formatDistance, formatDuration, formatCoord, REJECTED, isRejected,
 } from './geo.js';
 import { onTileLoad, setTilesEnabled, tilesEnabled, cachedTileCount } from './tiles.js';
 import { MapView } from './terkepnezet.js';
@@ -39,11 +39,19 @@ export class TrackEditor {
   /**
    * @returns {Promise<boolean>} true, ha változott a nyomvonal
    */
-  open({ points, items = [], drawn = [], onApply }) {
+  /**
+   * @param {object} o
+   * @param {object} [o.pick]  helyszín kijelölése a térképen: { lat, lon, cim }
+   *   — ilyenkor a szerkesztő egyetlen pont megadására szolgál (GPS nélküli,
+   *   otthoni szerkesztéshez), és a kiválasztott koordinátával tér vissza.
+   */
+  open({ points, items = [], drawn = [], onApply, pick = null }) {
     this.points = points;
     this.items = items;
     this.drawn = drawn;
     this.onApply = onApply;
+    this.pick = pick;
+    this.picked = pick && pick.lat != null ? { lat: pick.lat, lon: pick.lon } : null;
     this.sel = null;
     this.draft = null;        // éppen rajzolt szakasz
     this.selectedDrawn = null;
@@ -59,6 +67,8 @@ export class TrackEditor {
   }
 
   close() {
+    const bar = $('#trackedit-pickbar', this.root);
+    if (bar) bar.hidden = true;
     onTileLoad(null);
     this.root.hidden = true;
     document.body.classList.remove('modal-open');
@@ -149,9 +159,60 @@ export class TrackEditor {
     b.title = on ? 'Alaptérkép kikapcsolása' : 'Alaptérkép bekapcsolása';
   }
 
+  /** Egyetlen pont megadása a térképen — GPS nélküli szerkesztéshez. */
+  renderPickPanel() {
+    for (const id of ['#trackedit-drawbar', '#trackedit-normalbar', '#trackedit-draw',
+      '#trackedit-selinfo', '#trackedit-sections-wrap', '#trackedit-drawn-wrap',
+      '#trackedit-turnaround']) {
+      const node = $(id, this.root);
+      if (node) node.hidden = true;
+    }
+    const hint = $('#trackedit-hint', this.root);
+    hint.hidden = false;
+    hint.textContent = this.picked
+      ? `Kijelölve: ${formatCoord(this.picked.lat, this.picked.lon)} — `
+        + 'koppintson máshova, ha módosítja, vagy mentse.'
+      : (this.pick.cim ? `„${this.pick.cim}” helyszíne: ` : '')
+        + 'nagyítson rá a helyre, és koppintson a pontos helyszínre.';
+
+    let bar = $('#trackedit-pickbar', this.root);
+    if (!bar) {
+      bar = el('div', { class: 'editor-row', id: 'trackedit-pickbar' }, [
+        el('button', {
+          id: 'trackedit-pick-save', class: 'btn primary small', type: 'button',
+          text: '✓ Helyszín mentése',
+          onclick: () => {
+            if (!this.picked) { toast('Koppintson a térképen a helyszínre.', 'error'); return; }
+            const r = this._resolve;
+            this._resolve = null;
+            this.pick = null;
+            this.root.hidden = true;
+            document.body.classList.remove('modal-open');
+            onTileLoad(null);
+            if (r) r(this.picked);
+          },
+        }),
+        el('button', {
+          class: 'btn ghost small', type: 'button', text: 'Mégse',
+          onclick: () => { this.pick = null; this.close(); },
+        }),
+      ]);
+      hint.parentNode.insertBefore(bar, hint.nextSibling);
+    }
+    bar.hidden = false;
+    $('#trackedit-pick-save', this.root).disabled = !this.picked;
+  }
+
   /* ------------------------------------------------------------ kijelölés */
 
   tap(p) {
+    if (this.pick) {
+      if (!this.hit || !this.hit.unproject) return;
+      this.picked = this.hit.unproject(p.x, p.y);
+      this.draw();
+      this.renderPanel();
+      return;
+    }
     if (!this.hit || !this.hit.nearest) return;
     if (this.draft) { this.addVertex(p); return; }
 
@@ -411,6 +472,7 @@ export class TrackEditor {
   draw() {
     if (this.root.hidden) return;
     this.hit = renderTrack(this.canvas, this.points, this.items, {
+      here: this.picked ? { ...this.picked, color: '#ffd60a' } : null,
       view: this.view,
       selection: this.sel,
       drawn: this.drawn,
@@ -421,6 +483,10 @@ export class TrackEditor {
   }
 
   renderPanel() {
+    if (this.pick) {
+      this.renderPickPanel();
+      return;
+    }
     const len = lengthByStatus(this.points);
     const drawnLen = drawnLength(this.drawn);
     $('#te-ok', this.root).textContent = formatDistance(len.ok);

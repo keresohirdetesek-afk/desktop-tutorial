@@ -415,16 +415,17 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   const markerPts = markers.filter((m) => m.lat != null && m.lon != null);
   const drawn = opts.drawn || [];        // kézzel berajzolt szakaszok
   const draft = opts.draft || null;      // éppen rajzolt szakasz
-  const drawnPts = drawn.flatMap((s) => s.pts).concat(draft ? draft.pts || [] : []);
+  const drawnPts = drawn.flatMap((s) => s.pts);
+  // az éppen rajzolt vonal szándékosan NEM számít bele a térkép
+  // illesztésébe: különben az első csúcs letétele után a nézet ráugrana, és
+  // a következő koppintás már máshová esne
   const all = coords.concat(markerPts, drawnPts);
 
-  if (!all.length) {
-    ctx.fillStyle = dim;
-    ctx.font = '13px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Nincs rögzített nyomvonal', w / 2, h / 2);
-    return { project: null };
-  }
+  // Nincs még semmi (otthoni szerkesztés GPS nélkül): az ország látszik,
+  // és onnan lehet ráközelíteni a helyszínre. A rajzolás, a koppintás és a
+  // térképcsempék így is működnek.
+  const empty = !all.length;
+  if (empty) all.push({ lat: 45.74, lon: 16.11 }, { lat: 48.59, lon: 22.9 });
 
   // Web Mercator vetítés: ebben dolgoznak a térképcsempék is, így a
   // nyomvonal és az alaptérkép pontosan fedésbe kerül.
@@ -443,6 +444,18 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     minY = c.y - r; maxY = c.y + r;
   }
 
+  // Egyetlen pont (vagy pár méteres nyomvonal) esetén a befoglaló téglalap
+  // egy pontra zsugorodna, és a nagyítás értelmetlenül nagy lenne — ezért
+  // legalább ekkora környezetet mutatunk (kb. 400 m).
+  const MIN_SPAN = 1e-5;
+  if (maxX - minX < MIN_SPAN) {
+    const c = (minX + maxX) / 2;
+    minX = c - MIN_SPAN / 2; maxX = c + MIN_SPAN / 2;
+  }
+  if (maxY - minY < MIN_SPAN) {
+    const c = (minY + maxY) / 2;
+    minY = c - MIN_SPAN / 2; maxY = c + MIN_SPAN / 2;
+  }
   const spanX = Math.max(maxX - minX, 1e-9);
   const spanY = Math.max(maxY - minY, 1e-9);
   const pad = opts.focus ? 0 : 22;      // kivágatnál a megadott sugár pontos legyen
@@ -473,6 +486,15 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   const tileStats = opts.tiles !== false
     ? drawTiles(ctx, w, h, px, worldToScreen, screenToWorld)
     : { wanted: 0, drawn: 0 };
+
+  if (empty) {
+    ctx.save();
+    ctx.fillStyle = tilesEnabled() && opts.tiles !== false ? '#1b1b1b' : dim;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nincs rögzített nyomvonal — nagyítson rá a helyszínre', w / 2, 20);
+    ctx.restore();
+  }
 
   const rejectColor = opts.rejectLine || '#ff8a4d';
   const lineW = (opts.lineWidth || 4) * Math.min(2, Math.max(1, view.k * 0.5 + 0.5));

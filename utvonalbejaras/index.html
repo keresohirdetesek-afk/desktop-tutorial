@@ -90,7 +90,12 @@
       <button id="cap-note" class="cap">
         <span class="cap-icon">📝</span><span>Jegyzet</span>
       </button>
+      <button id="cap-import" class="cap">
+        <span class="cap-icon">📁</span><span>Képek a gépről</span>
+      </button>
       <input id="photo-input" type="file" accept="image/*" capture="environment" hidden multiple>
+      <!-- capture nélkül: meglévő képek behozatalához (otthoni szerkesztés) -->
+      <input id="photo-import-input" type="file" accept="image/*" hidden multiple>
       <input id="video-input" type="file" accept="video/*" capture="environment" hidden>
       <input id="attach-photo-input" type="file" accept="image/*" capture="environment" hidden>
     </div>
