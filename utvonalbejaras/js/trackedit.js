@@ -46,10 +46,12 @@ export class TrackEditor {
    *   otthoni szerkesztéshez), és a kiválasztott koordinátával tér vissza.
    */
   open({ points, items = [], drawn = [], onApply, pick = null, onAddPoint = null,
-    onOpenItem = null, resolvePlace = null }) {
+    onOpenItem = null, resolvePlace = null, road = null }) {
     this.onAddPoint = onAddPoint;       // új pont felvétele a térképről
     this.onOpenItem = onOpenItem;       // meglévő jelölésre koppintva
     this.resolvePlace = resolvePlace;   // „ugrás helyre” feloldása
+    this.road = road;                   // úthálózat: illesztés és útkövetés
+    this.roadSnap = !!(road && road.ready && road.ready());
     this.points = points;
     this.items = items;
     this.drawn = drawn;
@@ -107,6 +109,13 @@ export class TrackEditor {
     $('#trackedit-turnaround', this.root).addEventListener('click', () => this.markTurnaround());
     $('#trackedit-draw', this.root).addEventListener('click', () => this.startDraw());
     $('#trackedit-addpoint', this.root).addEventListener('click', () => this.toggleAdd());
+    $('#trackedit-roadsnap', this.root).addEventListener('click', () => {
+      this.roadSnap = !this.roadSnap;
+      this.renderPanel();
+      toast(this.roadSnap
+        ? 'Úthoz illesztés bekapcsolva — a pontok az útra kerülnek, a vonal az utat követi.'
+        : 'Úthoz illesztés kikapcsolva — a pontok oda kerülnek, ahová koppint.');
+    });
     $('#trackedit-goto', this.root).addEventListener('click', () => this.gotoPlace());
     $('#trackedit-draw-undo', this.root).addEventListener('click', () => {
       if (!this.draft) return;
@@ -171,7 +180,7 @@ export class TrackEditor {
   renderPickPanel() {
     for (const id of ['#trackedit-drawbar', '#trackedit-normalbar', '#trackedit-draw',
       '#trackedit-selinfo', '#trackedit-sections-wrap', '#trackedit-drawn-wrap',
-      '#trackedit-turnaround', '#trackedit-pointbar']) {
+      '#trackedit-turnaround', '#trackedit-pointbar', '#trackedit-addpoint']) {
       const node = $(id, this.root);
       if (node) node.hidden = true;
     }
@@ -329,7 +338,7 @@ export class TrackEditor {
     toast('Koppintson sorban a szakasz pontjaira. A nyomvonal közelében automatikusan illeszkedik.');
   }
 
-  addVertex(p) {
+  async addVertex(p) {
     const un = this.hit.unproject(p.x, p.y);
     let pt = { lat: un.lat, lon: un.lon };
 
@@ -343,8 +352,33 @@ export class TrackEditor {
       pt = { lat: nd.point.lat, lon: nd.point.lon, snap: 'drawn' };
     }
 
+    // illesztés az úthálózatra: a koppintott pont az útra kerül
+    let utszam = null;
+    if (!pt.snap && this.roadSnap && this.road && this.road.snap) {
+      const hit = await this.road.snap(pt);
+      if (hit) {
+        pt = { lat: hit.lat, lon: hit.lon, snap: 'road' };
+        utszam = hit.utszam;
+      }
+    }
+
+    // a két pont közötti vonal kövesse az utat
+    const prev = this.draft.pts[this.draft.pts.length - 1];
+    let routed = 0;
+    if (prev && this.roadSnap && this.road && this.road.route) {
+      const mid = await this.road.route(prev, pt);
+      if (mid && mid.length) {
+        for (const m of mid) this.draft.pts.push({ lat: m.lat, lon: m.lon, snap: 'road' });
+        routed = mid.length;
+      } else if (mid === null) {
+        toast('Az úthálózaton nem találtam ide utat — egyenes vonallal kötöm össze.');
+      }
+    }
+
     this.draft.pts.push(pt);
-    if (pt.snap) toast('Illesztve a meglévő útvonalhoz.');
+    if (routed) toast(`Úton vezetve: ${utszam ? utszam + ' · ' : ''}${routed + 1} pont.`);
+    else if (pt.snap === 'road') toast(`Illesztve az útra${utszam ? ': ' + utszam : ''}.`);
+    else if (pt.snap) toast('Illesztve a meglévő útvonalhoz.');
     this.draw();
     this.renderPanel();
   }
@@ -551,7 +585,7 @@ export class TrackEditor {
     // ha közben megváltozott a térkép illesztése (új pont, berajzolt szakasz),
     // a nézetet igazítsuk vissza, hogy ne ugorjon el a térkép
     if (prevFit && this.hit.fit
-        && rebaseView(this.mapView.view, prevFit, this.hit.fit, this.hit.width, this.hit.height)) {
+        && rebaseView(this.mapView.view, prevFit, this.hit.fit)) {
       this.mapView.changed();
       this.hit = renderTrack(this.canvas, this.points, this.items, opts);
     }
@@ -574,16 +608,24 @@ export class TrackEditor {
     const drawing = !!this.draft;
     $('#trackedit-drawbar', this.root).hidden = !drawing;
     $('#trackedit-normalbar', this.root).hidden = drawing;
-    $('#trackedit-pointbar', this.root).hidden = drawing;
+    // rajzolás közben is kelljen tudni helyre ugrani; csak a pontfelvétel
+    // nem értelmes ilyenkor
+    $('#trackedit-pointbar', this.root).hidden = false;
+    $('#trackedit-addpoint', this.root).hidden = drawing;
     $('#trackedit-draw', this.root).hidden = drawing;
     if (drawing) {
       const n = this.draft.pts.length;
       $('#trackedit-hint', this.root).hidden = false;
       $('#trackedit-hint', this.root).textContent = n
         ? `${n} pont · ${formatDistance(trackLength(this.draft.pts))} — koppintson a következő pontra.`
-        : 'Koppintson a szakasz első pontjára. A meglévő nyomvonal közelében automatikusan illeszkedik.';
+        : 'Koppintson a szakasz első pontjára. A meglévő nyomvonal közelében automatikusan '
+          + 'illeszkedik; betöltött úthálózati adattal az utat is követi.';
       $('#trackedit-selinfo', this.root).hidden = true;
       $('#trackedit-turnaround', this.root).disabled = true;
+      const snapBtn = $('#trackedit-roadsnap', this.root);
+      snapBtn.hidden = !(this.road && this.road.ready && this.road.ready());
+      snapBtn.textContent = this.roadSnap ? '🛣️ Úthoz illesztve' : '🛣️ Úthoz illesztés ki';
+      snapBtn.classList.toggle('active', this.roadSnap);
       $('#trackedit-draw-done', this.root).disabled = n < 2;
       $('#trackedit-draw-undo', this.root).disabled = n === 0;
       this.renderDrawnList();

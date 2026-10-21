@@ -301,6 +301,11 @@ export function lookupRoad(net, lat, lon, maxDistance = 120) {
     szelveny: formatSzelveny(meters),
     meters,
     distance: Math.round(bestD),
+    // a pont rávetítve az útra — ebből lesz az úthoz illesztett útvonal
+    lat: net.aLat[best] + (net.bLat[best] - net.aLat[best]) * bestT,
+    lon: net.aLon[best] + (net.bLon[best] - net.aLon[best]) * bestT,
+    seg: best,
+    t: bestT,
   };
 }
 
@@ -359,4 +364,112 @@ export function findPlace(net, name) {
   }
   if (!n) return null;
   return { lat: sumLat / n, lon: sumLon / n, cim: net.places[pi], span: 4000 };
+}
+
+/* ------------------------------------- útvonalkeresés az úthálózaton */
+
+const NODE = 1e5;      // csomópont-rács: kb. 1 m-re egyező végpontok egyek
+const nodeKey = (lat, lon) => `${Math.round(lat * NODE)}|${Math.round(lon * NODE)}`;
+
+/** A megadott téglalapba eső szakaszok (a rácsos index alapján). */
+function segmentsInBox(net, minLat, minLon, maxLat, maxLon) {
+  const out = new Set();
+  const y0 = Math.round(minLat / CELL) - 1;
+  const y1 = Math.round(maxLat / CELL) + 1;
+  const x0 = Math.round(minLon / CELL) - 1;
+  const x1 = Math.round(maxLon / CELL) + 1;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const arr = net.cells.get(`${y}|${x}`);
+      if (arr) for (const i of arr) out.add(i);
+    }
+  }
+  return out;
+}
+
+/**
+ * Útvonal két pont között, az úthálózaton haladva.
+ *
+ * Csak a két pont környékére épít gráfot (ezért gyors), és Dijkstrával
+ * keresi a legrövidebb utat. Ha nem talál összefüggő utat, null-t ad —
+ * ilyenkor a hívó egyenes vonalat húz.
+ *
+ * @returns {Array<{lat:number, lon:number}>|null} a közbülső pontok
+ */
+export function routeBetween(net, from, to, margin = 3000) {
+  if (!net || !net.count) return null;
+  const degLat = margin / 111320;
+  const degLon = margin / (111320 * Math.cos(((from.lat + to.lat) / 2) * DEG) || 1);
+  const segs = segmentsInBox(net,
+    Math.min(from.lat, to.lat) - degLat, Math.min(from.lon, to.lon) - degLon,
+    Math.max(from.lat, to.lat) + degLat, Math.max(from.lon, to.lon) + degLon);
+  if (!segs.size) return null;
+
+  // szomszédsági lista a környékbeli szakaszokból
+  const adj = new Map();
+  const coord = new Map();
+  const link = (k, other, len, i) => {
+    let arr = adj.get(k);
+    if (!arr) { arr = []; adj.set(k, arr); }
+    arr.push({ to: other, len, seg: i });
+  };
+  for (const i of segs) {
+    const ka = nodeKey(net.aLat[i], net.aLon[i]);
+    const kb = nodeKey(net.bLat[i], net.bLon[i]);
+    if (ka === kb) continue;
+    coord.set(ka, { lat: net.aLat[i], lon: net.aLon[i] });
+    coord.set(kb, { lat: net.bLat[i], lon: net.bLon[i] });
+    link(ka, kb, net.segLen[i], i);
+    link(kb, ka, net.segLen[i], i);
+  }
+
+  const nearestNode = (p) => {
+    let best = null;
+    let bestD = Infinity;
+    for (const [k, c] of coord) {
+      const d = metersBetween(p.lat, p.lon, c.lat, c.lon);
+      if (d < bestD) { bestD = d; best = k; }
+    }
+    return bestD < 400 ? best : null;
+  };
+
+  const start = nearestNode(from);
+  const goal = nearestNode(to);
+  if (!start || !goal) return null;
+  if (start === goal) return [];
+
+  // Dijkstra — egyszerű, rendezett sorral; a környék kicsi, ez bőven elég
+  const dist = new Map([[start, 0]]);
+  const prev = new Map();
+  const queue = [{ k: start, d: 0 }];
+  const done = new Set();
+  let found = false;
+
+  while (queue.length) {
+    queue.sort((a, b) => a.d - b.d);
+    const cur = queue.shift();
+    if (done.has(cur.k)) continue;
+    done.add(cur.k);
+    if (cur.k === goal) { found = true; break; }
+    if (done.size > 60000) break;          // ne fusson el a kereséssel
+    for (const edge of adj.get(cur.k) || []) {
+      const nd = cur.d + edge.len;
+      if (nd < (dist.get(edge.to) ?? Infinity)) {
+        dist.set(edge.to, nd);
+        prev.set(edge.to, cur.k);
+        queue.push({ k: edge.to, d: nd });
+      }
+    }
+  }
+  if (!found) return null;
+
+  const path = [];
+  let k = goal;
+  while (k && k !== start) {
+    const c = coord.get(k);
+    if (c) path.push(c);
+    k = prev.get(k);
+  }
+  path.reverse();
+  return path;
 }

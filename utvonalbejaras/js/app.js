@@ -14,7 +14,7 @@ import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
 import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
 import { MapView } from './terkepnezet.js';
-import { pointOnRoad, findPlace } from './uthalozat.js';
+import { pointOnRoad, findPlace, lookupRoad, routeBetween } from './uthalozat.js';
 import { eovToWgs84 } from './eov.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
@@ -340,7 +340,7 @@ function drawTrack() {
   trackHit = renderTrack(canvas, state.points, state.items, opts);
   // új pont felvételekor ne ugorjon el a nagyított térkép
   if (prevFit && trackView && trackHit.fit
-      && rebaseView(trackView.view, prevFit, trackHit.fit, trackHit.width, trackHit.height)) {
+      && rebaseView(trackView.view, prevFit, trackHit.fit)) {
     trackView.changed();
     trackHit = renderTrack(canvas, state.points, state.items, opts);
   }
@@ -461,6 +461,7 @@ async function openTrackEditor() {
   }
 
   if (!trackEditor) trackEditor = new TrackEditor($('#trackedit'));
+  await roadNetwork();   // hogy az „úthoz illesztés” rögtön elérhető legyen
   const changed = await trackEditor.open({
     points: state.points,
     items: state.items,
@@ -468,6 +469,19 @@ async function openTrackEditor() {
     onAddPoint: (at) => addPointAt(at),
     onOpenItem: (id) => { trackEditor.close(); openViewer(id); },
     resolvePlace: (text) => resolvePlace(text),
+    // úthálózati adat (NAP): a rajzolt pontok az útra kerülnek, és a vonal
+    // az utat követi két pont között
+    road: {
+      ready: () => !!roadNet,
+      snap: async (pt) => {
+        const net = await roadNetwork();
+        return net ? lookupRoad(net, pt.lat, pt.lon, 80) : null;
+      },
+      route: async (a, b) => {
+        const net = await roadNetwork();
+        return net ? routeBetween(net, a, b) : null;
+      },
+    },
     onApply: async ({ updated, deleted, drawn }) => {
       if (updated) await db.updatePoints(updated);
       if (deleted) await db.deletePoints(deleted);

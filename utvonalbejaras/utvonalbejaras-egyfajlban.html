@@ -1256,6 +1256,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
     </div>
 
     <div class="editor-row" id="trackedit-drawbar" hidden>
+      <button id="trackedit-roadsnap" class="btn ghost small" hidden>🛣️ Úthoz illesztés</button>
       <button id="trackedit-draw-done" class="btn primary small">✓ Szakasz kész</button>
       <button id="trackedit-draw-undo" class="btn ghost small">↶ Utolsó pont</button>
       <button id="trackedit-draw-cancel" class="btn ghost small">Mégse</button>
@@ -1871,7 +1872,10 @@ async function clearTileCache() {
 
 /** A nézet a renderTrack illesztett (teljes nyomvonalat befoglaló) képére ül rá. */
 const MIN_ZOOM = 1;
-const MAX_ZOOM = 40;
+// A nagyítás a térkép illesztésére ül rá: ha az ország látszik (otthoni
+// szerkesztés, még üres bejárás), utcaszintig több ezerszeres kell. A
+// térképcsempék 19-es szintnél megállnak, onnan már csak nagyítva látszanak.
+const MAX_ZOOM = 5000;
 
 const clampZoom = (k) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
 
@@ -1962,6 +1966,15 @@ class MapView {
   panBy(dx, dy) {
     this.view.tx += dx;
     this.view.ty += dy;
+  }
+
+  /** Egérgörgő: nagyítás a kurzor helyére. */
+  onWheel(e) {
+    e.preventDefault();
+    // a görgő egy „kattanása” böngészőnként más értéket ad; a lényeg az irány
+    const factor = e.deltaY < 0 ? 1.25 : 1 / 1.25;
+    this.zoomAt(this.local(e), clampZoom(this.view.k * factor));
+    if (this.onPan) this.onPan();
   }
 
   onDown(e) {
@@ -2744,7 +2757,7 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
     project, unproject, hitboxes, nearest, nearestDrawn, coords,
     tiles: tileStats, labelBoxes, width: w, height: h,
     // az illesztés adatai — ebből lehet kiszámolni, hogyan ugorjunk egy helyre
-    fit: { scale, cx, cy },
+    fit: { scale, cx, cy, w, h },
   };
 }
 
@@ -2859,23 +2872,25 @@ function toGeoJSON(session, points, items = [], opts = {}) {
  * elcsúszna — ez számolja át úgy, hogy ugyanaz a terület maradjon a
  * képernyőn, ugyanakkora nagyításban.
  */
-function rebaseView(view, prev, next, w, h) {
+function rebaseView(view, prev, next) {
   if (!view || !prev || !next) return false;
   // ha a felhasználó nem nagyított és nem mozgatott, hagyjuk, hogy a térkép
   // magától illeszkedjen az új tartalomra
   const moved = view.k > 1.02 || Math.abs(view.tx) > 1 || Math.abs(view.ty) > 1;
   if (!moved) return false;
-  if (prev.scale === next.scale && prev.cx === next.cx && prev.cy === next.cy) return false;
+  if (prev.scale === next.scale && prev.cx === next.cx && prev.cy === next.cy
+      && prev.w === next.w && prev.h === next.h) return false;
   if (!isFinite(prev.scale) || !isFinite(next.scale) || !next.scale) return false;
 
-  // a képernyő közepének világkoordinátája a régi illesztéssel
-  const wx = prev.cx + ((w / 2 - view.tx) / view.k - w / 2) / prev.scale;
-  const wy = prev.cy + ((h / 2 - view.ty) / view.k - h / 2) / prev.scale;
+  // a képernyő közepének világkoordinátája a RÉGI illesztéssel és mérettel
+  // (a vászon mérete is változhat, pl. ha megjelenik a rajzoló sáv)
+  const wx = prev.cx + ((prev.w / 2 - view.tx) / view.k - prev.w / 2) / prev.scale;
+  const wy = prev.cy + ((prev.h / 2 - view.ty) / view.k - prev.h / 2) / prev.scale;
   const px = prev.scale * view.k;          // képpont / világegység: ez marad
 
   view.k = px / next.scale;
-  view.tx = w / 2 - (w / 2 + (wx - next.cx) * next.scale) * view.k;
-  view.ty = h / 2 - (h / 2 + (wy - next.cy) * next.scale) * view.k;
+  view.tx = next.w / 2 - (next.w / 2 + (wx - next.cx) * next.scale) * view.k;
+  view.ty = next.h / 2 - (next.h / 2 + (wy - next.cy) * next.scale) * view.k;
   return true;
 }
 
@@ -5599,6 +5614,11 @@ function lookupRoad(net, lat, lon, maxDistance = 120) {
     szelveny: formatSzelveny(meters),
     meters,
     distance: Math.round(bestD),
+    // a pont rávetítve az útra — ebből lesz az úthoz illesztett útvonal
+    lat: net.aLat[best] + (net.bLat[best] - net.aLat[best]) * bestT,
+    lon: net.aLon[best] + (net.bLon[best] - net.aLon[best]) * bestT,
+    seg: best,
+    t: bestT,
   };
 }
 
@@ -5657,6 +5677,114 @@ function findPlace(net, name) {
   }
   if (!n) return null;
   return { lat: sumLat / n, lon: sumLon / n, cim: net.places[pi], span: 4000 };
+}
+
+/* ------------------------------------- útvonalkeresés az úthálózaton */
+
+const NODE = 1e5;      // csomópont-rács: kb. 1 m-re egyező végpontok egyek
+const nodeKey = (lat, lon) => `${Math.round(lat * NODE)}|${Math.round(lon * NODE)}`;
+
+/** A megadott téglalapba eső szakaszok (a rácsos index alapján). */
+function segmentsInBox(net, minLat, minLon, maxLat, maxLon) {
+  const out = new Set();
+  const y0 = Math.round(minLat / CELL) - 1;
+  const y1 = Math.round(maxLat / CELL) + 1;
+  const x0 = Math.round(minLon / CELL) - 1;
+  const x1 = Math.round(maxLon / CELL) + 1;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const arr = net.cells.get(`${y}|${x}`);
+      if (arr) for (const i of arr) out.add(i);
+    }
+  }
+  return out;
+}
+
+/**
+ * Útvonal két pont között, az úthálózaton haladva.
+ *
+ * Csak a két pont környékére épít gráfot (ezért gyors), és Dijkstrával
+ * keresi a legrövidebb utat. Ha nem talál összefüggő utat, null-t ad —
+ * ilyenkor a hívó egyenes vonalat húz.
+ *
+ * @returns {Array<{lat:number, lon:number}>|null} a közbülső pontok
+ */
+function routeBetween(net, from, to, margin = 3000) {
+  if (!net || !net.count) return null;
+  const degLat = margin / 111320;
+  const degLon = margin / (111320 * Math.cos(((from.lat + to.lat) / 2) * DEG) || 1);
+  const segs = segmentsInBox(net,
+    Math.min(from.lat, to.lat) - degLat, Math.min(from.lon, to.lon) - degLon,
+    Math.max(from.lat, to.lat) + degLat, Math.max(from.lon, to.lon) + degLon);
+  if (!segs.size) return null;
+
+  // szomszédsági lista a környékbeli szakaszokból
+  const adj = new Map();
+  const coord = new Map();
+  const link = (k, other, len, i) => {
+    let arr = adj.get(k);
+    if (!arr) { arr = []; adj.set(k, arr); }
+    arr.push({ to: other, len, seg: i });
+  };
+  for (const i of segs) {
+    const ka = nodeKey(net.aLat[i], net.aLon[i]);
+    const kb = nodeKey(net.bLat[i], net.bLon[i]);
+    if (ka === kb) continue;
+    coord.set(ka, { lat: net.aLat[i], lon: net.aLon[i] });
+    coord.set(kb, { lat: net.bLat[i], lon: net.bLon[i] });
+    link(ka, kb, net.segLen[i], i);
+    link(kb, ka, net.segLen[i], i);
+  }
+
+  const nearestNode = (p) => {
+    let best = null;
+    let bestD = Infinity;
+    for (const [k, c] of coord) {
+      const d = metersBetween(p.lat, p.lon, c.lat, c.lon);
+      if (d < bestD) { bestD = d; best = k; }
+    }
+    return bestD < 400 ? best : null;
+  };
+
+  const start = nearestNode(from);
+  const goal = nearestNode(to);
+  if (!start || !goal) return null;
+  if (start === goal) return [];
+
+  // Dijkstra — egyszerű, rendezett sorral; a környék kicsi, ez bőven elég
+  const dist = new Map([[start, 0]]);
+  const prev = new Map();
+  const queue = [{ k: start, d: 0 }];
+  const done = new Set();
+  let found = false;
+
+  while (queue.length) {
+    queue.sort((a, b) => a.d - b.d);
+    const cur = queue.shift();
+    if (done.has(cur.k)) continue;
+    done.add(cur.k);
+    if (cur.k === goal) { found = true; break; }
+    if (done.size > 60000) break;          // ne fusson el a kereséssel
+    for (const edge of adj.get(cur.k) || []) {
+      const nd = cur.d + edge.len;
+      if (nd < (dist.get(edge.to) ?? Infinity)) {
+        dist.set(edge.to, nd);
+        prev.set(edge.to, cur.k);
+        queue.push({ k: edge.to, d: nd });
+      }
+    }
+  }
+  if (!found) return null;
+
+  const path = [];
+  let k = goal;
+  while (k && k !== start) {
+    const c = coord.get(k);
+    if (c) path.push(c);
+    k = prev.get(k);
+  }
+  path.reverse();
+  return path;
 }
 
 /* ===== js/kozut.js ===== */
@@ -7928,10 +8056,12 @@ class TrackEditor {
    *   otthoni szerkesztéshez), és a kiválasztott koordinátával tér vissza.
    */
   open({ points, items = [], drawn = [], onApply, pick = null, onAddPoint = null,
-    onOpenItem = null, resolvePlace = null }) {
+    onOpenItem = null, resolvePlace = null, road = null }) {
     this.onAddPoint = onAddPoint;       // új pont felvétele a térképről
     this.onOpenItem = onOpenItem;       // meglévő jelölésre koppintva
     this.resolvePlace = resolvePlace;   // „ugrás helyre” feloldása
+    this.road = road;                   // úthálózat: illesztés és útkövetés
+    this.roadSnap = !!(road && road.ready && road.ready());
     this.points = points;
     this.items = items;
     this.drawn = drawn;
@@ -7989,6 +8119,13 @@ class TrackEditor {
     $('#trackedit-turnaround', this.root).addEventListener('click', () => this.markTurnaround());
     $('#trackedit-draw', this.root).addEventListener('click', () => this.startDraw());
     $('#trackedit-addpoint', this.root).addEventListener('click', () => this.toggleAdd());
+    $('#trackedit-roadsnap', this.root).addEventListener('click', () => {
+      this.roadSnap = !this.roadSnap;
+      this.renderPanel();
+      toast(this.roadSnap
+        ? 'Úthoz illesztés bekapcsolva — a pontok az útra kerülnek, a vonal az utat követi.'
+        : 'Úthoz illesztés kikapcsolva — a pontok oda kerülnek, ahová koppint.');
+    });
     $('#trackedit-goto', this.root).addEventListener('click', () => this.gotoPlace());
     $('#trackedit-draw-undo', this.root).addEventListener('click', () => {
       if (!this.draft) return;
@@ -8053,7 +8190,7 @@ class TrackEditor {
   renderPickPanel() {
     for (const id of ['#trackedit-drawbar', '#trackedit-normalbar', '#trackedit-draw',
       '#trackedit-selinfo', '#trackedit-sections-wrap', '#trackedit-drawn-wrap',
-      '#trackedit-turnaround', '#trackedit-pointbar']) {
+      '#trackedit-turnaround', '#trackedit-pointbar', '#trackedit-addpoint']) {
       const node = $(id, this.root);
       if (node) node.hidden = true;
     }
@@ -8211,7 +8348,7 @@ class TrackEditor {
     toast('Koppintson sorban a szakasz pontjaira. A nyomvonal közelében automatikusan illeszkedik.');
   }
 
-  addVertex(p) {
+  async addVertex(p) {
     const un = this.hit.unproject(p.x, p.y);
     let pt = { lat: un.lat, lon: un.lon };
 
@@ -8225,8 +8362,33 @@ class TrackEditor {
       pt = { lat: nd.point.lat, lon: nd.point.lon, snap: 'drawn' };
     }
 
+    // illesztés az úthálózatra: a koppintott pont az útra kerül
+    let utszam = null;
+    if (!pt.snap && this.roadSnap && this.road && this.road.snap) {
+      const hit = await this.road.snap(pt);
+      if (hit) {
+        pt = { lat: hit.lat, lon: hit.lon, snap: 'road' };
+        utszam = hit.utszam;
+      }
+    }
+
+    // a két pont közötti vonal kövesse az utat
+    const prev = this.draft.pts[this.draft.pts.length - 1];
+    let routed = 0;
+    if (prev && this.roadSnap && this.road && this.road.route) {
+      const mid = await this.road.route(prev, pt);
+      if (mid && mid.length) {
+        for (const m of mid) this.draft.pts.push({ lat: m.lat, lon: m.lon, snap: 'road' });
+        routed = mid.length;
+      } else if (mid === null) {
+        toast('Az úthálózaton nem találtam ide utat — egyenes vonallal kötöm össze.');
+      }
+    }
+
     this.draft.pts.push(pt);
-    if (pt.snap) toast('Illesztve a meglévő útvonalhoz.');
+    if (routed) toast(`Úton vezetve: ${utszam ? utszam + ' · ' : ''}${routed + 1} pont.`);
+    else if (pt.snap === 'road') toast(`Illesztve az útra${utszam ? ': ' + utszam : ''}.`);
+    else if (pt.snap) toast('Illesztve a meglévő útvonalhoz.');
     this.draw();
     this.renderPanel();
   }
@@ -8433,7 +8595,7 @@ class TrackEditor {
     // ha közben megváltozott a térkép illesztése (új pont, berajzolt szakasz),
     // a nézetet igazítsuk vissza, hogy ne ugorjon el a térkép
     if (prevFit && this.hit.fit
-        && rebaseView(this.mapView.view, prevFit, this.hit.fit, this.hit.width, this.hit.height)) {
+        && rebaseView(this.mapView.view, prevFit, this.hit.fit)) {
       this.mapView.changed();
       this.hit = renderTrack(this.canvas, this.points, this.items, opts);
     }
@@ -8456,16 +8618,24 @@ class TrackEditor {
     const drawing = !!this.draft;
     $('#trackedit-drawbar', this.root).hidden = !drawing;
     $('#trackedit-normalbar', this.root).hidden = drawing;
-    $('#trackedit-pointbar', this.root).hidden = drawing;
+    // rajzolás közben is kelljen tudni helyre ugrani; csak a pontfelvétel
+    // nem értelmes ilyenkor
+    $('#trackedit-pointbar', this.root).hidden = false;
+    $('#trackedit-addpoint', this.root).hidden = drawing;
     $('#trackedit-draw', this.root).hidden = drawing;
     if (drawing) {
       const n = this.draft.pts.length;
       $('#trackedit-hint', this.root).hidden = false;
       $('#trackedit-hint', this.root).textContent = n
         ? `${n} pont · ${formatDistance(trackLength(this.draft.pts))} — koppintson a következő pontra.`
-        : 'Koppintson a szakasz első pontjára. A meglévő nyomvonal közelében automatikusan illeszkedik.';
+        : 'Koppintson a szakasz első pontjára. A meglévő nyomvonal közelében automatikusan '
+          + 'illeszkedik; betöltött úthálózati adattal az utat is követi.';
       $('#trackedit-selinfo', this.root).hidden = true;
       $('#trackedit-turnaround', this.root).disabled = true;
+      const snapBtn = $('#trackedit-roadsnap', this.root);
+      snapBtn.hidden = !(this.road && this.road.ready && this.road.ready());
+      snapBtn.textContent = this.roadSnap ? '🛣️ Úthoz illesztve' : '🛣️ Úthoz illesztés ki';
+      snapBtn.classList.toggle('active', this.roadSnap);
       $('#trackedit-draw-done', this.root).disabled = n < 2;
       $('#trackedit-draw-undo', this.root).disabled = n === 0;
       this.renderDrawnList();
@@ -8882,7 +9052,7 @@ function drawTrack() {
   trackHit = renderTrack(canvas, state.points, state.items, opts);
   // új pont felvételekor ne ugorjon el a nagyított térkép
   if (prevFit && trackView && trackHit.fit
-      && rebaseView(trackView.view, prevFit, trackHit.fit, trackHit.width, trackHit.height)) {
+      && rebaseView(trackView.view, prevFit, trackHit.fit)) {
     trackView.changed();
     trackHit = renderTrack(canvas, state.points, state.items, opts);
   }
@@ -9003,6 +9173,7 @@ async function openTrackEditor() {
   }
 
   if (!trackEditor) trackEditor = new TrackEditor($('#trackedit'));
+  await roadNetwork();   // hogy az „úthoz illesztés” rögtön elérhető legyen
   const changed = await trackEditor.open({
     points: state.points,
     items: state.items,
@@ -9010,6 +9181,19 @@ async function openTrackEditor() {
     onAddPoint: (at) => addPointAt(at),
     onOpenItem: (id) => { trackEditor.close(); openViewer(id); },
     resolvePlace: (text) => resolvePlace(text),
+    // úthálózati adat (NAP): a rajzolt pontok az útra kerülnek, és a vonal
+    // az utat követi két pont között
+    road: {
+      ready: () => !!roadNet,
+      snap: async (pt) => {
+        const net = await roadNetwork();
+        return net ? lookupRoad(net, pt.lat, pt.lon, 80) : null;
+      },
+      route: async (a, b) => {
+        const net = await roadNetwork();
+        return net ? routeBetween(net, a, b) : null;
+      },
+    },
     onApply: async ({ updated, deleted, drawn }) => {
       if (updated) await db.updatePoints(updated);
       if (deleted) await db.deletePoints(deleted);

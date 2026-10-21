@@ -146,11 +146,36 @@ A nyomvonal-szerkesztőben minden megvan, amit a terepen is tennél:
 | **Meglévő pontot megnyitni** | koppintson rá a térképen a pöttyre — megnyílik az adatlapja |
 | **Fotót, hangot, jegyzetet hozzáadni** | az elem adatlapján: *📷 Fotó csatolása*, *🎙️ Hangjegyzet*, *📝 Megjegyzés*, *✏️ Jelölés / méretek* |
 | **Pontot áthelyezni** | adatlap → *📍 Hely javítása* → *Kijelölés a térképen* |
-| **Útvonalat rajzolni** | *✏️ Hiányzó szakasz berajzolása* — koppintás pontról pontra |
+| **Útvonalat rajzolni** | *✏️ Hiányzó szakasz berajzolása* — koppintás pontról pontra, a vonal magától követi az utat |
 
 > A térkép nem ugrik el munka közben: az éppen rajzolt vonal nem mozdítja a
 > nézetet, új pont felvételekor a nagyított kivágat a helyén marad, és
-> egyetlen pont körül is értelmes nagyítás marad.
+> egyetlen pont körül is értelmes nagyítás marad. Rajzolás közben is kézben
+> van a *🔍 Ugrás helyre* gomb, tehát a következő szakaszhoz el lehet ugrani
+> anélkül, hogy a félbehagyott vonalat el kellene dobni.
+
+#### Az útvonal magától az útra illeszkedik
+
+Rajzoláskor nem kell minden kanyart végigkattintani. Elég a szakasz elejére
+és a végére koppintani — a program a **🛣️ Úthoz illesztés** bekapcsolt
+állapotában:
+
+- a koppintást **ráteszi a legközelebbi útra** (kb. 80 méteren belül), így
+  nem az út mellé kerül a pont,
+- a két koppintás **közé beilleszti az úthálózat szerinti útvonalat**, tehát
+  a vonal a valódi kanyarokat követi, nem egyenesen vág át,
+- ha az úthálózaton nincs út a két pont között (pl. két külön útról van szó),
+  **egyenes vonallal** köti össze, és ezt ki is írja — nem rajzol ki
+  valótlan kerülőt.
+
+Ehhez a **betöltött úthálózati (NAP) adat** kell (lásd *Útszám és szelvény
+automatikusan*). Ha nincs betöltve, a gomb jelzi, és a rajzolás a korábbi
+módon, koppintásról koppintásra, egyenes szakaszokkal megy — ugyanúgy
+használható, csak több koppintás kell hozzá. A gomb bármikor kikapcsolható,
+ha szándékosan nem úton (pl. telephelyen, gyárudvaron) kell vonalat húzni.
+
+A berajzolt pontok a nyomvonalhoz és a már berajzolt szakaszokhoz is
+hozzátapadnak, ezért a szakaszok hézag nélkül állnak össze.
 
 ### Nagyítható térkép
 
@@ -164,7 +189,12 @@ nyomvonal-szerkesztő és az élő kísérés — ugyanúgy kezelhető:
 - **dupla koppintás** a megkoppintott helyre nagyít,
 - a sarokban lévő **＋ / −** gombok, és a **⤢** gomb visszaáll a teljes
   nyomvonalra,
-- asztali gépen az **egérgörgő** nagyít.
+- asztali gépen az **egérgörgő** nagyít, mindig oda, ahol az egér áll.
+
+A nagyítás **utcaszintig** elmegy akkor is, ha a kiindulás az egész ország
+(üres bejárás, otthoni szerkesztés): a térkép csempéi a legnagyobb
+szinteken már nagyítva látszanak, de a tájékozódáshoz és a pontos
+kattintáshoz elég élesek.
 
 A nyomvonal-szerkesztőben a dupla koppintás szándékosan nem nagyít: ott a
 koppintás jelöli ki a szakaszt és rakja le a berajzolt csúcsokat.
@@ -406,7 +436,10 @@ tenni — a *Nyomvonal szerkesztése* gombbal.
 nem ment végig, nincs róla GPS-nyom — ilyenkor a *Hiányzó szakasz berajzolása*
 gombbal közvetlenül a térképre rajzolható. Koppintson sorban a szakasz
 pontjaira; a meglévő nyomvonal (vagy egy másik berajzolt szakasz) közelében a
-csúcs automatikusan **odailleszkedik**, így hézag nélkül csatlakozik. Az
+csúcs automatikusan **odailleszkedik**, így hézag nélkül csatlakozik. A
+**🛣️ Úthoz illesztés** bekapcsolva a koppintásokat az útra teszi, és a
+köztük lévő útvonalat az úthálózat szerint rajzolja ki (lásd *Az útvonal
+magától az útra illeszkedik*). Az
 *Utolsó pont* visszavon, a *Szakasz kész* menti névvel és megjegyzéssel. A kész
 szakasz zölden jelenik meg, a listából kijelölhető, átnevezhető és törölhető.
 

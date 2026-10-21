@@ -7,7 +7,10 @@
 
 /** A nézet a renderTrack illesztett (teljes nyomvonalat befoglaló) képére ül rá. */
 export const MIN_ZOOM = 1;
-export const MAX_ZOOM = 40;
+// A nagyítás a térkép illesztésére ül rá: ha az ország látszik (otthoni
+// szerkesztés, még üres bejárás), utcaszintig több ezerszeres kell. A
+// térképcsempék 19-es szintnél megállnak, onnan már csak nagyítva látszanak.
+export const MAX_ZOOM = 5000;
 
 export const clampZoom = (k) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
 
@@ -98,6 +101,15 @@ export class MapView {
   panBy(dx, dy) {
     this.view.tx += dx;
     this.view.ty += dy;
+  }
+
+  /** Egérgörgő: nagyítás a kurzor helyére. */
+  onWheel(e) {
+    e.preventDefault();
+    // a görgő egy „kattanása” böngészőnként más értéket ad; a lényeg az irány
+    const factor = e.deltaY < 0 ? 1.25 : 1 / 1.25;
+    this.zoomAt(this.local(e), clampZoom(this.view.k * factor));
+    if (this.onPan) this.onPan();
   }
 
   onDown(e) {
