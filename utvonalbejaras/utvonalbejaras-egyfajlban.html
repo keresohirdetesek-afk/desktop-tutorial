@@ -474,6 +474,45 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field-label { font-size: 12.5px; color: var(--muted); }
 .field-hint { font-size: 11.5px; color: var(--muted); }
+/* Képes választó (jelzésképek): a táblát magát kell látni, nem a nevét */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 2px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 4px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.tile-pic { display: block; line-height: 0; }
+.tile-pic svg { width: 48px; height: 48px; }
+.tile-label { font-size: 11px; line-height: 1.2; text-align: center; color: var(--muted); }
+.tile.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+}
+.tile.on .tile-label { color: var(--text); font-weight: 600; }
+
+/* A jelzéskép a listában, az adatlapon és az élő kísérés riasztásán */
+.sign-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sign-row svg { width: 38px; height: 38px; }
+.sign-big { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 4px 0 10px; }
+.sign-big svg { width: 96px; height: 96px; }
+.thumb.sign { display: flex; align-items: center; justify-content: center; background: #fff; }
+.thumb.sign svg { width: 44px; height: 44px; }
+
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
 .modal-actions .btn { min-width: 96px; }
 
@@ -755,7 +794,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .escort-shot { width: 100%; border-radius: 10px; background: #000; }
 .escort-audio { width: 100%; }
 .escort-note { margin: 0; font-size: 14px; }
+.escort-note.strong { font-size: 17px; font-weight: 700; text-align: center; }
 .escort-dims { margin: 0; font-size: 14px; font-weight: 600; color: var(--warn); }
+
+/* Jelzéskép: vezetés közben erre kell egy pillantás, ezért nagyban */
+.escort-sign { flex: none; line-height: 0; display: flex; gap: 3px; }
+.escort-sign svg { width: 34px; height: 34px; }
+.escort-sign-big {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  padding: 10px;
+  background: #fff;
+  border-radius: 12px;
+}
+.escort-sign-big svg { width: 120px; height: 120px; }
 
 /* ------------------------------------------------------- hangfelvétel */
 
@@ -912,6 +966,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <button id="cap-condition" class="cap">
         <span class="cap-icon">⚠️</span><span>Állapot / tábla</span>
       </button>
+      <button id="cap-sign" class="cap">
+        <span class="cap-icon">🚧</span><span>Jelzéskép</span>
+      </button>
       <button id="cap-note" class="cap">
         <span class="cap-icon">📝</span><span>Jegyzet</span>
       </button>
@@ -934,6 +991,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
           <button class="chip" data-f="audio">Hang</button>
           <button class="chip" data-f="video">Videó</button>
           <button class="chip" data-f="condition">Állapot</button>
+          <button class="chip" data-f="jelzes">Jelzéskép</button>
           <button class="chip" data-f="note">Jegyzet</button>
         </div>
       </div>
@@ -1149,6 +1207,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <button id="escort-add-video" class="btn ghost tiny">🎬 Videó</button>
       <button id="escort-add-audio" class="btn ghost tiny">🎙️ Hang</button>
       <button id="escort-add-condition" class="btn ghost tiny">⚠️ Állapot</button>
+      <button id="escort-add-sign" class="btn ghost tiny">🚧 Jelzéskép</button>
     </div>
 
     <div class="editor-row">
@@ -1346,6 +1405,37 @@ function modal({ title, fields = [], okText = 'Mentés', cancelText = 'Mégse', 
       if (f.type === 'textarea') {
         input = el('textarea', { id, rows: f.rows || 3, placeholder: f.placeholder || '' });
         input.value = f.value || '';
+      } else if (f.type === 'tiles') {
+        // Képes választó (pl. jelzésképek): a lapkákra koppintva jelöl ki.
+        // Egy rejtett beviteli mező tartja az értéket, így a modál
+        // visszatérése ugyanúgy működik, mint a többi mezőnél.
+        input = el('input', { id, type: 'hidden' });
+        input.value = f.value || '';
+        const sel = new Set(String(f.value || '').split(',').filter(Boolean));
+        const grid = el('div', { class: 'tile-grid' + (f.multi ? ' multi' : '') });
+        const sync = () => {
+          input.value = [...sel].join(',');
+          for (const b of grid.children) b.classList.toggle('on', sel.has(b.dataset.value));
+        };
+        for (const o of f.options || []) {
+          const tile = el('button', { type: 'button', class: 'tile', 'data-value': o.value, title: o.label }, [
+            el('span', { class: 'tile-pic', html: o.html || '' }),
+            el('span', { class: 'tile-label', text: o.label }),
+          ]);
+          tile.addEventListener('click', () => {
+            if (f.multi) {
+              if (sel.has(o.value)) sel.delete(o.value); else sel.add(o.value);
+            } else {
+              sel.clear();
+              sel.add(o.value);
+            }
+            sync();
+            if (f.onPick) f.onPick(o.value, [...sel]);
+          });
+          grid.appendChild(tile);
+        }
+        sync();
+        row.appendChild(grid);
       } else if (f.type === 'select') {
         input = el('select', { id });
         for (const o of f.options || []) {
@@ -2049,6 +2139,274 @@ class MapView {
   }
 }
 
+/* ===== js/jelzes.js ===== */
+// A kísérőautó jelzésképei.
+//
+// A túlméretes szerelvény előtt-mögött menő kísérőautó tábláit („jelzésképek”)
+// nem elég fejben tartani: a bejáráskor ott derül ki, hol kell előzési
+// tilalmat vagy sebességkorlátozást kitenni, és ugyanezt a tervezéskor
+// (otthon, térképen) is meg kell tudni adni. Ez a modul a táblakészlet és a
+// táblák kirajzolása — egy helyen, hogy a térkép, a jegyzőkönyv, az élő
+// kísérés és a Közút-űrlapok ugyanazt a képet használják.
+//
+// A rajzok sematikusak: a felismerést segítik, nem hivatalos KRESZ-ábrák.
+
+const SGN_RED = '#d4171a';
+const SGN_DARK = '#1b1b1b';
+const SGN_GREY = '#8a8a8a';
+const SGN_BLUE = '#0b4ea2';
+const SGN_WHITE = '#ffffff';
+
+/** Autó hátulnézetből, 44×38 egységben (utána méretezzük). */
+const SGN_CAR = (fill) => `
+  <path d="M7,23 L11,9 C11.6,6.5 13,5.5 15.5,5.5 H28.5 C31,5.5 32.4,6.5 33,9 L37,23 V33 H7 Z" fill="${fill}"/>
+  <path d="M13.2,21.5 L15.8,11.5 H28.2 L30.8,21.5 Z" fill="${SGN_WHITE}"/>
+  <rect x="8.5" y="32" width="7" height="5" rx="1.6" fill="${fill}"/>
+  <rect x="28.5" y="32" width="7" height="5" rx="1.6" fill="${fill}"/>`;
+
+/** Tehergépkocsi hátulnézetből: magasabb, zárt felépítmény, hátsó ajtókkal. */
+const SGN_TRUCK = (fill) => `
+  <path d="M6,2 H38 V31 H6 Z" fill="${fill}"/>
+  <path d="M10,13 H34 V27 H10 Z" fill="${SGN_WHITE}"/>
+  <rect x="21.2" y="13" width="1.6" height="14" fill="${fill}"/>
+  <rect x="2.5" y="8" width="4" height="7" rx="1.2" fill="${fill}"/>
+  <rect x="37.5" y="8" width="4" height="7" rx="1.2" fill="${fill}"/>
+  <rect x="8" y="30" width="8" height="6" rx="1.8" fill="${fill}"/>
+  <rect x="28" y="30" width="8" height="6" rx="1.8" fill="${fill}"/>`;
+
+/** Két jármű egymás mellett a tábla közepén. */
+const sgnPair = (left, right) =>
+  `<g transform="translate(14.5,28) scale(0.79)">${left}</g>`
+  + `<g transform="translate(50.3,28) scale(0.79)">${right}</g>`;
+
+/** Átlós sávok a „vége” táblákhoz, a tábla körére vágva. */
+const SGN_END_STRIPES = `
+  <g clip-path="url(#sgnClip)" stroke="${SGN_GREY}" stroke-width="4.5" stroke-linecap="butt">
+    <line x1="4" y1="78" x2="78" y2="4"/>
+    <line x1="18" y1="86" x2="86" y2="18"/>
+    <line x1="32" y1="94" x2="94" y2="32"/>
+    <line x1="-4" y1="64" x2="64" y2="-4"/>
+  </g>`;
+
+const sgnNumber = (txt, color) =>
+  `<text x="50" y="69" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
+     font-size="${String(txt).length > 2 ? 44 : 54}" font-weight="700" fill="${color}">${txt}</text>`;
+
+/**
+ * A táblakészlet. `ring`: a karima színe, `inner`: a tábla belseje.
+ * A `rajz` a 100×100-as tábla belsejébe kerül.
+ */
+const SIGNS = [
+  {
+    id: 'elozni-tilos', nev: 'Előzni tilos', rovid: 'Előzni tilos',
+    csoport: 'Előzési tilalom', ring: SGN_RED, inner: SGN_WHITE,
+    rajz: () => sgnPair(SGN_CAR(SGN_RED), SGN_CAR(SGN_DARK)),
+  },
+  {
+    id: 'teher-elozni-tilos', nev: 'Tehergépkocsival előzni tilos', rovid: 'Teherrel előzni tilos',
+    csoport: 'Előzési tilalom', ring: SGN_RED, inner: SGN_WHITE,
+    rajz: () => sgnPair(SGN_TRUCK(SGN_RED), SGN_CAR(SGN_DARK)),
+  },
+  {
+    id: 'elozes-vege', nev: 'Előzési tilalom vége', rovid: 'Előzés vége',
+    csoport: 'Előzési tilalom', ring: SGN_GREY, inner: SGN_WHITE,
+    rajz: () => sgnPair(SGN_CAR(SGN_GREY), SGN_CAR(SGN_GREY)) + SGN_END_STRIPES,
+  },
+  ...[10, 20, 30, 40, 50, 60, 70, 80, 90].map((v) => ({
+    id: 'seb-' + v,
+    nev: `Sebességkorlátozás ${v} km/h`,
+    rovid: `${v} km/h`,
+    csoport: 'Sebességkorlátozás',
+    ring: SGN_RED, inner: SGN_WHITE,
+    rajz: () => sgnNumber(String(v), SGN_DARK),
+  })),
+  {
+    id: 'seb-vege', nev: 'Sebességkorlátozás vége', rovid: 'Korlátozás vége',
+    csoport: 'Sebességkorlátozás', ring: SGN_GREY, inner: SGN_WHITE,
+    rajz: () => sgnNumber('50', SGN_GREY) + SGN_END_STRIPES,
+  },
+  {
+    id: 'kikerules-balra', nev: 'Balra kikerülni kötelező', rovid: 'Kikerülés balra',
+    csoport: 'Terelés', ring: SGN_BLUE, inner: SGN_BLUE,
+    rajz: () => `<path d="M74,56 H48 V70 L22,50 L48,30 V44 H74 Z" fill="${SGN_WHITE}"/>`,
+  },
+  {
+    id: 'kikerules-jobbra', nev: 'Jobbra kikerülni kötelező', rovid: 'Kikerülés jobbra',
+    csoport: 'Terelés', ring: SGN_BLUE, inner: SGN_BLUE,
+    rajz: () => `<g transform="translate(100,0) scale(-1,1)"><path d="M74,56 H48 V70 L22,50 L48,30 V44 H74 Z" fill="${SGN_WHITE}"/></g>`,
+  },
+  {
+    id: 'egyeb', nev: 'Egyéb jelzéskép', rovid: 'Egyéb',
+    csoport: 'Egyéb', ring: SGN_DARK, inner: SGN_WHITE, szoveges: true,
+    rajz: (text) => {
+      const t = String(text || '?').slice(0, 4);
+      return `<text x="50" y="62" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
+        font-size="${t.length > 2 ? 26 : 38}" font-weight="700" fill="${SGN_DARK}">${sgnEsc(t)}</text>`;
+    },
+  },
+];
+
+const sgnEsc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const signById = (id) => SIGNS.find((s) => s.id === id) || null;
+
+/** A tábla neve; az „egyéb” a beírt szöveget mutatja. */
+function signName(id, text) {
+  const s = signById(id);
+  if (!s) return 'Jelzéskép';
+  if (s.szoveges) return text ? `Egyéb jelzéskép: ${text}` : s.nev;
+  return s.nev;
+}
+
+function signShort(id, text) {
+  const s = signById(id);
+  if (!s) return 'Jelzés';
+  if (s.szoveges) return text || s.rovid;
+  return s.rovid;
+}
+
+/** Egy elem összes tábláját egy sorban („Előzni tilos + 30 km/h”). */
+function signsLabel(item) {
+  const ids = itemSigns(item);
+  if (!ids.length) return 'Jelzéskép';
+  return ids.map((id) => signShort(id, item.signText)).join(' + ');
+}
+
+/** A jelzésképek listája egy elemből (a régi, egytáblás alak is jó). */
+function itemSigns(item) {
+  if (!item) return [];
+  if (Array.isArray(item.signs)) return item.signs.filter((id) => signById(id));
+  return item.signId && signById(item.signId) ? [item.signId] : [];
+}
+
+const isSignItem = (item) => !!item && item.type === 'jelzes';
+
+let sgnClipSeq = 0;
+
+/**
+ * A tábla SVG-je. A kör r=46, hogy a karima széle épp a 100×100-as nézetbe
+ * essen; a vékony szürke kontúr azért kell, hogy világos alaptérképen vagy
+ * fehér papíron is látszódjon a tábla széle.
+ */
+function signSvg(id, { size = 72, text, title } = {}) {
+  const s = signById(id);
+  if (!s) return '';
+  const label = title === false ? '' : `<title>${sgnEsc(signName(id, text))}</title>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}" role="img">`
+    + label
+    + `<defs><clipPath id="sgnClip"><circle cx="50" cy="50" r="46"/></clipPath></defs>`
+    + `<circle cx="50" cy="50" r="46" fill="${s.inner}"/>`
+    + `<circle cx="50" cy="50" r="41" fill="none" stroke="${s.ring}" stroke-width="10"/>`
+    + `<circle cx="50" cy="50" r="45.2" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1.6"/>`
+    + s.rajz(text)
+    + `</svg>`;
+  // Egy lapon több tábla is lehet, és az azonos id-vel megadott vágás
+  // összekeverednék köztük — ezért minden táblának saját azonosítót adunk.
+  sgnClipSeq += 1;
+  return svg.replace(/sgnClip/g, 'sgnClip' + sgnClipSeq);
+}
+
+/** Adaturl — térképre rajzoláshoz, jegyzőkönyvbe beágyazáshoz. */
+const sgnUrlCache = new Map();
+function signDataUrl(id, text) {
+  const key = id + '|' + (text || '');
+  if (!sgnUrlCache.has(key)) {
+    const svg = signSvg(id, { size: 100, text, title: false });
+    sgnUrlCache.set(key, 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
+  }
+  return sgnUrlCache.get(key);
+}
+
+/* ------------------------------------------------- rajzolás vászonra
+
+A térkép vászonra rajzol, ezért a táblákat képként kell betölteni. Az
+adaturl miatt ez azonnali, de mégis aszinkron — ezért a betöltött képeket
+eltároljuk, és a térkép induláskor előre betölti őket. Amíg nincs kész,
+a térkép egy egyszerűsített jelet rajzol a tábla helyére.                */
+
+const sgnImgCache = new Map();
+
+function signImage(id, text) {
+  const key = id + '|' + (text || '');
+  if (sgnImgCache.has(key)) return sgnImgCache.get(key);
+  const img = new Image();
+  img.decoding = 'sync';
+  img.src = signDataUrl(id, text);
+  sgnImgCache.set(key, img);
+  return img;
+}
+
+/** Betöltött-e már (a térkép csak ilyenkor rajzolja ki). */
+const signReady = (id, text) => {
+  const img = signImage(id, text);
+  return img.complete && img.naturalWidth > 0;
+};
+
+/** Minden tábla betöltése — a jegyzőkönyv és a térképfájl ezt bevárja. */
+function preloadSigns(extra = []) {
+  const jobs = SIGNS.map((s) => signImage(s.id)).concat(extra.map((e) => signImage(e.id, e.text)));
+  return Promise.all(jobs.map((img) => (
+    img.complete && img.naturalWidth > 0
+      ? Promise.resolve()
+      : new Promise((res) => {
+          img.addEventListener('load', res, { once: true });
+          img.addEventListener('error', res, { once: true });
+          setTimeout(res, 1500);
+        })
+  )));
+}
+
+/** PNG a Word-űrlapokhoz (a .docx nem tud SVG-t megjeleníteni). */
+async function signPng(id, { px = 160, text } = {}) {
+  const img = signImage(id, text);
+  if (!(img.complete && img.naturalWidth > 0)) await preloadSigns(text ? [{ id, text }] : []);
+  const canvas = document.createElement('canvas');
+  canvas.width = px;
+  canvas.height = px;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = SGN_WHITE;
+  ctx.fillRect(0, 0, px, px);
+  try { ctx.drawImage(img, 0, 0, px, px); } catch (_) { return null; }
+  return new Promise((res) => canvas.toBlob((b) => res(b), 'image/png'));
+}
+
+/** Rajzolás a térkép vásznára, a pont fölé. */
+function drawSign(ctx, p, ids, text, size = 26) {
+  const list = ids.length ? ids : ['egyeb'];
+  // több tábla egy ponton: enyhén egymás mellé csúsztatva, hogy mindegyik
+  // látszódjon, de a pont helye azért felismerhető maradjon
+  const step = size * 0.72;
+  const x0 = p.x - ((list.length - 1) * step) / 2;
+  list.forEach((id, i) => {
+    const x = x0 + i * step;
+    const y = p.y - size * 0.95;
+    const img = signImage(id, text);
+    if (img.complete && img.naturalWidth > 0) {
+      ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+    } else {
+      const s = signById(id);
+      ctx.beginPath();
+      ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+      ctx.fillStyle = SGN_WHITE;
+      ctx.fill();
+      ctx.lineWidth = size * 0.14;
+      ctx.strokeStyle = (s && s.ring) || SGN_RED;
+      ctx.stroke();
+    }
+  });
+  // szár a tábla és a pont között: látszódjon, hová tartozik
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x, p.y - size * 0.5);
+  ctx.strokeStyle = SGN_DARK;
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 3.2, 0, Math.PI * 2);
+  ctx.fillStyle = SGN_DARK;
+  ctx.fill();
+}
+
 /* ===== js/geo.js ===== */
 // GPS: nyomvonal rögzítés, számítások, rajzolás, GPX/GeoJSON export
 
@@ -2669,8 +3027,16 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
   const hitboxes = [];
   markerPts.forEach((m) => {
     const p = project(m.lat, m.lon);
+    // a kísérőautó jelzésképe magával a táblával látszik: egy pöttyről nem
+    // derülne ki, hogy ott előzési tilalmat vagy 30-at kell kitenni
+    if (m.type === 'jelzes' && opts.signs !== false) {
+      drawSign(ctx, p, itemSigns(m), m.signText, opts.signSize || 26);
+      hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 14 });
+      return;
+    }
     const color = {
       audio: '#ffbe4d', note: '#c58cff', video: '#6fd3ff', condition: '#ff5f56',
+      jelzes: '#ffd60a',
     }[m.type] || '#ffffff';
     dot(ctx, p, 5, color, '#0b0f16');
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 12 });
@@ -3140,6 +3506,7 @@ function typeLabel(type) {
     audio: 'Hangjegyzet',
     condition: 'Állapot / tábla',
     note: 'Jegyzet',
+    jelzes: 'Jelzéskép (kísérőautó)',
   }[type] || 'Jegyzet';
 }
 
@@ -3193,6 +3560,8 @@ const severityLabel = (id) => byId(SEVERITIES, id);
 
 function describeItem(i) {
   const parts = [];
+  if (i.type === 'jelzes') parts.push(signsLabel(i));
+  if (i.reason) parts.push('Indok: ' + i.reason);
   if (i.note) parts.push(i.note);
   if (i.dims && i.dims.length) parts.push('Méretek: ' + i.dims.join('; '));
   return parts.join(' | ');
@@ -3957,6 +4326,11 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
     if (m) labels.push({ lat: m.lat, lon: m.lon, text: 'B' + (i + 1), color: MARK_DRAWN, href: `#berajzolt-${i + 1}` });
   });
 
+  // a jelzésképek a térképre is rákerülnek: meg kell várni a betöltésüket,
+  // különben a kép a tábla helyén üresen marad
+  await preloadSigns(ordered.filter((i) => i.type === 'jelzes' && i.signText)
+    .flatMap((i) => itemSigns(i).map((id) => ({ id, text: i.signText }))));
+
   progress('Térképkép készítése… (alaptérkép letöltése)');
   let map = '';
   let mapTiles = { wanted: 0, drawn: 0 };
@@ -4014,6 +4388,7 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   ].filter(([, val]) => val);
 
   const signs = ordered.filter((i) => i.type === 'condition' && i.category === 'tabla');
+  const escortSigns = ordered.filter((i) => i.type === 'jelzes');
   const conditions = ordered.filter((i) => i.type === 'condition' && i.category !== 'tabla');
 
   const itemBlocks = ordered.map((it, idx) => {
@@ -4025,6 +4400,8 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
       it.type === 'condition' ? ['Kategória', categoryLabel(it.category)] : null,
       it.type === 'condition' ? ['Állapot', conditionLabel(it.condition)] : null,
       it.type === 'condition' ? ['Minősítés', severityLabel(it.severity)] : null,
+      it.type === 'jelzes' ? ['Jelzésképek', itemSigns(it).map((id) => signName(id, it.signText)).join(' + ')] : null,
+      it.type === 'jelzes' && it.reason ? ['Miért kell', it.reason] : null,
       (it.dims || []).length ? ['Mért értékek', it.dims.join(' · ')] : null,
       (it.texts || []).length ? ['Feliratok a képen', it.texts.join(' · ')] : null,
       it.note ? ['Megjegyzés', it.note] : null,
@@ -4045,8 +4422,14 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
       <span class="zoom-x">✕ Bezárás</span>
     </figure>` : '';
 
+    // a kísérőautó táblája magával a táblaképpel
+    const signPics = it.type === 'jelzes'
+      ? `<div class="signpics">${itemSigns(it).map((id) => signSvg(id, { size: 104, text: it.signText })).join('')}</div>`
+      : '';
+
     // ha nincs felvétel, a helyszínrajz ne szoruljon üres oszlop mellé
     const shots = [
+      signPics,
       photo,
       m.video ? `<video class="shot" controls preload="none"${m.img ? ` poster="${m.img}"` : ''} src="${m.video}"></video>` : '',
       !include.video && it.video ? '<p class="muted">Videófelvétel készült — a riportból helytakarékosságból kimaradt.</p>' : '',
@@ -4080,6 +4463,24 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
     return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td><td>${rEsc(s.what || 'jelzőtábla')}</td>`
       + `<td>${rEsc(conditionLabel(s.condition))}</td><td class="sev ${rEsc(s.severity || '')}">${rEsc(severityLabel(s.severity))}</td>`
       + `<td>${rEsc((s.dims || []).join(', '))}</td><td>${rEsc(formatCoord(s.lat, s.lon))}</td></tr>`;
+  }).join('')}</tbody>
+</table>` : '';
+
+  // A kísérőautó jelzésképei: ezt a szállítás napján a kísérő is használja,
+  // ezért a sorrend az útvonal menti sorrend, és a tábla képe is látszik.
+  const escortSignTable = escortSigns.length ? `
+<h2>A kísérőautó jelzésképei (${escortSigns.length})</h2>
+<p class="muted">Az útvonal mentén, a bejárás sorrendjében: hol melyik táblát kell kitenni a kísérőautóra.</p>
+<table class="grid signs">
+  <thead><tr><th>Jel a térképen</th><th>Jelzéskép</th><th>Mit kell kitenni</th><th>Miért</th><th>Pozíció</th></tr></thead>
+  <tbody>${escortSigns.map((s2) => {
+    const idx = ordered.indexOf(s2) + 1;
+    const pics = itemSigns(s2).map((id) => signSvg(id, { size: 54, text: s2.signText })).join('');
+    return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td>`
+      + `<td class="signcell">${pics}</td>`
+      + `<td>${rEsc(signsLabel(s2))}${s2.note ? `<br><span class="muted">${rEsc(s2.note)}</span>` : ''}</td>`
+      + `<td>${rEsc(s2.reason || '—')}</td>`
+      + `<td>${rEsc(formatCoord(s2.lat, s2.lon))}</td></tr>`;
   }).join('')}</tbody>
 </table>` : '';
 
@@ -4185,6 +4586,10 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   /* elemblokk: bal oldalon a felvételek, jobb oldalon a helyszínrajz */
   .itembody { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; margin-bottom:8px; }
   .shots { flex:1 1 300px; min-width:0; }
+  .signpics { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:8px; }
+  .signcell { white-space:nowrap; }
+  .signcell svg { vertical-align:middle; margin-right:4px; }
+  .grid.signs td { vertical-align:middle; }
   .placemap { flex:0 0 260px; margin:0; }
   .placemap img { width:100%; border:1px solid var(--line); border-radius:6px; display:block; }
   .placemap figcaption { font-size:12px; color:var(--muted); margin-top:4px; }
@@ -4275,6 +4680,7 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
      újra a jegyzőkönyvet.</p>` : mapTiles.drawn < mapTiles.wanted ? `<p class="legend warnbox">Az
      alaptérkép egy része nem töltődött be (${mapTiles.drawn}/${mapTiles.wanted} csempe).</p>` : ''}` : ''}
 
+  ${escortSignTable}
   ${signTable}
   ${conditionTable}
   ${rejectedBlock}
@@ -4439,10 +4845,25 @@ async function buildMapPage(session, points, items, progress = () => {}) {
       lon: Number(i.lon.toFixed(6)),
       tipus: i.type,
       cim: i.title || typeLabel(i.type),
-      leiras: [i.what, (i.dims || []).join(' · '), i.note].filter(Boolean).join(' · '),
+      // a kísérőautó táblái a megosztott térképen is látszanak
+      jelzes: i.type === 'jelzes' ? itemSigns(i).map((id) => id + '|' + (i.signText || '')) : null,
+      leiras: [
+        i.type === 'jelzes' ? 'Kitenni: ' + signsLabel(i) : '',
+        i.reason ? 'Indok: ' + i.reason : '',
+        i.what, (i.dims || []).join(' · '), i.note,
+      ].filter(Boolean).join(' · '),
       irany: i.heading == null ? null : Math.round(i.heading),
     })),
   };
+
+  // a használt jelzésképek képe is bekerül a fájlba (SVG adaturl, pár kB)
+  data.tablak = {};
+  for (const i of items) {
+    if (i.type !== 'jelzes') continue;
+    for (const id of itemSigns(i)) {
+      data.tablak[id + '|' + (i.signText || '')] = signDataUrl(id, i.signText);
+    }
+  }
 
   // az alaptérkép a fájlba kerül: a nyilvános csempeszerver a saját gépről
   // megnyitott fájl kéréseit elutasítja, offline pedig semmi nem töltődne
@@ -4501,6 +4922,15 @@ var D = ${JSON.stringify(data)};
 var TS = 256, MINK = 1, MAXK = 2000;
 var c = document.getElementById('c'), g = c.getContext('2d');
 var view = { k: 1, tx: 0, ty: 0 }, hits = [], tiles = {}, pending = 0;
+
+// a kísérőautó jelzésképei (a fájlba ágyazott SVG-k)
+var SGN = {};
+Object.keys(D.tablak || {}).forEach(function (k) {
+  var im = new Image();
+  im.onload = function () { draw(); };
+  im.src = D.tablak[k];
+  SGN[k] = im;
+});
 
 function merc(lat, lon) {
   var s = Math.sin(lat * Math.PI / 180);
@@ -4643,6 +5073,18 @@ function draw() {
       g.beginPath(); g.moveTo(0, -20); g.lineTo(-8, 7); g.lineTo(0, 3); g.lineTo(8, 7);
       g.closePath(); g.globalAlpha = 0.8; g.fillStyle = '#0a6ed1'; g.fill();
       g.globalAlpha = 1; g.lineWidth = 1.2; g.strokeStyle = '#fff'; g.stroke(); g.restore();
+    }
+    if (e.jelzes && e.jelzes.length) {
+      var sz = 30, step = sz * 0.72;
+      var x0 = p.x - ((e.jelzes.length - 1) * step) / 2;
+      for (var si = 0; si < e.jelzes.length; si++) {
+        var im = SGN[e.jelzes[si]];
+        if (im && im.complete && im.naturalWidth) {
+          g.drawImage(im, x0 + si * step - sz / 2, p.y - sz * 1.45, sz, sz);
+        }
+      }
+      g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x, p.y - sz * 0.5);
+      g.strokeStyle = '#1b1b1b'; g.lineWidth = 1.6; g.stroke();
     }
     marker(p, 7, '#0a6ed1');
     g.fillStyle = '#fff'; g.font = 'bold 11px system-ui, sans-serif';
@@ -5880,6 +6322,10 @@ function describeForDoc(it) {
     if (it.what) bits.push(it.what);
     if (it.condition) bits.push(conditionLabel(it.condition));
     if (it.severity) bits.push(severityLabel(it.severity));
+  } else if (it.type === 'jelzes') {
+    // a kísérőautó táblája: a közút felé ez is elvégzendő feladat
+    bits.push('Kísérőautó jelzésképe: ' + signsLabel(it));
+    if (it.reason) bits.push(it.reason);
   } else {
     bits.push(it.title || typeLabel(it.type));
   }
@@ -6786,6 +7232,7 @@ class EscortMode {
     for (const [id, kind] of [
       ['#escort-add-photo', 'photo'], ['#escort-add-video', 'video'],
       ['#escort-add-audio', 'audio'], ['#escort-add-condition', 'condition'],
+      ['#escort-add-sign', 'sign'],
     ]) {
       $(id, this.root).addEventListener('click', () => {
         if (this.capture[kind]) this.capture[kind]();
@@ -6875,6 +7322,8 @@ class EscortMode {
     return this.items.filter((i) => {
       if (i.lat == null) return false;
       if (!this.onlyCritical) return true;
+      // a jelzéskép mindig fontos: azt ki KELL tenni, ez nem észrevétel
+      if (i.type === 'jelzes') return true;
       if (i.type === 'condition') return i.severity && i.severity !== 'megfelelo';
       return (i.dims || []).length > 0;
     });
@@ -6917,6 +7366,13 @@ class EscortMode {
         onclick: () => this.showAlert(item, d, true),
       }, [
         el('span', { class: 'escort-dist', text: formatDistance(d) }),
+        item.type === 'jelzes'
+          ? el('span', {
+              class: 'escort-sign',
+              html: itemSigns(item).slice(0, 2)
+                .map((id) => signSvg(id, { size: 34, text: item.signText })).join(''),
+            })
+          : null,
         el('span', { class: 'escort-body' }, [
           el('span', { class: 'escort-title', text: item.title || typeLabel(item.type) }),
           el('span', { class: 'escort-sub', text: this.describe(item) }),
@@ -6943,6 +7399,9 @@ class EscortMode {
     if (item.type === 'condition') {
       bits.push(categoryLabel(item.category));
       if (item.severity) bits.push(severityLabel(item.severity));
+    } else if (item.type === 'jelzes') {
+      bits.push('Kitenni: ' + signsLabel(item));
+      if (item.reason) bits.push(item.reason);
     } else {
       bits.push(typeLabel(item.type));
     }
@@ -6981,6 +7440,17 @@ class EscortMode {
 
     $('#escort-alert-title', this.root).textContent = item.title || typeLabel(item.type);
     this.setAlertDistance(distance);
+
+    // A jelzéskép a riasztás legfontosabb tartalma: vezetés közben erre
+    // kell egy pillantás, ezért a fotó és minden más fölé kerül, nagyban.
+    if (item.type === 'jelzes') {
+      body.appendChild(el('div', {
+        class: 'escort-sign-big',
+        html: itemSigns(item).map((id) => signSvg(id, { size: 120, text: item.signText })).join(''),
+      }));
+      body.appendChild(el('p', { class: 'escort-note strong', text: 'Kitenni: ' + signsLabel(item) }));
+      if (item.reason) body.appendChild(el('p', { class: 'escort-sub', text: 'Indok: ' + item.reason }));
+    }
 
     const picture = item.flat || item.photo;
     if (picture) body.appendChild(el('img', { class: 'escort-shot', src: this.objectUrl(picture), alt: '' }));
@@ -9631,6 +10101,108 @@ async function editCondition(item) {
   toast('Mentve.');
 }
 
+/* --------------------------------------- kísérőautó jelzésképei
+
+A kísérőautó táblái nem a bejárás „állapota”, hanem utasítás a szállítás
+napjára: innentől előzni tilos, itt 30-cal lehet menni. Ezért külön
+elemtípus — így a jegyzőkönyvben saját jegyzéke van, az élő kísérés pedig
+a helyszín előtt kiteszi a képernyőre, hogy mit kell kirakni.      */
+
+/** A választható táblák lapkái a modál képes választójához. */
+const signOptions = () => SIGNS.map((s) => ({
+  value: s.id,
+  label: s.rovid,
+  html: signSvg(s.id, { size: 48, text: s.szoveges ? '?' : null }),
+}));
+
+const signFields = (v = {}) => [
+  {
+    name: 'signs', label: 'Melyik jelzésképet kell kitenni?', type: 'tiles', multi: true,
+    value: itemSigns(v).join(','),
+    options: signOptions(),
+    hint: 'Többet is kijelölhet, ha egyszerre két táblát kell kitenni (pl. előzni tilos + 30).',
+  },
+  {
+    name: 'signText', label: 'Egyéb jelzéskép szövege', value: v.signText || '',
+    placeholder: 'csak az „Egyéb” lapkához',
+  },
+  { name: 'reason', label: 'Miért kell', value: v.reason || '', placeholder: 'pl. szűk híd, iskola, útszűkület' },
+  { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2, value: v.note || '' },
+];
+
+/** A bejegyzés adatai a választott táblákból. */
+function signValues(res) {
+  const ids = String(res.signs || '').split(',').filter((id) => signById(id));
+  const text = res.signText.trim();
+  return {
+    signs: ids,
+    signText: text,
+    reason: res.reason.trim(),
+    note: res.note.trim(),
+    title: ids.length
+      ? ids.map((id) => (signById(id).szoveges ? signName(id, text) : signById(id).nev)).join(' + ')
+      : 'Jelzéskép',
+  };
+}
+
+async function addSign() {
+  const res = await modal({
+    title: 'Jelzéskép a kísérőautóra',
+    text: 'Itt kell kitenni a kísérőautó táblájára. A szállítás napján az élő '
+      + 'kísérés ezt a helyszín előtt jelzi, és bekerül a jegyzőkönyv jelzéskép-jegyzékébe.',
+    fields: signFields(),
+    okText: 'Mentés',
+  });
+  if (!res) return;
+  const vals = signValues(res);
+  if (!vals.signs.length) {
+    toast('Jelöljön ki legalább egy táblát.', 'error');
+    return;
+  }
+
+  const pos = await positionNow();
+  const heading = compassHeading();
+  const item = {
+    id: db.uid(),
+    sessionId: state.session.id,
+    type: 'jelzes',
+    phase: capturePhase,
+    created: Date.now(),
+    ...pos,
+    heading,
+    headingSource: heading == null ? null : 'compass',
+    dims: [],
+    texts: [],
+    ops: [],
+    ...vals,
+  };
+  await db.saveItem(item);
+  state.items.push(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  escortRefresh();
+  toast(`Jelzéskép rögzítve: ${signsLabel(item)}.`);
+}
+
+async function editSign(item) {
+  const res = await modal({ title: 'Jelzéskép szerkesztése', fields: signFields(item) });
+  if (!res) return;
+  const vals = signValues(res);
+  if (!vals.signs.length) {
+    toast('Jelöljön ki legalább egy táblát.', 'error');
+    return;
+  }
+  Object.assign(item, vals);
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  escortRefresh();
+  closeViewer();
+  toast('Mentve.');
+}
+
 /** Fotó csatolása egy meglévő bejegyzéshez (nem külön elemként). */
 let attachTargetId = null;
 function attachPhotoTo(itemId) {
@@ -9736,19 +10308,25 @@ function renderItems() {
 }
 
 function itemCard(item, extraSub) {
-  const icons = { audio: '🎙️', note: '📝', video: '🎬', condition: '⚠️' };
+  const icons = { audio: '🎙️', note: '📝', video: '🎬', condition: '⚠️', jelzes: '🚧' };
+  const signIds = item.type === 'jelzes' ? itemSigns(item) : [];
   const thumb = item.thumb
     ? el('div', { class: 'thumb-wrap' }, [
         el('img', { class: 'thumb', src: objectUrl(item.thumb), alt: '' }),
         item.type === 'video' ? el('span', { class: 'thumb-badge', text: '▶' }) : null,
       ])
-    : el('div', { class: 'thumb placeholder', text: icons[item.type] || '📝' });
+    : signIds.length
+      // a táblát a listában is látni kell: így egy pillantásra végig lehet
+      // futni, mit kell hol kitenni
+      ? el('div', { class: 'thumb sign', html: signSvg(signIds[0], { size: 44, text: item.signText }) })
+      : el('div', { class: 'thumb placeholder', text: icons[item.type] || '📝' });
 
   const sub = [];
   sub.push(formatTime(item.created));
   if (item.type === 'audio' && item.audioDuration) sub.push(formatDuration(item.audioDuration));
   if (item.type === 'video' && item.videoDuration) sub.push(formatDuration(item.videoDuration));
   if (item.type === 'condition') sub.push(categoryLabel(item.category));
+  if (item.type === 'jelzes') sub.push('kísérőautó jelzésképe');
   if (item.lat != null) sub.push(formatCoord(item.lat, item.lon));
   else sub.push('📍 nincs helyszín');
 
@@ -9760,6 +10338,8 @@ function itemCard(item, extraSub) {
       text: severityLabel(item.severity) + ' · ' + conditionLabel(item.condition),
     }));
   }
+  if (signIds.length > 1) tags.push(el('span', { class: 'tag', text: '🚧 ' + signsLabel(item) }));
+  if (item.type === 'jelzes' && item.reason) tags.push(el('span', { class: 'tag', text: 'Indok: ' + item.reason }));
   if (item.heading != null) tags.push(el('span', { class: 'tag', text: '🧭 ' + formatHeading(item.heading) }));
   if (item.audio && item.type === 'photo') tags.push(el('span', { class: 'tag', text: '🎙️ hang' }));
   if ((item.ops || []).some((o) => o.k === 'dir')) tags.push(el('span', { class: 'tag', text: '⇨ útirány' }));
@@ -9814,6 +10394,7 @@ async function addPointAt(at) {
         options: [
           { value: 'note', label: 'Jegyzet / útpont' },
           { value: 'condition', label: 'Állapot, tábla' },
+          { value: 'jelzes', label: 'Jelzéskép a kísérőautóra' },
         ],
       },
       { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2, value: '' },
@@ -9839,9 +10420,29 @@ async function addPointAt(at) {
     texts: [],
     ops: [],
   };
-  const item = res.type === 'condition'
-    ? { ...base, type: 'condition', category: 'egyeb', condition: 'ep', severity: 'figyelendo', what: res.title.trim() }
-    : { ...base, type: 'note' };
+  let item;
+  if (res.type === 'jelzes') {
+    // a tábla kiválasztása külön lépés: itt a képes választó kell
+    const sgn = await modal({
+      title: 'Jelzéskép a kísérőautóra',
+      text: formatCoord(at.lat, at.lon) + ' — innentől ezt kell kitenni.',
+      fields: signFields(),
+      okText: 'Felvétel',
+    });
+    if (!sgn) return;
+    const vals = signValues(sgn);
+    if (!vals.signs.length) {
+      toast('Jelöljön ki legalább egy táblát.', 'error');
+      return;
+    }
+    item = { ...base, type: 'jelzes', ...vals };
+    if (res.title.trim()) item.title = res.title.trim();
+    if (res.note.trim()) item.note = [res.note.trim(), vals.note].filter(Boolean).join(' — ');
+  } else if (res.type === 'condition') {
+    item = { ...base, type: 'condition', category: 'egyeb', condition: 'ep', severity: 'figyelendo', what: res.title.trim() };
+  } else {
+    item = { ...base, type: 'note' };
+  }
 
   await db.saveItem(item);
   state.items.push(item);
@@ -9851,7 +10452,9 @@ async function addPointAt(at) {
   drawTrack();
   // a szerkesztő nyitva marad: így egymás után több pont is felvehető
   if (trackEditor) trackEditor.draw();
-  toast('Pont felvéve. Fotót, hangot a listából, az elem adatlapján adhat hozzá.');
+  toast(item.type === 'jelzes'
+    ? `Jelzéskép felvéve: ${signsLabel(item)}.`
+    : 'Pont felvéve. Fotót, hangot a listából, az elem adatlapján adhat hozzá.');
 }
 
 /**
@@ -10007,6 +10610,12 @@ async function openViewer(id) {
   if (item.audio) {
     body.appendChild(el('audio', { class: 'player', controls: true, src: objectUrl(item.audio) }));
   }
+  if (item.type === 'jelzes') {
+    body.appendChild(el('div', {
+      class: 'sign-big',
+      html: itemSigns(item).map((id) => signSvg(id, { size: 96, text: item.signText })).join(''),
+    }));
+  }
 
   const info = el('div', { class: 'meta-card' });
   const rows = [
@@ -10023,6 +10632,10 @@ async function openViewer(id) {
     if (item.what) rows.push(['Megnevezés', item.what]);
     rows.push(['Állapot', conditionLabel(item.condition)]);
     rows.push(['Minősítés', severityLabel(item.severity)]);
+  }
+  if (item.type === 'jelzes') {
+    rows.push(['Jelzésképek', itemSigns(item).map((id) => signName(id, item.signText)).join(' + ') || '—']);
+    if (item.reason) rows.push(['Miért kell', item.reason]);
   }
   if (item.type === 'video' && item.video) {
     rows.push(['Videó', `${formatDuration(item.videoDuration || 0)} · ${(item.video.size / 1048576).toFixed(1).replace('.', ',')} MB`]);
@@ -10056,6 +10669,11 @@ async function openViewer(id) {
   if (item.type === 'condition') {
     actions.appendChild(el('button', {
       class: 'btn primary small', text: '⚠️ Állapot szerkesztése', onclick: () => editCondition(item),
+    }));
+  }
+  if (item.type === 'jelzes') {
+    actions.appendChild(el('button', {
+      class: 'btn primary small', text: '🚧 Jelzéskép szerkesztése', onclick: () => editSign(item),
     }));
   }
   if (!item.photo && !item.flat && item.type !== 'video') {
@@ -10365,6 +10983,7 @@ async function startEscort() {
       video: () => $('#video-input').click(),
       audio: () => recordAudio(null),
       condition: () => addCondition(),
+      sign: () => addSign(),
     },
     onClose: () => {
       capturePhase = 'survey';
@@ -10657,6 +11276,7 @@ function bind() {
   $('#video-input').addEventListener('change', onVideoSelected);
   $('#attach-photo-input').addEventListener('change', onAttachPhoto);
   $('#cap-condition').addEventListener('click', addCondition);
+  $('#cap-sign').addEventListener('click', addSign);
   $('#cap-audio').addEventListener('click', () => recordAudio(null));
   $('#cap-note').addEventListener('click', addNote);
 
@@ -10727,6 +11347,9 @@ async function init() {
   bind();
   try { setTilesEnabled(localStorage.getItem('tiles') !== '0'); } catch (_) {}
   editor = new PhotoEditor($('#editor'));
+  // a jelzésképek a térképre képként kerülnek: töltsük be őket előre, hogy
+  // az első rajzoláskor már a tábla látszódjon, ne egy üres karika
+  preloadSigns().then(() => { if (state.session) drawTrack(); });
   await renderSessionList();
   show('list');
 

@@ -14,6 +14,7 @@ import {
   textOf, tablesOf, fillTable, findLeafParagraphs, addParagraphAfter, fillDotsNear,
   insertImageAfter,
 } from './docx.js';
+import { signsLabel } from './jelzes.js';
 import { formatCoord, formatDistance, typeLabel, categoryLabel, conditionLabel, severityLabel, isRejected, trackLength } from './geo.js';
 import { formatEov } from './eov.js';
 import { buildNetwork, lookupRoad } from './uthalozat.js';
@@ -100,6 +101,10 @@ function describeForDoc(it) {
     if (it.what) bits.push(it.what);
     if (it.condition) bits.push(conditionLabel(it.condition));
     if (it.severity) bits.push(severityLabel(it.severity));
+  } else if (it.type === 'jelzes') {
+    // a kísérőautó táblája: a közút felé ez is elvégzendő feladat
+    bits.push('Kísérőautó jelzésképe: ' + signsLabel(it));
+    if (it.reason) bits.push(it.reason);
   } else {
     bits.push(it.title || typeLabel(it.type));
   }

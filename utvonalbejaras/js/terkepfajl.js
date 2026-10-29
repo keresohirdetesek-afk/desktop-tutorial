@@ -10,6 +10,7 @@
 // megnyitható, és elküldhető — az adat nem megy át idegen kiszolgálón.
 
 import { trackLength, formatDistance, typeLabel, isRejected, REJECTED, mercator } from './geo.js';
+import { itemSigns, signsLabel, signDataUrl } from './jelzes.js';
 import { ATTRIBUTION, tileDataURL } from './tiles.js';
 
 const TILE_PX = 256;
@@ -144,10 +145,25 @@ export async function buildMapPage(session, points, items, progress = () => {}) 
       lon: Number(i.lon.toFixed(6)),
       tipus: i.type,
       cim: i.title || typeLabel(i.type),
-      leiras: [i.what, (i.dims || []).join(' · '), i.note].filter(Boolean).join(' · '),
+      // a kísérőautó táblái a megosztott térképen is látszanak
+      jelzes: i.type === 'jelzes' ? itemSigns(i).map((id) => id + '|' + (i.signText || '')) : null,
+      leiras: [
+        i.type === 'jelzes' ? 'Kitenni: ' + signsLabel(i) : '',
+        i.reason ? 'Indok: ' + i.reason : '',
+        i.what, (i.dims || []).join(' · '), i.note,
+      ].filter(Boolean).join(' · '),
       irany: i.heading == null ? null : Math.round(i.heading),
     })),
   };
+
+  // a használt jelzésképek képe is bekerül a fájlba (SVG adaturl, pár kB)
+  data.tablak = {};
+  for (const i of items) {
+    if (i.type !== 'jelzes') continue;
+    for (const id of itemSigns(i)) {
+      data.tablak[id + '|' + (i.signText || '')] = signDataUrl(id, i.signText);
+    }
+  }
 
   // az alaptérkép a fájlba kerül: a nyilvános csempeszerver a saját gépről
   // megnyitott fájl kéréseit elutasítja, offline pedig semmi nem töltődne
@@ -206,6 +222,15 @@ var D = ${JSON.stringify(data)};
 var TS = 256, MINK = 1, MAXK = 2000;
 var c = document.getElementById('c'), g = c.getContext('2d');
 var view = { k: 1, tx: 0, ty: 0 }, hits = [], tiles = {}, pending = 0;
+
+// a kísérőautó jelzésképei (a fájlba ágyazott SVG-k)
+var SGN = {};
+Object.keys(D.tablak || {}).forEach(function (k) {
+  var im = new Image();
+  im.onload = function () { draw(); };
+  im.src = D.tablak[k];
+  SGN[k] = im;
+});
 
 function merc(lat, lon) {
   var s = Math.sin(lat * Math.PI / 180);
@@ -348,6 +373,18 @@ function draw() {
       g.beginPath(); g.moveTo(0, -20); g.lineTo(-8, 7); g.lineTo(0, 3); g.lineTo(8, 7);
       g.closePath(); g.globalAlpha = 0.8; g.fillStyle = '#0a6ed1'; g.fill();
       g.globalAlpha = 1; g.lineWidth = 1.2; g.strokeStyle = '#fff'; g.stroke(); g.restore();
+    }
+    if (e.jelzes && e.jelzes.length) {
+      var sz = 30, step = sz * 0.72;
+      var x0 = p.x - ((e.jelzes.length - 1) * step) / 2;
+      for (var si = 0; si < e.jelzes.length; si++) {
+        var im = SGN[e.jelzes[si]];
+        if (im && im.complete && im.naturalWidth) {
+          g.drawImage(im, x0 + si * step - sz / 2, p.y - sz * 1.45, sz, sz);
+        }
+      }
+      g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x, p.y - sz * 0.5);
+      g.strokeStyle = '#1b1b1b'; g.lineWidth = 1.6; g.stroke();
     }
     marker(p, 7, '#0a6ed1');
     g.fillStyle = '#fff'; g.font = 'bold 11px system-ui, sans-serif';

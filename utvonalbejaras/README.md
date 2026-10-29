@@ -28,6 +28,7 @@ használatra.
 | **Hangjegyzet** felvétele a helyszínen, önállóan vagy fotóhoz csatolva | *Hangjegyzet* gomb, vagy fotó → *Hangjegyzet* |
 | **Videós megjegyzés** a telefon kamerájával, bélyegképpel | *Videó* gomb |
 | **Állapot- és táblarögzítés** kategóriával, állapottal, minősítéssel | *Állapot / tábla* gomb |
+| **Kísérőautó jelzésképei** (előzni tilos, teherrel előzni tilos, 10–90 km/h, terelés) — bejáráskor és otthoni tervezéskor is | *Jelzéskép* gomb, vagy térkép → *Pont felvétele* |
 | **HTML-jegyzőkönyv** önálló fájlban, a közút felé átadható | *Riport (HTML)* gomb |
 | **Közút Word-űrlapjainak kitöltése** (bejárás, részletező, itiner, jegyzék, rendkívüli jegyzék) | *Közút dokumentumok* gomb |
 | **Élő kísérés a szállítás során**: közeledéskor szól, lejátssza a hangjegyzetet, előhozza a fotót/videót | *Élő kísérés* gomb |
@@ -176,6 +177,52 @@ ha szándékosan nem úton (pl. telephelyen, gyárudvaron) kell vonalat húzni.
 
 A berajzolt pontok a nyomvonalhoz és a már berajzolt szakaszokhoz is
 hozzátapadnak, ezért a szakaszok hézag nélkül állnak össze.
+
+### A kísérőautó jelzésképei
+
+A túlméretes szerelvény előtt-mögött haladó kísérőautóra az útvonal egyes
+pontjain más-más táblát kell kitenni. Az app ezt külön bejegyzésként kezeli,
+mert ez nem „állapot”, hanem **utasítás a szállítás napjára**.
+
+**Mikor adható meg:**
+
+| Helyzet | Hogyan |
+|---|---|
+| **A bejáráson**, ott helyben, ahol kiderül | *🚧 Jelzéskép* gomb — a hely a GPS-ből jön |
+| **Otthon, tervezéskor**, térképen | *Nyomvonal szerkesztése* → *➕ Pont felvétele a térképre* → típus: *Jelzéskép a kísérőautóra* |
+| **A szállítás közben**, ha menet közben derül ki | Élő kísérés → *🚧 Jelzéskép* |
+| **Utólag módosítani** | az elem adatlapján: *🚧 Jelzéskép szerkesztése* |
+
+**A választható táblák** (a lapkákra koppintva, a tábla képével):
+
+- **Előzni tilos**, **Tehergépkocsival előzni tilos**, **Előzési tilalom vége**
+- **Sebességkorlátozás** 10, 20, 30, 40, 50, 60, 70, 80, 90 km/h, és
+  **Sebességkorlátozás vége**
+- **Balra / jobbra kikerülni kötelező**
+- **Egyéb jelzéskép** — beírt szöveggel, ha a készlet nem fedi le
+
+Egy ponthoz **több tábla is kijelölhető** (pl. *előzni tilos + 30 km/h*),
+mert a kísérőautó egyszerre kettőt is kitesz. Megadható, hogy **miért kell**
+(pl. „szűk híd”) — ezt a közút felé beadott anyag is kéri.
+
+**Hol jelenik meg utána:**
+
+- **a térképen magával a táblával** — nem pöttyel, így egy pillantásra
+  látszik, hol melyik tábla kell (a bejárás térképén, a szerkesztőben, az
+  élő kísérésben és a megosztható térképfájlban is);
+- **az élő kísérésben**: a helyszín előtt a tábla nagyban kiugrik a
+  képernyőre, „Kitenni: …” felirattal és az indokkal — ezért a jelzésképre
+  akkor is szól, ha a *csak a lényeges pontok* szűrő be van kapcsolva;
+- **a jegyzőkönyvben**: külön *A kísérőautó jelzésképei* jegyzék, útvonal
+  menti sorrendben, a tábla képével, az indoklással és a koordinátával, a
+  térképi sorszámra kattintva a megfelelő részletre ugorva;
+- **a Közút Word-űrlapjain**: a bejegyzés az *Elvégzendő munka* soraiba
+  „Kísérőautó jelzésképe: …” alakban kerül, a településsel, útszámmal és
+  szelvénnyel együtt, amit a NAP-adatból vagy kézzel adunk meg.
+
+> A táblarajzok **sematikusak** — a felismerést segítik, nem hivatalos
+> KRESZ-ábrák. A kitett tábla mindig a hatályos engedély és a KRESZ szerint
+> kell, hogy legyen.
 
 ### Nagyítható térkép
 

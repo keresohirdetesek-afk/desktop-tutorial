@@ -1,6 +1,7 @@
 // GPS: nyomvonal rögzítés, számítások, rajzolás, GPX/GeoJSON export
 
 import { getTile, tilesEnabled, TILE_SIZE, ATTRIBUTION } from './tiles.js';
+import { drawSign, itemSigns, signsLabel } from './jelzes.js';
 
 export const ATTRIBUTION_TEXT = ATTRIBUTION;
 
@@ -618,8 +619,16 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   const hitboxes = [];
   markerPts.forEach((m) => {
     const p = project(m.lat, m.lon);
+    // a kísérőautó jelzésképe magával a táblával látszik: egy pöttyről nem
+    // derülne ki, hogy ott előzési tilalmat vagy 30-at kell kitenni
+    if (m.type === 'jelzes' && opts.signs !== false) {
+      drawSign(ctx, p, itemSigns(m), m.signText, opts.signSize || 26);
+      hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 14 });
+      return;
+    }
     const color = {
       audio: '#ffbe4d', note: '#c58cff', video: '#6fd3ff', condition: '#ff5f56',
+      jelzes: '#ffd60a',
     }[m.type] || '#ffffff';
     dot(ctx, p, 5, color, '#0b0f16');
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 12 });
@@ -1089,6 +1098,7 @@ export function typeLabel(type) {
     audio: 'Hangjegyzet',
     condition: 'Állapot / tábla',
     note: 'Jegyzet',
+    jelzes: 'Jelzéskép (kísérőautó)',
   }[type] || 'Jegyzet';
 }
 
@@ -1142,6 +1152,8 @@ export const severityLabel = (id) => byId(SEVERITIES, id);
 
 export function describeItem(i) {
   const parts = [];
+  if (i.type === 'jelzes') parts.push(signsLabel(i));
+  if (i.reason) parts.push('Indok: ' + i.reason);
   if (i.note) parts.push(i.note);
   if (i.dims && i.dims.length) parts.push('Méretek: ' + i.dims.join('; '));
   return parts.join(' | ');

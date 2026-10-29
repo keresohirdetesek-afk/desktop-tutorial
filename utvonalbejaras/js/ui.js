@@ -51,6 +51,37 @@ export function modal({ title, fields = [], okText = 'Mentés', cancelText = 'M�
       if (f.type === 'textarea') {
         input = el('textarea', { id, rows: f.rows || 3, placeholder: f.placeholder || '' });
         input.value = f.value || '';
+      } else if (f.type === 'tiles') {
+        // Képes választó (pl. jelzésképek): a lapkákra koppintva jelöl ki.
+        // Egy rejtett beviteli mező tartja az értéket, így a modál
+        // visszatérése ugyanúgy működik, mint a többi mezőnél.
+        input = el('input', { id, type: 'hidden' });
+        input.value = f.value || '';
+        const sel = new Set(String(f.value || '').split(',').filter(Boolean));
+        const grid = el('div', { class: 'tile-grid' + (f.multi ? ' multi' : '') });
+        const sync = () => {
+          input.value = [...sel].join(',');
+          for (const b of grid.children) b.classList.toggle('on', sel.has(b.dataset.value));
+        };
+        for (const o of f.options || []) {
+          const tile = el('button', { type: 'button', class: 'tile', 'data-value': o.value, title: o.label }, [
+            el('span', { class: 'tile-pic', html: o.html || '' }),
+            el('span', { class: 'tile-label', text: o.label }),
+          ]);
+          tile.addEventListener('click', () => {
+            if (f.multi) {
+              if (sel.has(o.value)) sel.delete(o.value); else sel.add(o.value);
+            } else {
+              sel.clear();
+              sel.add(o.value);
+            }
+            sync();
+            if (f.onPick) f.onPick(o.value, [...sel]);
+          });
+          grid.appendChild(tile);
+        }
+        sync();
+        row.appendChild(grid);
       } else if (f.type === 'select') {
         input = el('select', { id });
         for (const o of f.options || []) {
