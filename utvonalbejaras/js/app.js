@@ -557,23 +557,54 @@ const POSITION_MAX_AGE = 10000;
  * ha az valóban friss — különben új mérést kér. Így nem ragad be egy régi,
  * más helyszínen mért koordináta egy most készült fotóra.
  */
+/**
+ * Útszám és km szelvény a ponthoz — ha van betöltött úthálózati (NAP) adat.
+ *
+ * A közút nem GPS-koordinátában kéri a helyszíneket, hanem útszámban és
+ * szelvényben. Ezért minden rögzített pontra rögtön ráírjuk, melyik út
+ * melyik szelvénye — így nem utólag, fejből kell kikeresni. A 150 méteres
+ * határ azért kell, hogy egy telephelyen vagy letérőn készült felvételt ne
+ * húzzunk rá tévesen a legközelebbi országos útra.
+ */
+async function roadStamp(lat, lon) {
+  if (lat == null || lon == null) return null;
+  let net = null;
+  try { net = await roadNetwork(); } catch (_) { return null; }
+  if (!net) return null;
+  const hit = lookupRoad(net, lat, lon, 150);
+  if (!hit) return null;
+  return {
+    utszam: hit.utszam || '',
+    szelveny: hit.szelveny || '',
+    meters: hit.meters,
+    telepules: hit.telepules || '',
+    tavolsag: hit.distance,      // ennyire volt a ponttól az út
+  };
+}
+
+/** Az útszám + szelvény egy sorban („81 · 27 km + 387 m”). */
+const roadLabel = (r) => (r ? [r.utszam, r.szelveny].filter(Boolean).join(' · ') : '');
+
 async function positionNow() {
   const now = Date.now();
+  // minden rögzített helyszínre ráírjuk az útszámot és a szelvényt is
+  const withRoad = async (p) => ({ ...p, road: await roadStamp(p.lat, p.lon) });
+
   const cur = state.recording && recorder ? recorder.current : null;
   if (cur && cur.t && now - cur.t < POSITION_MAX_AGE) {
-    return { lat: cur.lat, lon: cur.lon, acc: cur.acc, heading: cur.heading, posAt: cur.t, posSource: 'gps' };
+    return withRoad({ lat: cur.lat, lon: cur.lon, acc: cur.acc, heading: cur.heading, posAt: cur.t, posSource: 'gps' });
   }
   // valóban új mérés (tárolt fix nem fogadható el)
   const fresh = await currentPosition(7000, 0);
   if (fresh) {
-    return { lat: fresh.lat, lon: fresh.lon, acc: fresh.acc, heading: fresh.heading, posAt: fresh.t || now, posSource: 'gps' };
+    return withRoad({ lat: fresh.lat, lon: fresh.lon, acc: fresh.acc, heading: fresh.heading, posAt: fresh.t || now, posSource: 'gps' });
   }
   // ha nincs friss jel, inkább egy megjelölt, tárolt mérés, mint semmi
   const cached = await currentPosition(3000, 60000);
   if (cached) {
-    return { lat: cached.lat, lon: cached.lon, acc: cached.acc, heading: cached.heading, posAt: cached.t || null, posSource: 'gps-cached' };
+    return withRoad({ lat: cached.lat, lon: cached.lon, acc: cached.acc, heading: cached.heading, posAt: cached.t || null, posSource: 'gps-cached' });
   }
-  return { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none' };
+  return { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none', road: null };
 }
 
 async function onPhotoSelected(e) {
@@ -613,6 +644,7 @@ async function onPhotoSelected(e) {
       let pos;
       if (exif && exif.lat != null) {
         pos = { lat: exif.lat, lon: exif.lon, acc: null, heading: null, posAt: exif.takenAt || null, posSource: 'exif' };
+        pos.road = await roadStamp(pos.lat, pos.lon);
       } else if (live) {
         pos = live;
       } else {
@@ -1148,6 +1180,8 @@ function itemCard(item, extraSub) {
   if (item.type === 'video' && item.videoDuration) sub.push(formatDuration(item.videoDuration));
   if (item.type === 'condition') sub.push(categoryLabel(item.category));
   if (item.type === 'jelzes') sub.push('kísérőautó jelzésképe');
+  // a közút útszámban és szelvényben gondolkodik — az áll elöl, ha tudjuk
+  if (item.road) sub.push('🛣️ ' + roadLabel(item.road));
   if (item.lat != null) sub.push(formatCoord(item.lat, item.lon));
   else sub.push('📍 nincs helyszín');
 
@@ -1235,6 +1269,7 @@ async function addPointAt(at) {
     posAt: Date.now(),
     posSource: 'manual',
     heading: null,
+    road: await roadStamp(at.lat, at.lon),
     title: res.title.trim(),
     note: res.note.trim(),
     dims: [],
@@ -1399,12 +1434,16 @@ async function editItemPosition(item) {
   }
 
   Object.assign(item, next);
+  // új hely — új szelvény
+  item.road = await roadStamp(item.lat, item.lon);
   await db.saveItem(item);
   markUnsaved();
   renderItems();
   drawTrack();
   closeViewer();
-  toast('Helyadat mentve.');
+  toast(item.road
+    ? `Helyadat mentve. Útszám, szelvény: ${roadLabel(item.road)}.`
+    : 'Helyadat mentve.');
 }
 
 async function openViewer(id) {
@@ -1443,6 +1482,11 @@ async function openViewer(id) {
     [item.importedAt ? 'Felvétel ideje' : 'Idő', formatDateTime(item.created)],
     ['Pozíció', formatCoord(item.lat, item.lon) + positionNote(item)],
   ];
+  if (item.road) {
+    rows.push(['Útszám, szelvény', roadLabel(item.road)
+      + (item.road.telepules ? ` · ${item.road.telepules}` : '')
+      + (item.road.tavolsag != null ? ` (az úttól ${item.road.tavolsag} m)` : '')]);
+  }
   if (item.heading != null) {
     const c = cardinal(item.heading);
     const src = { compass: 'iránytű', exif: 'a kép adatából', gps: 'haladási irány', manual: 'kézzel' }[item.headingSource];
@@ -1772,7 +1816,11 @@ async function openKozut() {
       await db.saveSession(state.session);
       for (const it of state.items) if (it.kozut) await db.saveItem(it);
       markUnsaved();
+      renderItems();
+      drawTrack();
     },
+    // betöltött vagy törölt úthálózat után újra kell olvasni
+    onNetwork: () => { roadNet = undefined; },
   });
 }
 

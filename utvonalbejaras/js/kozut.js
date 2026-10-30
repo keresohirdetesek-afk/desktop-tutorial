@@ -139,11 +139,14 @@ export class KozutDocs {
     });
   }
 
-  async open({ session, points, items, onSave }) {
+  async open({ session, points, items, onSave, onNetwork }) {
     this.session = session;
     this.points = points;
     this.items = items;
     this.onSave = onSave;
+    // az app a betöltött úthálózatot gyorsítótárazza — szólni kell neki,
+    // ha változott, különben az új pontok nem kapnának szelvényt
+    this.onNetwork = onNetwork;
     this.form = Object.assign({
       nevek: '',
       datum: dateHu(session.created),
@@ -206,8 +209,10 @@ export class KozutDocs {
 
     // elemenkénti adatok: amit tudunk, azt kitöltjük
     for (const it of this.items) {
+      const r = it.road || {};
       it.kozut = Object.assign({
-        telepules: '', utszam: '', km: '',
+        // amit a bejáráskor az úthálózatból már tudtunk
+        telepules: r.telepules || '', utszam: r.utszam || '', km: r.szelveny || '',
         // minden rögzített helyszín bekerül a részletezőbe — a fotók is,
         // nemcsak az állapotbejegyzések; ami nem kell, az kivehető
         munka: describeForDoc(it),
@@ -216,6 +221,13 @@ export class KozutDocs {
         megnevezes: it.type === 'condition' ? (it.what || categoryLabel(it.category)) : (it.title || ''),
         ideiglenes: '', vegleges: '', technologia: '', jovahagyas: '',
       }, it.kozut || {});
+      // korábban megnyitott bejárásnál a mezők már léteznek üresen — a
+      // bejáráskor rögzített útszám és szelvény ilyenkor is kerüljön be
+      if (it.road) {
+        if (!it.kozut.utszam) it.kozut.utszam = it.road.utszam || '';
+        if (!it.kozut.km) it.kozut.km = it.road.szelveny || '';
+        if (!it.kozut.telepules) it.kozut.telepules = it.road.telepules || '';
+      }
     }
   }
 
@@ -265,16 +277,46 @@ export class KozutDocs {
       await db.saveNetwork(net);
       toast(`Úthálózat betöltve: ${net.roads.length} útszám, ${net.count} szakasz`
         + (net.hasSzelveny ? ', szelvényezéssel.' : ' (szelvény nincs benne).'));
+      if (this.onNetwork) this.onNetwork();
+      // a korábban rögzített pontokra is felírjuk az útszámot és a szelvényt
+      const n = this.stampItems();
+      if (n) toast(`${n} korábbi helyszín megkapta az útszámot és a szelvényt.`);
     } catch (err) {
       toast('Az úthálózati adat nem olvasható: ' + err.message, 'error');
     }
     this.render();
   }
 
+  /**
+   * Útszám + szelvény ráírása a már rögzített helyszínekre. A bejáráskor még
+   * nem biztos, hogy be volt töltve az úthálózat — ilyenkor itt pótoljuk.
+   */
+  stampItems() {
+    if (!this.net) return 0;
+    let n = 0;
+    for (const it of this.items) {
+      if (it.lat == null || it.road) continue;
+      const hit = lookupRoad(this.net, it.lat, it.lon, 150);
+      if (!hit) continue;
+      it.road = {
+        utszam: hit.utszam || '', szelveny: hit.szelveny || '', meters: hit.meters,
+        telepules: hit.telepules || '', tavolsag: hit.distance,
+      };
+      const k = it.kozut || (it.kozut = {});
+      if (!k.utszam) k.utszam = it.road.utszam;
+      if (!k.km) k.km = it.road.szelveny;
+      if (!k.telepules) k.telepules = it.road.telepules;
+      n += 1;
+    }
+    if (n) this.save();
+    return n;
+  }
+
   async dropNetwork() {
     this.net = null;
     this.netFile = null;
     try { await db.clearNetwork(); } catch (_) {}
+    if (this.onNetwork) this.onNetwork();
     this.render();
   }
 
@@ -355,11 +397,13 @@ export class KozutDocs {
     let n = 0;
     for (const it of this.items) {
       if (only && it !== only) continue;
-      const hit = this.netHit(it);
+      const hit = it.road || this.netHit(it);
       if (!hit) continue;
       const k = it.kozut;
-      if (!k.utszam) { k.utszam = hit.utszam; n += 1; }
-      if (!k.km && hit.szelveny) { k.km = hit.szelveny; n += 1; }
+      const km = hit.szelveny;
+      if (!k.utszam && hit.utszam) { k.utszam = hit.utszam; n += 1; }
+      if (!k.km && km) { k.km = km; n += 1; }
+      if (!k.telepules && hit.telepules) { k.telepules = hit.telepules; n += 1; }
     }
     this.save();
     this.render();

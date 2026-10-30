@@ -3221,6 +3221,9 @@ function toGeoJSON(session, points, items = [], opts = {}) {
         nev: i.title || typeLabel(i.type),
         tipus: i.type,
         megjegyzes: i.note || '',
+        utszam: (i.road && i.road.utszam) || '',
+        szelveny: (i.road && i.road.szelveny) || '',
+        telepules: (i.road && i.road.telepules) || '',
         meretek: (i.dims || []).join('; '),
         ido: new Date(i.created).toISOString(),
       },
@@ -3561,6 +3564,9 @@ const severityLabel = (id) => byId(SEVERITIES, id);
 function describeItem(i) {
   const parts = [];
   if (i.type === 'jelzes') parts.push(signsLabel(i));
+  if (i.road && (i.road.utszam || i.road.szelveny)) {
+    parts.push([i.road.utszam, i.road.szelveny].filter(Boolean).join(' '));
+  }
   if (i.reason) parts.push('Indok: ' + i.reason);
   if (i.note) parts.push(i.note);
   if (i.dims && i.dims.length) parts.push('Méretek: ' + i.dims.join('; '));
@@ -4157,6 +4163,11 @@ const MARK_ITEM = '#0a6ed1';
 const MARK_REJECTED = '#c2410c';
 const MARK_DRAWN = '#1a7f45';
 
+/** Útszám és szelvény egy táblázatcellába. */
+const roadCell = (it) => (it && it.road
+  ? [it.road.utszam, it.road.szelveny].filter(Boolean).join(' ')
+  : '—');
+
 const rEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
@@ -4396,6 +4407,8 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
     const facts = [
       ['Idő', dt(it.created)],
       ['Pozíció', formatCoord(it.lat, it.lon)],
+      it.road ? ['Útszám, szelvény', [it.road.utszam, it.road.szelveny].filter(Boolean).join(' · ')
+        + (it.road.telepules ? ' · ' + it.road.telepules : '')] : null,
       it.heading != null ? ['Kameairány', `${cardinal(it.heading).name} (${formatHeading(it.heading)})`] : null,
       it.type === 'condition' ? ['Kategória', categoryLabel(it.category)] : null,
       it.type === 'condition' ? ['Állapot', conditionLabel(it.condition)] : null,
@@ -4457,12 +4470,13 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   const signTable = signs.length ? `
 <h2>Táblajegyzék</h2>
 <table class="grid">
-  <thead><tr><th>Jel a térképen</th><th>Tábla</th><th>Állapot</th><th>Minősítés</th><th>Mért érték</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Tábla</th><th>Állapot</th><th>Minősítés</th><th>Mért érték</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
   <tbody>${signs.map((s) => {
     const idx = ordered.indexOf(s) + 1;
     return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td><td>${rEsc(s.what || 'jelzőtábla')}</td>`
       + `<td>${rEsc(conditionLabel(s.condition))}</td><td class="sev ${rEsc(s.severity || '')}">${rEsc(severityLabel(s.severity))}</td>`
-      + `<td>${rEsc((s.dims || []).join(', '))}</td><td>${rEsc(formatCoord(s.lat, s.lon))}</td></tr>`;
+      + `<td>${rEsc((s.dims || []).join(', '))}</td><td>${rEsc(roadCell(s))}</td>`
+      + `<td>${rEsc(formatCoord(s.lat, s.lon))}</td></tr>`;
   }).join('')}</tbody>
 </table>` : '';
 
@@ -4472,7 +4486,7 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
 <h2>A kísérőautó jelzésképei (${escortSigns.length})</h2>
 <p class="muted">Az útvonal mentén, a bejárás sorrendjében: hol melyik táblát kell kitenni a kísérőautóra.</p>
 <table class="grid signs">
-  <thead><tr><th>Jel a térképen</th><th>Jelzéskép</th><th>Mit kell kitenni</th><th>Miért</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Jelzéskép</th><th>Mit kell kitenni</th><th>Miért</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
   <tbody>${escortSigns.map((s2) => {
     const idx = ordered.indexOf(s2) + 1;
     const pics = itemSigns(s2).map((id) => signSvg(id, { size: 54, text: s2.signText })).join('');
@@ -4480,6 +4494,7 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
       + `<td class="signcell">${pics}</td>`
       + `<td>${rEsc(signsLabel(s2))}${s2.note ? `<br><span class="muted">${rEsc(s2.note)}</span>` : ''}</td>`
       + `<td>${rEsc(s2.reason || '—')}</td>`
+      + `<td>${rEsc(roadCell(s2))}</td>`
       + `<td>${rEsc(formatCoord(s2.lat, s2.lon))}</td></tr>`;
   }).join('')}</tbody>
 </table>` : '';
@@ -4487,13 +4502,13 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   const conditionTable = conditions.length ? `
 <h2>Rögzített állapotok</h2>
 <table class="grid">
-  <thead><tr><th>Jel a térképen</th><th>Mi</th><th>Megnevezés</th><th>Állapot</th><th>Minősítés</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Mi</th><th>Megnevezés</th><th>Állapot</th><th>Minősítés</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
   <tbody>${conditions.map((c) => {
     const idx = ordered.indexOf(c) + 1;
     return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td><td>${rEsc(categoryLabel(c.category))}</td>`
       + `<td>${rEsc(c.what || '')}</td><td>${rEsc(conditionLabel(c.condition))}</td>`
       + `<td class="sev ${rEsc(c.severity || '')}">${rEsc(severityLabel(c.severity))}</td>`
-      + `<td>${rEsc(formatCoord(c.lat, c.lon))}</td></tr>`;
+      + `<td>${rEsc(roadCell(c))}</td><td>${rEsc(formatCoord(c.lat, c.lon))}</td></tr>`;
   }).join('')}</tbody>
 </table>` : '';
 
@@ -6055,6 +6070,8 @@ function lookupRoad(net, lat, lon, maxDistance = 120) {
     utszam: net.roads[net.segRoad[best]],
     szelveny: formatSzelveny(meters),
     meters,
+    // a szakaszhoz tartozó település, ha az adat tartalmazza
+    telepules: (net.places && net.segPlace && net.places[net.segPlace[best]]) || '',
     distance: Math.round(bestD),
     // a pont rávetítve az útra — ebből lesz az úthoz illesztett útvonal
     lat: net.aLat[best] + (net.bLat[best] - net.aLat[best]) * bestT,
@@ -6360,11 +6377,14 @@ class KozutDocs {
     });
   }
 
-  async open({ session, points, items, onSave }) {
+  async open({ session, points, items, onSave, onNetwork }) {
     this.session = session;
     this.points = points;
     this.items = items;
     this.onSave = onSave;
+    // az app a betöltött úthálózatot gyorsítótárazza — szólni kell neki,
+    // ha változott, különben az új pontok nem kapnának szelvényt
+    this.onNetwork = onNetwork;
     this.form = Object.assign({
       nevek: '',
       datum: dateHu(session.created),
@@ -6427,8 +6447,10 @@ class KozutDocs {
 
     // elemenkénti adatok: amit tudunk, azt kitöltjük
     for (const it of this.items) {
+      const r = it.road || {};
       it.kozut = Object.assign({
-        telepules: '', utszam: '', km: '',
+        // amit a bejáráskor az úthálózatból már tudtunk
+        telepules: r.telepules || '', utszam: r.utszam || '', km: r.szelveny || '',
         // minden rögzített helyszín bekerül a részletezőbe — a fotók is,
         // nemcsak az állapotbejegyzések; ami nem kell, az kivehető
         munka: describeForDoc(it),
@@ -6437,6 +6459,13 @@ class KozutDocs {
         megnevezes: it.type === 'condition' ? (it.what || categoryLabel(it.category)) : (it.title || ''),
         ideiglenes: '', vegleges: '', technologia: '', jovahagyas: '',
       }, it.kozut || {});
+      // korábban megnyitott bejárásnál a mezők már léteznek üresen — a
+      // bejáráskor rögzített útszám és szelvény ilyenkor is kerüljön be
+      if (it.road) {
+        if (!it.kozut.utszam) it.kozut.utszam = it.road.utszam || '';
+        if (!it.kozut.km) it.kozut.km = it.road.szelveny || '';
+        if (!it.kozut.telepules) it.kozut.telepules = it.road.telepules || '';
+      }
     }
   }
 
@@ -6486,16 +6515,46 @@ class KozutDocs {
       await db.saveNetwork(net);
       toast(`Úthálózat betöltve: ${net.roads.length} útszám, ${net.count} szakasz`
         + (net.hasSzelveny ? ', szelvényezéssel.' : ' (szelvény nincs benne).'));
+      if (this.onNetwork) this.onNetwork();
+      // a korábban rögzített pontokra is felírjuk az útszámot és a szelvényt
+      const n = this.stampItems();
+      if (n) toast(`${n} korábbi helyszín megkapta az útszámot és a szelvényt.`);
     } catch (err) {
       toast('Az úthálózati adat nem olvasható: ' + err.message, 'error');
     }
     this.render();
   }
 
+  /**
+   * Útszám + szelvény ráírása a már rögzített helyszínekre. A bejáráskor még
+   * nem biztos, hogy be volt töltve az úthálózat — ilyenkor itt pótoljuk.
+   */
+  stampItems() {
+    if (!this.net) return 0;
+    let n = 0;
+    for (const it of this.items) {
+      if (it.lat == null || it.road) continue;
+      const hit = lookupRoad(this.net, it.lat, it.lon, 150);
+      if (!hit) continue;
+      it.road = {
+        utszam: hit.utszam || '', szelveny: hit.szelveny || '', meters: hit.meters,
+        telepules: hit.telepules || '', tavolsag: hit.distance,
+      };
+      const k = it.kozut || (it.kozut = {});
+      if (!k.utszam) k.utszam = it.road.utszam;
+      if (!k.km) k.km = it.road.szelveny;
+      if (!k.telepules) k.telepules = it.road.telepules;
+      n += 1;
+    }
+    if (n) this.save();
+    return n;
+  }
+
   async dropNetwork() {
     this.net = null;
     this.netFile = null;
     try { await db.clearNetwork(); } catch (_) {}
+    if (this.onNetwork) this.onNetwork();
     this.render();
   }
 
@@ -6576,11 +6635,13 @@ class KozutDocs {
     let n = 0;
     for (const it of this.items) {
       if (only && it !== only) continue;
-      const hit = this.netHit(it);
+      const hit = it.road || this.netHit(it);
       if (!hit) continue;
       const k = it.kozut;
-      if (!k.utszam) { k.utszam = hit.utszam; n += 1; }
-      if (!k.km && hit.szelveny) { k.km = hit.szelveny; n += 1; }
+      const km = hit.szelveny;
+      if (!k.utszam && hit.utszam) { k.utszam = hit.utszam; n += 1; }
+      if (!k.km && km) { k.km = km; n += 1; }
+      if (!k.telepules && hit.telepules) { k.telepules = hit.telepules; n += 1; }
     }
     this.save();
     this.render();
@@ -7405,6 +7466,7 @@ class EscortMode {
     } else {
       bits.push(typeLabel(item.type));
     }
+    if (item.road) bits.push([item.road.utszam, item.road.szelveny].filter(Boolean).join(' '));
     if ((item.dims || []).length) bits.push(item.dims.join(' · '));
     if (item.phase === 'transport') bits.push('szállítás közben rögzítve');
     return bits.join(' · ');
@@ -9736,23 +9798,54 @@ const POSITION_MAX_AGE = 10000;
  * ha az valóban friss — különben új mérést kér. Így nem ragad be egy régi,
  * más helyszínen mért koordináta egy most készült fotóra.
  */
+/**
+ * Útszám és km szelvény a ponthoz — ha van betöltött úthálózati (NAP) adat.
+ *
+ * A közút nem GPS-koordinátában kéri a helyszíneket, hanem útszámban és
+ * szelvényben. Ezért minden rögzített pontra rögtön ráírjuk, melyik út
+ * melyik szelvénye — így nem utólag, fejből kell kikeresni. A 150 méteres
+ * határ azért kell, hogy egy telephelyen vagy letérőn készült felvételt ne
+ * húzzunk rá tévesen a legközelebbi országos útra.
+ */
+async function roadStamp(lat, lon) {
+  if (lat == null || lon == null) return null;
+  let net = null;
+  try { net = await roadNetwork(); } catch (_) { return null; }
+  if (!net) return null;
+  const hit = lookupRoad(net, lat, lon, 150);
+  if (!hit) return null;
+  return {
+    utszam: hit.utszam || '',
+    szelveny: hit.szelveny || '',
+    meters: hit.meters,
+    telepules: hit.telepules || '',
+    tavolsag: hit.distance,      // ennyire volt a ponttól az út
+  };
+}
+
+/** Az útszám + szelvény egy sorban („81 · 27 km + 387 m”). */
+const roadLabel = (r) => (r ? [r.utszam, r.szelveny].filter(Boolean).join(' · ') : '');
+
 async function positionNow() {
   const now = Date.now();
+  // minden rögzített helyszínre ráírjuk az útszámot és a szelvényt is
+  const withRoad = async (p) => ({ ...p, road: await roadStamp(p.lat, p.lon) });
+
   const cur = state.recording && recorder ? recorder.current : null;
   if (cur && cur.t && now - cur.t < POSITION_MAX_AGE) {
-    return { lat: cur.lat, lon: cur.lon, acc: cur.acc, heading: cur.heading, posAt: cur.t, posSource: 'gps' };
+    return withRoad({ lat: cur.lat, lon: cur.lon, acc: cur.acc, heading: cur.heading, posAt: cur.t, posSource: 'gps' });
   }
   // valóban új mérés (tárolt fix nem fogadható el)
   const fresh = await currentPosition(7000, 0);
   if (fresh) {
-    return { lat: fresh.lat, lon: fresh.lon, acc: fresh.acc, heading: fresh.heading, posAt: fresh.t || now, posSource: 'gps' };
+    return withRoad({ lat: fresh.lat, lon: fresh.lon, acc: fresh.acc, heading: fresh.heading, posAt: fresh.t || now, posSource: 'gps' });
   }
   // ha nincs friss jel, inkább egy megjelölt, tárolt mérés, mint semmi
   const cached = await currentPosition(3000, 60000);
   if (cached) {
-    return { lat: cached.lat, lon: cached.lon, acc: cached.acc, heading: cached.heading, posAt: cached.t || null, posSource: 'gps-cached' };
+    return withRoad({ lat: cached.lat, lon: cached.lon, acc: cached.acc, heading: cached.heading, posAt: cached.t || null, posSource: 'gps-cached' });
   }
-  return { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none' };
+  return { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none', road: null };
 }
 
 async function onPhotoSelected(e) {
@@ -9792,6 +9885,7 @@ async function onPhotoSelected(e) {
       let pos;
       if (exif && exif.lat != null) {
         pos = { lat: exif.lat, lon: exif.lon, acc: null, heading: null, posAt: exif.takenAt || null, posSource: 'exif' };
+        pos.road = await roadStamp(pos.lat, pos.lon);
       } else if (live) {
         pos = live;
       } else {
@@ -10327,6 +10421,8 @@ function itemCard(item, extraSub) {
   if (item.type === 'video' && item.videoDuration) sub.push(formatDuration(item.videoDuration));
   if (item.type === 'condition') sub.push(categoryLabel(item.category));
   if (item.type === 'jelzes') sub.push('kísérőautó jelzésképe');
+  // a közút útszámban és szelvényben gondolkodik — az áll elöl, ha tudjuk
+  if (item.road) sub.push('🛣️ ' + roadLabel(item.road));
   if (item.lat != null) sub.push(formatCoord(item.lat, item.lon));
   else sub.push('📍 nincs helyszín');
 
@@ -10414,6 +10510,7 @@ async function addPointAt(at) {
     posAt: Date.now(),
     posSource: 'manual',
     heading: null,
+    road: await roadStamp(at.lat, at.lon),
     title: res.title.trim(),
     note: res.note.trim(),
     dims: [],
@@ -10578,12 +10675,16 @@ async function editItemPosition(item) {
   }
 
   Object.assign(item, next);
+  // új hely — új szelvény
+  item.road = await roadStamp(item.lat, item.lon);
   await db.saveItem(item);
   markUnsaved();
   renderItems();
   drawTrack();
   closeViewer();
-  toast('Helyadat mentve.');
+  toast(item.road
+    ? `Helyadat mentve. Útszám, szelvény: ${roadLabel(item.road)}.`
+    : 'Helyadat mentve.');
 }
 
 async function openViewer(id) {
@@ -10622,6 +10723,11 @@ async function openViewer(id) {
     [item.importedAt ? 'Felvétel ideje' : 'Idő', formatDateTime(item.created)],
     ['Pozíció', formatCoord(item.lat, item.lon) + positionNote(item)],
   ];
+  if (item.road) {
+    rows.push(['Útszám, szelvény', roadLabel(item.road)
+      + (item.road.telepules ? ` · ${item.road.telepules}` : '')
+      + (item.road.tavolsag != null ? ` (az úttól ${item.road.tavolsag} m)` : '')]);
+  }
   if (item.heading != null) {
     const c = cardinal(item.heading);
     const src = { compass: 'iránytű', exif: 'a kép adatából', gps: 'haladási irány', manual: 'kézzel' }[item.headingSource];
@@ -10951,7 +11057,11 @@ async function openKozut() {
       await db.saveSession(state.session);
       for (const it of state.items) if (it.kozut) await db.saveItem(it);
       markUnsaved();
+      renderItems();
+      drawTrack();
     },
+    // betöltött vagy törölt úthálózat után újra kell olvasni
+    onNetwork: () => { roadNet = undefined; },
   });
 }
 

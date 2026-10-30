@@ -300,6 +300,8 @@ export function lookupRoad(net, lat, lon, maxDistance = 120) {
     utszam: net.roads[net.segRoad[best]],
     szelveny: formatSzelveny(meters),
     meters,
+    // a szakaszhoz tartozó település, ha az adat tartalmazza
+    telepules: (net.places && net.segPlace && net.places[net.segPlace[best]]) || '',
     distance: Math.round(bestD),
     // a pont rávetítve az útra — ebből lesz az úthoz illesztett útvonal
     lat: net.aLat[best] + (net.bLat[best] - net.aLat[best]) * bestT,

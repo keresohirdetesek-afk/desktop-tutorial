@@ -17,6 +17,11 @@ const MARK_ITEM = '#0a6ed1';
 const MARK_REJECTED = '#c2410c';
 const MARK_DRAWN = '#1a7f45';
 
+/** Útszám és szelvény egy táblázatcellába. */
+const roadCell = (it) => (it && it.road
+  ? [it.road.utszam, it.road.szelveny].filter(Boolean).join(' ')
+  : '—');
+
 const rEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
@@ -256,6 +261,8 @@ export async function buildReport(session, points, items, opts = {}, progress = 
     const facts = [
       ['Idő', dt(it.created)],
       ['Pozíció', formatCoord(it.lat, it.lon)],
+      it.road ? ['Útszám, szelvény', [it.road.utszam, it.road.szelveny].filter(Boolean).join(' · ')
+        + (it.road.telepules ? ' · ' + it.road.telepules : '')] : null,
       it.heading != null ? ['Kameairány', `${cardinal(it.heading).name} (${formatHeading(it.heading)})`] : null,
       it.type === 'condition' ? ['Kategória', categoryLabel(it.category)] : null,
       it.type === 'condition' ? ['Állapot', conditionLabel(it.condition)] : null,
@@ -317,12 +324,13 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   const signTable = signs.length ? `
 <h2>Táblajegyzék</h2>
 <table class="grid">
-  <thead><tr><th>Jel a térképen</th><th>Tábla</th><th>Állapot</th><th>Minősítés</th><th>Mért érték</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Tábla</th><th>Állapot</th><th>Minősítés</th><th>Mért érték</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
   <tbody>${signs.map((s) => {
     const idx = ordered.indexOf(s) + 1;
     return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td><td>${rEsc(s.what || 'jelzőtábla')}</td>`
       + `<td>${rEsc(conditionLabel(s.condition))}</td><td class="sev ${rEsc(s.severity || '')}">${rEsc(severityLabel(s.severity))}</td>`
-      + `<td>${rEsc((s.dims || []).join(', '))}</td><td>${rEsc(formatCoord(s.lat, s.lon))}</td></tr>`;
+      + `<td>${rEsc((s.dims || []).join(', '))}</td><td>${rEsc(roadCell(s))}</td>`
+      + `<td>${rEsc(formatCoord(s.lat, s.lon))}</td></tr>`;
   }).join('')}</tbody>
 </table>` : '';
 
@@ -332,7 +340,7 @@ export async function buildReport(session, points, items, opts = {}, progress = 
 <h2>A kísérőautó jelzésképei (${escortSigns.length})</h2>
 <p class="muted">Az útvonal mentén, a bejárás sorrendjében: hol melyik táblát kell kitenni a kísérőautóra.</p>
 <table class="grid signs">
-  <thead><tr><th>Jel a térképen</th><th>Jelzéskép</th><th>Mit kell kitenni</th><th>Miért</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Jelzéskép</th><th>Mit kell kitenni</th><th>Miért</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
   <tbody>${escortSigns.map((s2) => {
     const idx = ordered.indexOf(s2) + 1;
     const pics = itemSigns(s2).map((id) => signSvg(id, { size: 54, text: s2.signText })).join('');
@@ -340,6 +348,7 @@ export async function buildReport(session, points, items, opts = {}, progress = 
       + `<td class="signcell">${pics}</td>`
       + `<td>${rEsc(signsLabel(s2))}${s2.note ? `<br><span class="muted">${rEsc(s2.note)}</span>` : ''}</td>`
       + `<td>${rEsc(s2.reason || '—')}</td>`
+      + `<td>${rEsc(roadCell(s2))}</td>`
       + `<td>${rEsc(formatCoord(s2.lat, s2.lon))}</td></tr>`;
   }).join('')}</tbody>
 </table>` : '';
@@ -347,13 +356,13 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   const conditionTable = conditions.length ? `
 <h2>Rögzített állapotok</h2>
 <table class="grid">
-  <thead><tr><th>Jel a térképen</th><th>Mi</th><th>Megnevezés</th><th>Állapot</th><th>Minősítés</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Mi</th><th>Megnevezés</th><th>Állapot</th><th>Minősítés</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
   <tbody>${conditions.map((c) => {
     const idx = ordered.indexOf(c) + 1;
     return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td><td>${rEsc(categoryLabel(c.category))}</td>`
       + `<td>${rEsc(c.what || '')}</td><td>${rEsc(conditionLabel(c.condition))}</td>`
       + `<td class="sev ${rEsc(c.severity || '')}">${rEsc(severityLabel(c.severity))}</td>`
-      + `<td>${rEsc(formatCoord(c.lat, c.lon))}</td></tr>`;
+      + `<td>${rEsc(roadCell(c))}</td><td>${rEsc(formatCoord(c.lat, c.lon))}</td></tr>`;
   }).join('')}</tbody>
 </table>` : '';
 

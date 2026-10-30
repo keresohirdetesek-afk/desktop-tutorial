@@ -332,6 +332,34 @@ rögzített ponthoz kiírja, melyik út melyik szelvényénél van:
 - a feldolgozott hálózat a készüléken marad (egyszer kell betölteni, nem
   bejárásonként), és **hálózat nélkül is működik**.
 
+**A szelvény a rögzítés pillanatában rákerül a pontra.** Ha az úthálózati
+adat be van töltve, minden felvett helyszín — fotó, hangjegyzet, állapot,
+jelzéskép, térképen felvett pont — megkapja az **útszámot, a km szelvényt és
+a települést** abban a pillanatban, amikor rögzítjük. Nem kell utólag
+kikeresni, és nem vész el, ha később máshol nézzük meg:
+
+- a **listában** a sor alatt ott áll (`🛣️ 81 · 27 km + 387 m`);
+- az **adatlapon** külön sorban, a településsel és azzal, hogy hány méterre
+  volt a pont az úttól (ez mutatja, mennyire megbízható a hozzárendelés);
+- az **élő kísérésben** a figyelt pont mellett;
+- a **jegyzőkönyv** minden táblázatában külön *Útszám, szelvény* oszlopként,
+  és az elem adatlapján;
+- a **GPX** leírásában és a **GeoJSON** `utszam` / `szelveny` / `telepules`
+  tulajdonságaiban;
+- a **Közút Word-űrlapjain** a helyszínoszlopokban — kitöltés nélkül, mert
+  már a bejáráskor megvolt.
+
+Ha az úthálózat csak később kerül be (pl. a bejárás után otthon), a
+betöltéskor az app **visszamenőleg is ráírja** a szelvényt minden korábbi
+pontra, és kiírja, hány helyszínt pótolt. A hely utólagos javításakor
+(*📍 Hely javítása*) a szelvény újraszámolódik.
+
+> A hozzárendelés a ponthoz **legközelebbi** útszakaszra történik, legfeljebb
+> 150 méteren belül. Ami ennél messzebb van (telephely, gyárudvar, letérő),
+> az szándékosan szelvény nélkül marad, hogy ne kerüljön rá tévesen a
+> szomszédos országos út száma. Az adatlapon látszó „az úttól X m” érték
+> ennek az ellenőrzésére való.
+
 Minden dokumentum kártyáján látszik, **mi fog belekerülni** („Bekerül: 2 sor
 az elvégzendő munkákhoz · dátum”), és ott a saját **Kitöltés** gombja: egy
 koppintás, egy letöltés. (A böngészők az egymás után érkező letöltéseket

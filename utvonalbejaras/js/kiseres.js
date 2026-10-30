@@ -336,6 +336,7 @@ export class EscortMode {
     } else {
       bits.push(typeLabel(item.type));
     }
+    if (item.road) bits.push([item.road.utszam, item.road.szelveny].filter(Boolean).join(' '));
     if ((item.dims || []).length) bits.push(item.dims.join(' · '));
     if (item.phase === 'transport') bits.push('szállítás közben rögzítve');
     return bits.join(' · ');

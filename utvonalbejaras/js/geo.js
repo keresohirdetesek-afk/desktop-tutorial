@@ -813,6 +813,9 @@ export function toGeoJSON(session, points, items = [], opts = {}) {
         nev: i.title || typeLabel(i.type),
         tipus: i.type,
         megjegyzes: i.note || '',
+        utszam: (i.road && i.road.utszam) || '',
+        szelveny: (i.road && i.road.szelveny) || '',
+        telepules: (i.road && i.road.telepules) || '',
         meretek: (i.dims || []).join('; '),
         ido: new Date(i.created).toISOString(),
       },
@@ -1153,6 +1156,9 @@ export const severityLabel = (id) => byId(SEVERITIES, id);
 export function describeItem(i) {
   const parts = [];
   if (i.type === 'jelzes') parts.push(signsLabel(i));
+  if (i.road && (i.road.utszam || i.road.szelveny)) {
+    parts.push([i.road.utszam, i.road.szelveny].filter(Boolean).join(' '));
+  }
   if (i.reason) parts.push('Indok: ' + i.reason);
   if (i.note) parts.push(i.note);
   if (i.dims && i.dims.length) parts.push('Méretek: ' + i.dims.join('; '));
