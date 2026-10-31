@@ -358,7 +358,19 @@ pontra, és kiírja, hány helyszínt pótolt. A hely utólagos javításakor
 > 150 méteren belül. Ami ennél messzebb van (telephely, gyárudvar, letérő),
 > az szándékosan szelvény nélkül marad, hogy ne kerüljön rá tévesen a
 > szomszédos országos út száma. Az adatlapon látszó „az úttól X m” érték
-> ennek az ellenőrzésére való.
+> ennek az ellenőrzésére való. Ha a GPS-fix pontatlan volt (±100 m fölött),
+> az adatlap ezt is kiírja — ilyenkor a szomszédos út is lehet a
+> „legközelebbi”, érdemes ránézni.
+
+**Úthálózati adat nélkül is megadható kézzel.** Az elem adatlapján a
+**🛣️ Útszám, szelvény** gombbal beírható az útszám, a szelvény és a
+település — ez kell akkor, ha nincs (még) betöltve a NAP-állomány, és akkor
+is, ha a hálózatból kapott érték rosszul talált rá. A szelvény beírható
+`27+387`, `27,387` vagy `27 km + 387 m` alakban is, az app egységesíti. A
+kézzel megadott értéket az app nem írja felül: sem az úthálózat betöltése,
+sem a hely utólagos javítása nem bántja, és az adatlapon jelzi, hogy kézi
+adatról van szó. Innen megy tovább a jegyzőkönyvbe, az exportokba és a
+Közút-űrlapokba is.
 
 Minden dokumentum kártyáján látszik, **mi fog belekerülni** („Bekerül: 2 sor
 az elvégzendő munkákhoz · dátum”), és ott a saját **Kitöltés** gombja: egy

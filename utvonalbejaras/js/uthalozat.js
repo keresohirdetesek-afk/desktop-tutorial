@@ -62,14 +62,20 @@ export function guessFields(sample) {
   return out;
 }
 
-/** Szelvényérték méterben: „27+387”, „27,387 km”, 27387, 27.387 is lehet. */
-function toMeters(value) {
+/**
+ * Szelvényérték méterben: „27+387”, „27,387 km”, „27 km + 387 m”, 27387,
+ * 27.387 is lehet — az adatállományokban és kézi beírásnál is sokféle alak
+ * fordul elő.
+ */
+export function szelvenyMeters(value) {
   if (value == null || value === '') return null;
   if (typeof value === 'number') {
     // a 10 000-nél nagyobb szám biztosan méter, az alatta lévő inkább km
     return value > 10000 ? value : value * 1000;
   }
-  const s = String(value).trim().replace(/\s+/g, '');
+  // „27 km + 387 m” → „27+387”
+  const s = String(value).trim().toLowerCase()
+    .replace(/\s+/g, '').replace(/km/g, '').replace(/m$/, '');
   let m = /^(\d+)\+(\d+)$/.exec(s);                        // 27+387
   if (m) return Number(m[1]) * 1000 + Number(m[2]);
   m = /^(\d+)[.,](\d+)$/.exec(s);                          // 27,387 (km)
@@ -182,8 +188,8 @@ export async function buildNetwork(file, fields, progress = () => {}) {
     let ri = roadIndex.get(name);
     if (ri == null) { ri = roads.length; roads.push(name); roadIndex.set(name, ri); }
 
-    const kmFrom = map.kmKezd ? toMeters(props[map.kmKezd]) : null;
-    const kmTo = map.kmVeg ? toMeters(props[map.kmVeg]) : null;
+    const kmFrom = map.kmKezd ? szelvenyMeters(props[map.kmKezd]) : null;
+    const kmTo = map.kmVeg ? szelvenyMeters(props[map.kmVeg]) : null;
 
     // település (ha van ilyen mező): ide is lehet majd ugrani a térképen
     let pi = -1;

@@ -17,7 +17,9 @@ import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
 import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
 import { MapView } from './terkepnezet.js';
-import { pointOnRoad, findPlace, lookupRoad, routeBetween } from './uthalozat.js';
+import {
+  pointOnRoad, findPlace, lookupRoad, routeBetween, szelvenyMeters, formatSzelveny,
+} from './uthalozat.js';
 import { eovToWgs84 } from './eov.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
@@ -566,7 +568,7 @@ const POSITION_MAX_AGE = 10000;
  * határ azért kell, hogy egy telephelyen vagy letérőn készült felvételt ne
  * húzzunk rá tévesen a legközelebbi országos útra.
  */
-async function roadStamp(lat, lon) {
+async function roadStamp(lat, lon, acc = null) {
   if (lat == null || lon == null) return null;
   let net = null;
   try { net = await roadNetwork(); } catch (_) { return null; }
@@ -579,6 +581,9 @@ async function roadStamp(lat, lon) {
     meters: hit.meters,
     telepules: hit.telepules || '',
     tavolsag: hit.distance,      // ennyire volt a ponttól az út
+    // pontatlan GPS-fixnél a szomszédos út is „legközelebbi” lehet, ezért
+    // megjegyezzük, mekkora volt a hibahatár — az adatlap figyelmeztet
+    acc: acc == null ? null : Math.round(acc),
   };
 }
 
@@ -588,7 +593,7 @@ const roadLabel = (r) => (r ? [r.utszam, r.szelveny].filter(Boolean).join(' · '
 async function positionNow() {
   const now = Date.now();
   // minden rögzített helyszínre ráírjuk az útszámot és a szelvényt is
-  const withRoad = async (p) => ({ ...p, road: await roadStamp(p.lat, p.lon) });
+  const withRoad = async (p) => ({ ...p, road: await roadStamp(p.lat, p.lon, p.acc) });
 
   const cur = state.recording && recorder ? recorder.current : null;
   if (cur && cur.t && now - cur.t < POSITION_MAX_AGE) {
@@ -1434,8 +1439,10 @@ async function editItemPosition(item) {
   }
 
   Object.assign(item, next);
-  // új hely — új szelvény
-  item.road = await roadStamp(item.lat, item.lon);
+  // új hely — új szelvény; a kézzel beírt értéket viszont nem bántjuk
+  if (!item.road || item.road.forras !== 'kezi') {
+    item.road = await roadStamp(item.lat, item.lon);
+  }
   await db.saveItem(item);
   markUnsaved();
   renderItems();
@@ -1485,7 +1492,12 @@ async function openViewer(id) {
   if (item.road) {
     rows.push(['Útszám, szelvény', roadLabel(item.road)
       + (item.road.telepules ? ` · ${item.road.telepules}` : '')
-      + (item.road.tavolsag != null ? ` (az úttól ${item.road.tavolsag} m)` : '')]);
+      + (item.road.forras === 'kezi'
+        ? ' (kézzel megadva)'
+        : item.road.tavolsag != null ? ` (az úttól ${item.road.tavolsag} m)` : '')
+      + (item.road.forras !== 'kezi' && item.road.acc != null && item.road.acc > 100
+        ? ` — a GPS ±${item.road.acc} m volt, érdemes ellenőrizni`
+        : '')]);
   }
   if (item.heading != null) {
     const c = cardinal(item.heading);
@@ -1553,6 +1565,11 @@ async function openViewer(id) {
       onclick: () => download(item.video, `${slug(state.session?.name)}-${item.id.slice(0, 6)}.mp4`),
     }));
   }
+  actions.appendChild(el('button', {
+    class: 'btn ghost small',
+    text: item.road ? '🛣️ Útszám, szelvény' : '🛣️ Útszám, szelvény megadása',
+    onclick: () => editRoad(item),
+  }));
   actions.appendChild(el('button', { class: 'btn ghost small', text: '📝 Megjegyzés', onclick: () => editItemNote(item) }));
   actions.appendChild(el('button', {
     class: item.lat == null ? 'btn primary small' : 'btn ghost small',
@@ -1575,6 +1592,52 @@ function closeViewer() {
   $('#viewer').hidden = true;
   document.body.classList.remove('modal-open');
   viewerItem = null;
+}
+
+/**
+ * Útszám és szelvény kézzel.
+ *
+ * Úthálózati adat nélkül a GPS-ből ez nem jön ki — a közút viszont ebben
+ * kéri a helyszínt. Ezért be lehet írni (és a hálózatból kapott értéket is
+ * felül lehet bírálni, mert a pontatlan GPS-fix mellé rossz út kerülhet).
+ */
+async function editRoad(item) {
+  const r = item.road || {};
+  const res = await modal({
+    title: 'Útszám és szelvény',
+    text: 'Ha be van töltve az úthálózati (NAP) adat, ezt az app magától kitölti. '
+      + 'Enélkül — vagy ha rosszul talált rá — itt írható be kézzel.',
+    fields: [
+      { name: 'utszam', label: 'Útszám', value: r.utszam || '', placeholder: 'pl. 81, M35, 4812 j. út' },
+      {
+        name: 'szelveny', label: 'Km szelvény', value: r.szelveny || '',
+        placeholder: 'pl. 27+387', hint: 'Beírható „27+387”, „27,387” vagy „27 km + 387 m” alakban is.',
+      },
+      { name: 'telepules', label: 'Település', value: r.telepules || '' },
+    ],
+    okText: 'Mentés',
+  });
+  if (!res) return;
+
+  const utszam = res.utszam.trim();
+  const telepules = res.telepules.trim();
+  const meters = szelvenyMeters(res.szelveny);
+  const szelveny = meters == null ? res.szelveny.trim() : formatSzelveny(meters);
+
+  item.road = (utszam || szelveny || telepules)
+    ? { utszam, szelveny, meters, telepules, tavolsag: null, forras: 'kezi' }
+    : null;
+  // a Közút-űrlapok mezői ebből dolgoznak
+  if (item.kozut) {
+    item.kozut.utszam = utszam;
+    item.kozut.km = szelveny;
+    if (telepules) item.kozut.telepules = telepules;
+  }
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  closeViewer();
+  toast(item.road ? `Mentve: ${roadLabel(item.road)}.` : 'Útszám, szelvény törölve.');
 }
 
 async function editItemNote(item) {
