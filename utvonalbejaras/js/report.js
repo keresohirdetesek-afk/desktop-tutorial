@@ -9,12 +9,18 @@ import {
   formatDistance, formatDuration, formatCoord, formatHeading, cardinal,
   typeLabel, categoryLabel, conditionLabel, severityLabel, ATTRIBUTION_TEXT,
 } from './geo.js';
+import { signSvg, itemSigns, signsLabel, signName, preloadSigns } from './jelzes.js';
 import { tilesEnabled, setTilesEnabled, pendingTiles } from './tiles.js';
 
 /** A jegyzőkönyvben használt jelölésszínek — a táblázatok ugyanezt viselik. */
 const MARK_ITEM = '#0a6ed1';
 const MARK_REJECTED = '#c2410c';
 const MARK_DRAWN = '#1a7f45';
+
+/** Útszám és szelvény egy táblázatcellába. */
+const roadCell = (it) => (it && it.road
+  ? [it.road.utszam, it.road.szelveny].filter(Boolean).join(' ')
+  : '—');
 
 const rEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -185,6 +191,11 @@ export async function buildReport(session, points, items, opts = {}, progress = 
     if (m) labels.push({ lat: m.lat, lon: m.lon, text: 'B' + (i + 1), color: MARK_DRAWN, href: `#berajzolt-${i + 1}` });
   });
 
+  // a jelzésképek a térképre is rákerülnek: meg kell várni a betöltésüket,
+  // különben a kép a tábla helyén üresen marad
+  await preloadSigns(ordered.filter((i) => i.type === 'jelzes' && i.signText)
+    .flatMap((i) => itemSigns(i).map((id) => ({ id, text: i.signText }))));
+
   progress('Térképkép készítése… (alaptérkép letöltése)');
   let map = '';
   let mapTiles = { wanted: 0, drawn: 0 };
@@ -242,6 +253,7 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   ].filter(([, val]) => val);
 
   const signs = ordered.filter((i) => i.type === 'condition' && i.category === 'tabla');
+  const escortSigns = ordered.filter((i) => i.type === 'jelzes');
   const conditions = ordered.filter((i) => i.type === 'condition' && i.category !== 'tabla');
 
   const itemBlocks = ordered.map((it, idx) => {
@@ -249,10 +261,14 @@ export async function buildReport(session, points, items, opts = {}, progress = 
     const facts = [
       ['Idő', dt(it.created)],
       ['Pozíció', formatCoord(it.lat, it.lon)],
+      it.road ? ['Útszám, szelvény', [it.road.utszam, it.road.szelveny].filter(Boolean).join(' · ')
+        + (it.road.telepules ? ' · ' + it.road.telepules : '')] : null,
       it.heading != null ? ['Kameairány', `${cardinal(it.heading).name} (${formatHeading(it.heading)})`] : null,
       it.type === 'condition' ? ['Kategória', categoryLabel(it.category)] : null,
       it.type === 'condition' ? ['Állapot', conditionLabel(it.condition)] : null,
       it.type === 'condition' ? ['Minősítés', severityLabel(it.severity)] : null,
+      it.type === 'jelzes' ? ['Jelzésképek', itemSigns(it).map((id) => signName(id, it.signText)).join(' + ')] : null,
+      it.type === 'jelzes' && it.reason ? ['Miért kell', it.reason] : null,
       (it.dims || []).length ? ['Mért értékek', it.dims.join(' · ')] : null,
       (it.texts || []).length ? ['Feliratok a képen', it.texts.join(' · ')] : null,
       it.note ? ['Megjegyzés', it.note] : null,
@@ -273,8 +289,14 @@ export async function buildReport(session, points, items, opts = {}, progress = 
       <span class="zoom-x">✕ Bezárás</span>
     </figure>` : '';
 
+    // a kísérőautó táblája magával a táblaképpel
+    const signPics = it.type === 'jelzes'
+      ? `<div class="signpics">${itemSigns(it).map((id) => signSvg(id, { size: 104, text: it.signText })).join('')}</div>`
+      : '';
+
     // ha nincs felvétel, a helyszínrajz ne szoruljon üres oszlop mellé
     const shots = [
+      signPics,
       photo,
       m.video ? `<video class="shot" controls preload="none"${m.img ? ` poster="${m.img}"` : ''} src="${m.video}"></video>` : '',
       !include.video && it.video ? '<p class="muted">Videófelvétel készült — a riportból helytakarékosságból kimaradt.</p>' : '',
@@ -302,25 +324,45 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   const signTable = signs.length ? `
 <h2>Táblajegyzék</h2>
 <table class="grid">
-  <thead><tr><th>Jel a térképen</th><th>Tábla</th><th>Állapot</th><th>Minősítés</th><th>Mért érték</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Tábla</th><th>Állapot</th><th>Minősítés</th><th>Mért érték</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
   <tbody>${signs.map((s) => {
     const idx = ordered.indexOf(s) + 1;
     return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td><td>${rEsc(s.what || 'jelzőtábla')}</td>`
       + `<td>${rEsc(conditionLabel(s.condition))}</td><td class="sev ${rEsc(s.severity || '')}">${rEsc(severityLabel(s.severity))}</td>`
-      + `<td>${rEsc((s.dims || []).join(', '))}</td><td>${rEsc(formatCoord(s.lat, s.lon))}</td></tr>`;
+      + `<td>${rEsc((s.dims || []).join(', '))}</td><td>${rEsc(roadCell(s))}</td>`
+      + `<td>${rEsc(formatCoord(s.lat, s.lon))}</td></tr>`;
+  }).join('')}</tbody>
+</table>` : '';
+
+  // A kísérőautó jelzésképei: ezt a szállítás napján a kísérő is használja,
+  // ezért a sorrend az útvonal menti sorrend, és a tábla képe is látszik.
+  const escortSignTable = escortSigns.length ? `
+<h2>A kísérőautó jelzésképei (${escortSigns.length})</h2>
+<p class="muted">Az útvonal mentén, a bejárás sorrendjében: hol melyik táblát kell kitenni a kísérőautóra.</p>
+<table class="grid signs">
+  <thead><tr><th>Jel a térképen</th><th>Jelzéskép</th><th>Mit kell kitenni</th><th>Miért</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
+  <tbody>${escortSigns.map((s2) => {
+    const idx = ordered.indexOf(s2) + 1;
+    const pics = itemSigns(s2).map((id) => signSvg(id, { size: 54, text: s2.signText })).join('');
+    return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td>`
+      + `<td class="signcell">${pics}</td>`
+      + `<td>${rEsc(signsLabel(s2))}${s2.note ? `<br><span class="muted">${rEsc(s2.note)}</span>` : ''}</td>`
+      + `<td>${rEsc(s2.reason || '—')}</td>`
+      + `<td>${rEsc(roadCell(s2))}</td>`
+      + `<td>${rEsc(formatCoord(s2.lat, s2.lon))}</td></tr>`;
   }).join('')}</tbody>
 </table>` : '';
 
   const conditionTable = conditions.length ? `
 <h2>Rögzített állapotok</h2>
 <table class="grid">
-  <thead><tr><th>Jel a térképen</th><th>Mi</th><th>Megnevezés</th><th>Állapot</th><th>Minősítés</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Mi</th><th>Megnevezés</th><th>Állapot</th><th>Minősítés</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
   <tbody>${conditions.map((c) => {
     const idx = ordered.indexOf(c) + 1;
     return `<tr><td><a class="mark elem" href="#elem-${idx}">${idx}</a></td><td>${rEsc(categoryLabel(c.category))}</td>`
       + `<td>${rEsc(c.what || '')}</td><td>${rEsc(conditionLabel(c.condition))}</td>`
       + `<td class="sev ${rEsc(c.severity || '')}">${rEsc(severityLabel(c.severity))}</td>`
-      + `<td>${rEsc(formatCoord(c.lat, c.lon))}</td></tr>`;
+      + `<td>${rEsc(roadCell(c))}</td><td>${rEsc(formatCoord(c.lat, c.lon))}</td></tr>`;
   }).join('')}</tbody>
 </table>` : '';
 
@@ -413,6 +455,10 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   /* elemblokk: bal oldalon a felvételek, jobb oldalon a helyszínrajz */
   .itembody { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; margin-bottom:8px; }
   .shots { flex:1 1 300px; min-width:0; }
+  .signpics { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:8px; }
+  .signcell { white-space:nowrap; }
+  .signcell svg { vertical-align:middle; margin-right:4px; }
+  .grid.signs td { vertical-align:middle; }
   .placemap { flex:0 0 260px; margin:0; }
   .placemap img { width:100%; border:1px solid var(--line); border-radius:6px; display:block; }
   .placemap figcaption { font-size:12px; color:var(--muted); margin-top:4px; }
@@ -503,6 +549,7 @@ export async function buildReport(session, points, items, opts = {}, progress = 
      újra a jegyzőkönyvet.</p>` : mapTiles.drawn < mapTiles.wanted ? `<p class="legend warnbox">Az
      alaptérkép egy része nem töltődött be (${mapTiles.drawn}/${mapTiles.wanted} csempe).</p>` : ''}` : ''}
 
+  ${escortSignTable}
   ${signTable}
   ${conditionTable}
   ${rejectedBlock}

@@ -3,17 +3,22 @@
 import * as db from './db.js';
 import {
   TrackRecorder, currentPosition, renderTrack, lengthByStatus, isRejected,
-  rejectedSections, drawnLength, detectGap, formatDistance, formatDuration,
+  rejectedSections, drawnLength, detectGap, formatDistance, formatDuration, rebaseView,
   formatCoord, formatHeading, cardinal, toGPX, toGeoJSON, typeLabel, describeItem,
   CONDITION_CATEGORIES, CONDITION_STATES, SEVERITIES, parseDims,
   categoryLabel, conditionLabel, severityLabel,
 } from './geo.js';
+import {
+  SIGNS, signSvg, signName, signsLabel, itemSigns, signById, preloadSigns,
+} from './jelzes.js';
 import { startCompass, compassHeading, compassState } from './compass.js';
 import { AudioRecorder, shrinkImage, makeThumb, readExif, videoPoster } from './media.js';
 import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
 import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
 import { MapView } from './terkepnezet.js';
+import { pointOnRoad, findPlace, lookupRoad, routeBetween } from './uthalozat.js';
+import { eovToWgs84 } from './eov.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs } from './kozut.js';
@@ -52,6 +57,8 @@ const MEDIA_KEYS = ['photo', 'flat', 'thumb', 'audio', 'video'];
 
 let trackHit = null;
 let trackView = null;           // nagyítás/mozgatás a bejárás térképén
+let trackLastFit = null;        // az előző térképillesztés (nézet megtartásához)
+let roadNet;                    // betöltött úthálózati adat (NAP), ha van
 let firstPointAfterStart = false;
 
 /* ------------------------------------------------------------ segédek */
@@ -328,10 +335,19 @@ function updateStats() {
 function drawTrack() {
   const canvas = $('#track-canvas');
   if (!canvas.clientWidth) return;
-  trackHit = renderTrack(canvas, state.points, state.items, {
+  const prevFit = trackLastFit;
+  const opts = {
     drawn: (state.session && state.session.drawn) || [],
     view: trackView ? trackView.view : null,
-  });
+  };
+  trackHit = renderTrack(canvas, state.points, state.items, opts);
+  // új pont felvételekor ne ugorjon el a nagyított térkép
+  if (prevFit && trackView && trackHit.fit
+      && rebaseView(trackView.view, prevFit, trackHit.fit)) {
+    trackView.changed();
+    trackHit = renderTrack(canvas, state.points, state.items, opts);
+  }
+  trackLastFit = trackHit.fit;
   if (trackView) $('#track-fit').hidden = !trackView.isZoomed();
   // a csempék később futnak be; amíg ez a képernyő aktív, újrarajzoljuk
   onTileLoad(() => { if (state.screen === 'session') drawTrack(); });
@@ -432,9 +448,10 @@ async function stopRecording(silent = false) {
  * jóváhagyandó útvonal, ezért szakaszonként elvethető vagy törölhető.
  */
 async function openTrackEditor() {
-  if (state.points.length < 2) {
-    toast('Ehhez a bejáráshoz még nincs elég rögzített nyomvonalpont.', 'error');
-    return;
+  // GPS-pont nélkül is megnyitható: így otthon, utólag is meg lehet rajzolni
+  // az útvonalat a térképen (ld. „Hiányzó szakasz berajzolása”)
+  if (!state.points.length && !(state.session.drawn || []).length) {
+    toast('Nincs rögzített nyomvonal — nagyítson rá a helyszínre, és rajzolja meg az útvonalat.');
   }
   if (state.recording) {
     const ok = await modal({
@@ -447,10 +464,27 @@ async function openTrackEditor() {
   }
 
   if (!trackEditor) trackEditor = new TrackEditor($('#trackedit'));
+  await roadNetwork();   // hogy az „úthoz illesztés” rögtön elérhető legyen
   const changed = await trackEditor.open({
     points: state.points,
     items: state.items,
     drawn: state.session.drawn || [],
+    onAddPoint: (at) => addPointAt(at),
+    onOpenItem: (id) => { trackEditor.close(); openViewer(id); },
+    resolvePlace: (text) => resolvePlace(text),
+    // úthálózati adat (NAP): a rajzolt pontok az útra kerülnek, és a vonal
+    // az utat követi két pont között
+    road: {
+      ready: () => !!roadNet,
+      snap: async (pt) => {
+        const net = await roadNetwork();
+        return net ? lookupRoad(net, pt.lat, pt.lon, 80) : null;
+      },
+      route: async (a, b) => {
+        const net = await roadNetwork();
+        return net ? routeBetween(net, a, b) : null;
+      },
+    },
     onApply: async ({ updated, deleted, drawn }) => {
       if (updated) await db.updatePoints(updated);
       if (deleted) await db.deletePoints(deleted);
@@ -523,23 +557,54 @@ const POSITION_MAX_AGE = 10000;
  * ha az valóban friss — különben új mérést kér. Így nem ragad be egy régi,
  * más helyszínen mért koordináta egy most készült fotóra.
  */
+/**
+ * Útszám és km szelvény a ponthoz — ha van betöltött úthálózati (NAP) adat.
+ *
+ * A közút nem GPS-koordinátában kéri a helyszíneket, hanem útszámban és
+ * szelvényben. Ezért minden rögzített pontra rögtön ráírjuk, melyik út
+ * melyik szelvénye — így nem utólag, fejből kell kikeresni. A 150 méteres
+ * határ azért kell, hogy egy telephelyen vagy letérőn készült felvételt ne
+ * húzzunk rá tévesen a legközelebbi országos útra.
+ */
+async function roadStamp(lat, lon) {
+  if (lat == null || lon == null) return null;
+  let net = null;
+  try { net = await roadNetwork(); } catch (_) { return null; }
+  if (!net) return null;
+  const hit = lookupRoad(net, lat, lon, 150);
+  if (!hit) return null;
+  return {
+    utszam: hit.utszam || '',
+    szelveny: hit.szelveny || '',
+    meters: hit.meters,
+    telepules: hit.telepules || '',
+    tavolsag: hit.distance,      // ennyire volt a ponttól az út
+  };
+}
+
+/** Az útszám + szelvény egy sorban („81 · 27 km + 387 m”). */
+const roadLabel = (r) => (r ? [r.utszam, r.szelveny].filter(Boolean).join(' · ') : '');
+
 async function positionNow() {
   const now = Date.now();
+  // minden rögzített helyszínre ráírjuk az útszámot és a szelvényt is
+  const withRoad = async (p) => ({ ...p, road: await roadStamp(p.lat, p.lon) });
+
   const cur = state.recording && recorder ? recorder.current : null;
   if (cur && cur.t && now - cur.t < POSITION_MAX_AGE) {
-    return { lat: cur.lat, lon: cur.lon, acc: cur.acc, heading: cur.heading, posAt: cur.t, posSource: 'gps' };
+    return withRoad({ lat: cur.lat, lon: cur.lon, acc: cur.acc, heading: cur.heading, posAt: cur.t, posSource: 'gps' });
   }
   // valóban új mérés (tárolt fix nem fogadható el)
   const fresh = await currentPosition(7000, 0);
   if (fresh) {
-    return { lat: fresh.lat, lon: fresh.lon, acc: fresh.acc, heading: fresh.heading, posAt: fresh.t || now, posSource: 'gps' };
+    return withRoad({ lat: fresh.lat, lon: fresh.lon, acc: fresh.acc, heading: fresh.heading, posAt: fresh.t || now, posSource: 'gps' });
   }
   // ha nincs friss jel, inkább egy megjelölt, tárolt mérés, mint semmi
   const cached = await currentPosition(3000, 60000);
   if (cached) {
-    return { lat: cached.lat, lon: cached.lon, acc: cached.acc, heading: cached.heading, posAt: cached.t || null, posSource: 'gps-cached' };
+    return withRoad({ lat: cached.lat, lon: cached.lon, acc: cached.acc, heading: cached.heading, posAt: cached.t || null, posSource: 'gps-cached' });
   }
-  return { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none' };
+  return { lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none', road: null };
 }
 
 async function onPhotoSelected(e) {
@@ -579,6 +644,7 @@ async function onPhotoSelected(e) {
       let pos;
       if (exif && exif.lat != null) {
         pos = { lat: exif.lat, lon: exif.lon, acc: null, heading: null, posAt: exif.takenAt || null, posSource: 'exif' };
+        pos.road = await roadStamp(pos.lat, pos.lon);
       } else if (live) {
         pos = live;
       } else {
@@ -636,8 +702,8 @@ async function onPhotoSelected(e) {
   if (noPos) {
     toast(
       noPos === files.length
-        ? 'Nincs helyadat a fotó(k)hoz — a részleteknél kézzel megadható.'
-        : `${noPos} fotóhoz nincs helyadat — a részleteknél kézzel megadható.`,
+        ? 'Nincs helyadat a fotó(k)hoz — koppintson az elemre, és jelölje ki a térképen.'
+        : `${noPos} fotóhoz nincs helyadat — koppintson az elemre, és jelölje ki a térképen.`,
       'error'
     );
   }
@@ -888,6 +954,108 @@ async function editCondition(item) {
   toast('Mentve.');
 }
 
+/* --------------------------------------- kísérőautó jelzésképei
+
+A kísérőautó táblái nem a bejárás „állapota”, hanem utasítás a szállítás
+napjára: innentől előzni tilos, itt 30-cal lehet menni. Ezért külön
+elemtípus — így a jegyzőkönyvben saját jegyzéke van, az élő kísérés pedig
+a helyszín előtt kiteszi a képernyőre, hogy mit kell kirakni.      */
+
+/** A választható táblák lapkái a modál képes választójához. */
+const signOptions = () => SIGNS.map((s) => ({
+  value: s.id,
+  label: s.rovid,
+  html: signSvg(s.id, { size: 48, text: s.szoveges ? '?' : null }),
+}));
+
+const signFields = (v = {}) => [
+  {
+    name: 'signs', label: 'Melyik jelzésképet kell kitenni?', type: 'tiles', multi: true,
+    value: itemSigns(v).join(','),
+    options: signOptions(),
+    hint: 'Többet is kijelölhet, ha egyszerre két táblát kell kitenni (pl. előzni tilos + 30).',
+  },
+  {
+    name: 'signText', label: 'Egyéb jelzéskép szövege', value: v.signText || '',
+    placeholder: 'csak az „Egyéb” lapkához',
+  },
+  { name: 'reason', label: 'Miért kell', value: v.reason || '', placeholder: 'pl. szűk híd, iskola, útszűkület' },
+  { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2, value: v.note || '' },
+];
+
+/** A bejegyzés adatai a választott táblákból. */
+function signValues(res) {
+  const ids = String(res.signs || '').split(',').filter((id) => signById(id));
+  const text = res.signText.trim();
+  return {
+    signs: ids,
+    signText: text,
+    reason: res.reason.trim(),
+    note: res.note.trim(),
+    title: ids.length
+      ? ids.map((id) => (signById(id).szoveges ? signName(id, text) : signById(id).nev)).join(' + ')
+      : 'Jelzéskép',
+  };
+}
+
+async function addSign() {
+  const res = await modal({
+    title: 'Jelzéskép a kísérőautóra',
+    text: 'Itt kell kitenni a kísérőautó táblájára. A szállítás napján az élő '
+      + 'kísérés ezt a helyszín előtt jelzi, és bekerül a jegyzőkönyv jelzéskép-jegyzékébe.',
+    fields: signFields(),
+    okText: 'Mentés',
+  });
+  if (!res) return;
+  const vals = signValues(res);
+  if (!vals.signs.length) {
+    toast('Jelöljön ki legalább egy táblát.', 'error');
+    return;
+  }
+
+  const pos = await positionNow();
+  const heading = compassHeading();
+  const item = {
+    id: db.uid(),
+    sessionId: state.session.id,
+    type: 'jelzes',
+    phase: capturePhase,
+    created: Date.now(),
+    ...pos,
+    heading,
+    headingSource: heading == null ? null : 'compass',
+    dims: [],
+    texts: [],
+    ops: [],
+    ...vals,
+  };
+  await db.saveItem(item);
+  state.items.push(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  escortRefresh();
+  toast(`Jelzéskép rögzítve: ${signsLabel(item)}.`);
+}
+
+async function editSign(item) {
+  const res = await modal({ title: 'Jelzéskép szerkesztése', fields: signFields(item) });
+  if (!res) return;
+  const vals = signValues(res);
+  if (!vals.signs.length) {
+    toast('Jelöljön ki legalább egy táblát.', 'error');
+    return;
+  }
+  Object.assign(item, vals);
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  escortRefresh();
+  closeViewer();
+  toast('Mentve.');
+}
+
 /** Fotó csatolása egy meglévő bejegyzéshez (nem külön elemként). */
 let attachTargetId = null;
 function attachPhotoTo(itemId) {
@@ -993,20 +1161,29 @@ function renderItems() {
 }
 
 function itemCard(item, extraSub) {
-  const icons = { audio: '🎙️', note: '📝', video: '🎬', condition: '⚠️' };
+  const icons = { audio: '🎙️', note: '📝', video: '🎬', condition: '⚠️', jelzes: '🚧' };
+  const signIds = item.type === 'jelzes' ? itemSigns(item) : [];
   const thumb = item.thumb
     ? el('div', { class: 'thumb-wrap' }, [
         el('img', { class: 'thumb', src: objectUrl(item.thumb), alt: '' }),
         item.type === 'video' ? el('span', { class: 'thumb-badge', text: '▶' }) : null,
       ])
-    : el('div', { class: 'thumb placeholder', text: icons[item.type] || '📝' });
+    : signIds.length
+      // a táblát a listában is látni kell: így egy pillantásra végig lehet
+      // futni, mit kell hol kitenni
+      ? el('div', { class: 'thumb sign', html: signSvg(signIds[0], { size: 44, text: item.signText }) })
+      : el('div', { class: 'thumb placeholder', text: icons[item.type] || '📝' });
 
   const sub = [];
   sub.push(formatTime(item.created));
   if (item.type === 'audio' && item.audioDuration) sub.push(formatDuration(item.audioDuration));
   if (item.type === 'video' && item.videoDuration) sub.push(formatDuration(item.videoDuration));
   if (item.type === 'condition') sub.push(categoryLabel(item.category));
+  if (item.type === 'jelzes') sub.push('kísérőautó jelzésképe');
+  // a közút útszámban és szelvényben gondolkodik — az áll elöl, ha tudjuk
+  if (item.road) sub.push('🛣️ ' + roadLabel(item.road));
   if (item.lat != null) sub.push(formatCoord(item.lat, item.lon));
+  else sub.push('📍 nincs helyszín');
 
   const tags = [];
   for (const d of item.dims || []) tags.push(el('span', { class: 'tag dim', text: '↔ ' + d }));
@@ -1016,6 +1193,8 @@ function itemCard(item, extraSub) {
       text: severityLabel(item.severity) + ' · ' + conditionLabel(item.condition),
     }));
   }
+  if (signIds.length > 1) tags.push(el('span', { class: 'tag', text: '🚧 ' + signsLabel(item) }));
+  if (item.type === 'jelzes' && item.reason) tags.push(el('span', { class: 'tag', text: 'Indok: ' + item.reason }));
   if (item.heading != null) tags.push(el('span', { class: 'tag', text: '🧭 ' + formatHeading(item.heading) }));
   if (item.audio && item.type === 'photo') tags.push(el('span', { class: 'tag', text: '🎙️ hang' }));
   if ((item.ops || []).some((o) => o.k === 'dir')) tags.push(el('span', { class: 'tag', text: '⇨ útirány' }));
@@ -1054,6 +1233,156 @@ function positionNote(item) {
   return parts.length ? ` (${parts.join(', ')})` : '';
 }
 
+/**
+ * Új pont felvétele a térképre — ugyanaz, mintha a terepen rögzítenénk,
+ * csak a helyet koppintással adjuk meg. Utána a szokásos módon tehető hozzá
+ * fotó, hang, jegyzet.
+ */
+async function addPointAt(at) {
+  const res = await modal({
+    title: 'Új pont a térképen',
+    text: formatCoord(at.lat, at.lon) + ' — mit vegyünk fel ide?',
+    fields: [
+      { name: 'title', label: 'Megnevezés', value: '' },
+      {
+        name: 'type', label: 'Típus', type: 'select', value: 'note',
+        options: [
+          { value: 'note', label: 'Jegyzet / útpont' },
+          { value: 'condition', label: 'Állapot, tábla' },
+          { value: 'jelzes', label: 'Jelzéskép a kísérőautóra' },
+        ],
+      },
+      { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2, value: '' },
+    ],
+    okText: 'Felvétel',
+  });
+  if (!res) return;
+
+  const base = {
+    id: db.uid(),
+    sessionId: state.session.id,
+    phase: capturePhase,
+    created: Date.now(),
+    lat: at.lat,
+    lon: at.lon,
+    acc: null,
+    posAt: Date.now(),
+    posSource: 'manual',
+    heading: null,
+    road: await roadStamp(at.lat, at.lon),
+    title: res.title.trim(),
+    note: res.note.trim(),
+    dims: [],
+    texts: [],
+    ops: [],
+  };
+  let item;
+  if (res.type === 'jelzes') {
+    // a tábla kiválasztása külön lépés: itt a képes választó kell
+    const sgn = await modal({
+      title: 'Jelzéskép a kísérőautóra',
+      text: formatCoord(at.lat, at.lon) + ' — innentől ezt kell kitenni.',
+      fields: signFields(),
+      okText: 'Felvétel',
+    });
+    if (!sgn) return;
+    const vals = signValues(sgn);
+    if (!vals.signs.length) {
+      toast('Jelöljön ki legalább egy táblát.', 'error');
+      return;
+    }
+    item = { ...base, type: 'jelzes', ...vals };
+    if (res.title.trim()) item.title = res.title.trim();
+    if (res.note.trim()) item.note = [res.note.trim(), vals.note].filter(Boolean).join(' — ');
+  } else if (res.type === 'condition') {
+    item = { ...base, type: 'condition', category: 'egyeb', condition: 'ep', severity: 'figyelendo', what: res.title.trim() };
+  } else {
+    item = { ...base, type: 'note' };
+  }
+
+  await db.saveItem(item);
+  state.items.push(item);
+  state.items.sort((a, b) => a.created - b.created);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  // a szerkesztő nyitva marad: így egymás után több pont is felvehető
+  if (trackEditor) trackEditor.draw();
+  toast(item.type === 'jelzes'
+    ? `Jelzéskép felvéve: ${signsLabel(item)}.`
+    : 'Pont felvéve. Fotót, hangot a listából, az elem adatlapján adhat hozzá.');
+}
+
+/**
+ * „Ugrás helyre”: koordináta (GPS vagy EOV), útszám + szelvény, vagy
+ * település — az utóbbi kettőhöz a betöltött úthálózati adat kell.
+ */
+async function resolvePlace(text) {
+  const t = String(text).trim();
+
+  // 47.4979, 19.0402  (vagy pontosvesszővel/szóközzel)
+  const geo = /^(-?\d{1,2}[.,]\d+)\s*[,;\s]\s*(-?\d{1,3}[.,]\d+)$/.exec(t);
+  if (geo) {
+    const lat = Number(geo[1].replace(',', '.'));
+    const lon = Number(geo[2].replace(',', '.'));
+    if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+      return { lat, lon, cim: formatCoord(lat, lon) };
+    }
+  }
+
+  // EOV: 650000, 240000
+  const eov = /^(\d{5,7}(?:[.,]\d+)?)\s*[,;\s]\s*(\d{5,7}(?:[.,]\d+)?)$/.exec(t);
+  if (eov) {
+    const y = Number(eov[1].replace(',', '.'));
+    const x = Number(eov[2].replace(',', '.'));
+    const p = eovToWgs84(y, x);
+    if (isFinite(p.lat) && isFinite(p.lon)) return { ...p, cim: `EOV ${y}, ${x}` };
+  }
+
+  const net = await roadNetwork();
+
+  // útszám + szelvény: „81 27+387”, „M35 12+345”, „81 27”
+  const road = /^([A-Za-z]?\d{1,5}[A-Za-z]?)\s+(\d{1,3})(?:\s*\+\s*(\d{1,3}))?$/.exec(t);
+  if (road && net) {
+    const meters = Number(road[2]) * 1000 + Number(road[3] || 0);
+    const hit = pointOnRoad(net, road[1], meters);
+    if (hit) return hit;
+  }
+
+  // település a hálózatból
+  if (net) {
+    const place = findPlace(net, t);
+    if (place) return place;
+  }
+  return null;
+}
+
+/** A betöltött úthálózati adat (ha van) — a helykereséshez. */
+async function roadNetwork() {
+  if (roadNet !== undefined) return roadNet;
+  try {
+    roadNet = (await db.getNetwork()) || null;
+  } catch (_) {
+    roadNet = null;
+  }
+  return roadNet;
+}
+
+/**
+ * Helyszín kijelölése a térképen. GPS nélkül, utólag ez az egyetlen mód
+ * megadni, hol készült egy fotó — a térképre koppintva.
+ */
+async function pickOnMap(item) {
+  if (!trackEditor) trackEditor = new TrackEditor($('#trackedit'));
+  closeViewer();
+  return trackEditor.open({
+    points: state.points,
+    items: state.items.filter((i) => i.lat != null && i !== item),
+    drawn: (state.session && state.session.drawn) || [],
+    pick: { lat: item.lat, lon: item.lon, cim: item.title || typeLabel(item.type) },
+  });
+}
+
 /** Helyadat pótlása vagy javítása: nyomvonalról, friss méréssel, vagy kézzel. */
 async function editItemPosition(item) {
   const res = await modal({
@@ -1068,6 +1397,7 @@ async function editItemPosition(item) {
         name: 'mode', label: 'Vagy vegye át innen', type: 'select', value: '',
         options: [
           { value: '', label: '— a fenti koordinátát használom —' },
+          { value: 'map', label: 'Kijelölés a térképen' },
           { value: 'now', label: 'Friss GPS-mérés most' },
           { value: 'track', label: 'A nyomvonal időben legközelebbi pontja' },
         ],
@@ -1078,7 +1408,11 @@ async function editItemPosition(item) {
   if (!res) return;
 
   let next = null;
-  if (res.mode === 'now') {
+  if (res.mode === 'map') {
+    const picked = await pickOnMap(item);
+    if (!picked) return;
+    next = { lat: picked.lat, lon: picked.lon, acc: null, posAt: Date.now(), posSource: 'manual' };
+  } else if (res.mode === 'now') {
     const p = await positionNow();
     if (p.lat == null) { toast('Nem sikerült helyadatot mérni.', 'error'); return; }
     next = p;
@@ -1100,12 +1434,16 @@ async function editItemPosition(item) {
   }
 
   Object.assign(item, next);
+  // új hely — új szelvény
+  item.road = await roadStamp(item.lat, item.lon);
   await db.saveItem(item);
   markUnsaved();
   renderItems();
   drawTrack();
   closeViewer();
-  toast('Helyadat mentve.');
+  toast(item.road
+    ? `Helyadat mentve. Útszám, szelvény: ${roadLabel(item.road)}.`
+    : 'Helyadat mentve.');
 }
 
 async function openViewer(id) {
@@ -1132,12 +1470,23 @@ async function openViewer(id) {
   if (item.audio) {
     body.appendChild(el('audio', { class: 'player', controls: true, src: objectUrl(item.audio) }));
   }
+  if (item.type === 'jelzes') {
+    body.appendChild(el('div', {
+      class: 'sign-big',
+      html: itemSigns(item).map((id) => signSvg(id, { size: 96, text: item.signText })).join(''),
+    }));
+  }
 
   const info = el('div', { class: 'meta-card' });
   const rows = [
     [item.importedAt ? 'Felvétel ideje' : 'Idő', formatDateTime(item.created)],
     ['Pozíció', formatCoord(item.lat, item.lon) + positionNote(item)],
   ];
+  if (item.road) {
+    rows.push(['Útszám, szelvény', roadLabel(item.road)
+      + (item.road.telepules ? ` · ${item.road.telepules}` : '')
+      + (item.road.tavolsag != null ? ` (az úttól ${item.road.tavolsag} m)` : '')]);
+  }
   if (item.heading != null) {
     const c = cardinal(item.heading);
     const src = { compass: 'iránytű', exif: 'a kép adatából', gps: 'haladási irány', manual: 'kézzel' }[item.headingSource];
@@ -1148,6 +1497,10 @@ async function openViewer(id) {
     if (item.what) rows.push(['Megnevezés', item.what]);
     rows.push(['Állapot', conditionLabel(item.condition)]);
     rows.push(['Minősítés', severityLabel(item.severity)]);
+  }
+  if (item.type === 'jelzes') {
+    rows.push(['Jelzésképek', itemSigns(item).map((id) => signName(id, item.signText)).join(' + ') || '—']);
+    if (item.reason) rows.push(['Miért kell', item.reason]);
   }
   if (item.type === 'video' && item.video) {
     rows.push(['Videó', `${formatDuration(item.videoDuration || 0)} · ${(item.video.size / 1048576).toFixed(1).replace('.', ',')} MB`]);
@@ -1181,6 +1534,11 @@ async function openViewer(id) {
   if (item.type === 'condition') {
     actions.appendChild(el('button', {
       class: 'btn primary small', text: '⚠️ Állapot szerkesztése', onclick: () => editCondition(item),
+    }));
+  }
+  if (item.type === 'jelzes') {
+    actions.appendChild(el('button', {
+      class: 'btn primary small', text: '🚧 Jelzéskép szerkesztése', onclick: () => editSign(item),
     }));
   }
   if (!item.photo && !item.flat && item.type !== 'video') {
@@ -1458,7 +1816,11 @@ async function openKozut() {
       await db.saveSession(state.session);
       for (const it of state.items) if (it.kozut) await db.saveItem(it);
       markUnsaved();
+      renderItems();
+      drawTrack();
     },
+    // betöltött vagy törölt úthálózat után újra kell olvasni
+    onNetwork: () => { roadNet = undefined; },
   });
 }
 
@@ -1490,6 +1852,7 @@ async function startEscort() {
       video: () => $('#video-input').click(),
       audio: () => recordAudio(null),
       condition: () => addCondition(),
+      sign: () => addSign(),
     },
     onClose: () => {
       capturePhase = 'survey';
@@ -1775,10 +2138,14 @@ function bind() {
     $('#photo-input').click();
   });
   $('#photo-input').addEventListener('change', onPhotoSelected);
+  // meglévő (nem az appal készült) képek behozatala — otthoni szerkesztéshez
+  $('#cap-import').addEventListener('click', () => $('#photo-import-input').click());
+  $('#photo-import-input').addEventListener('change', onPhotoSelected);
   $('#cap-video').addEventListener('click', () => $('#video-input').click());
   $('#video-input').addEventListener('change', onVideoSelected);
   $('#attach-photo-input').addEventListener('change', onAttachPhoto);
   $('#cap-condition').addEventListener('click', addCondition);
+  $('#cap-sign').addEventListener('click', addSign);
   $('#cap-audio').addEventListener('click', () => recordAudio(null));
   $('#cap-note').addEventListener('click', addNote);
 
@@ -1849,6 +2216,9 @@ async function init() {
   bind();
   try { setTilesEnabled(localStorage.getItem('tiles') !== '0'); } catch (_) {}
   editor = new PhotoEditor($('#editor'));
+  // a jelzésképek a térképre képként kerülnek: töltsük be őket előre, hogy
+  // az első rajzoláskor már a tábla látszódjon, ne egy üres karika
+  preloadSigns().then(() => { if (state.session) drawTrack(); });
   await renderSessionList();
   show('list');
 

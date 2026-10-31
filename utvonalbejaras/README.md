@@ -20,6 +20,7 @@ használatra.
 | **Nyomvonal utólagos szerkesztése**: szakasz elvetése indoklással vagy törlése | *Nyomvonal szerkesztése* |
 | **Hiányzó szakasz berajzolása** a térképre, ahol nincs GPS-nyom | *Nyomvonal szerkesztése* → *Hiányzó szakasz berajzolása* |
 | **Fotó** készítése menet közben, automatikus GPS-koordinátával | *Fotó* gomb (a telefon kameráját nyitja) |
+| **Meglévő képek behozatala** (EXIF-ből GPS és idő), helyszín kijelölése a térképen | *Képek a gépről* gomb |
 | **Rajzolás a képernyőn** a fotóra (szabadkéz, keret, jelölő nyíl) | Fotó → *Jelölés / méretek* |
 | **Méretek beírása**: méretvonal két pont közé + beírt érték (m / cm / t) | Szerkesztő → *Méret* eszköz |
 | **Halvány útirány-nyíl** — külön eszköz, saját beállításokkal | Szerkesztő → *Útirány* eszköz |
@@ -27,6 +28,7 @@ használatra.
 | **Hangjegyzet** felvétele a helyszínen, önállóan vagy fotóhoz csatolva | *Hangjegyzet* gomb, vagy fotó → *Hangjegyzet* |
 | **Videós megjegyzés** a telefon kamerájával, bélyegképpel | *Videó* gomb |
 | **Állapot- és táblarögzítés** kategóriával, állapottal, minősítéssel | *Állapot / tábla* gomb |
+| **Kísérőautó jelzésképei** (előzni tilos, teherrel előzni tilos, 10–90 km/h, terelés) — bejáráskor és otthoni tervezéskor is | *Jelzéskép* gomb, vagy térkép → *Pont felvétele* |
 | **HTML-jegyzőkönyv** önálló fájlban, a közút felé átadható | *Riport (HTML)* gomb |
 | **Közút Word-űrlapjainak kitöltése** (bejárás, részletező, itiner, jegyzék, rendkívüli jegyzék) | *Közút dokumentumok* gomb |
 | **Élő kísérés a szállítás során**: közeledéskor szól, lejátssza a hangjegyzetet, előhozza a fotót/videót | *Élő kísérés* gomb |
@@ -115,6 +117,113 @@ veszi át (nincs átkódolás, marad az eredeti minőség). Az app bélyegképet
 készít belőle, és rögzíti a hosszát, a pozíciót és a kameairányt. 150 MB
 fölött rákérdez, mert a teljes mentés és a riport is ekkorára nő.
 
+### Otthoni szerkesztés — GPS nélkül, meglévő képekből
+
+Ha a helyszínen nem az appot használták (hagyományos fényképezőgép, telefon
+galériája), a teljes anyag utólag, otthon is összerakható:
+
+1. **Új bejárás** a szerelvény adataival.
+2. **📁 Képek a gépről** — a meglévő fotók behozatala (több is egyszerre). Ha
+   a képben van GPS-adat (EXIF), az app átveszi; ha nincs, az elem
+   *„📍 nincs helyszín”* jelzést kap.
+3. **🗺️ Nyomvonal szerkesztése** — GPS-pont nélkül is megnyílik: az ország
+   látszik, onnan rá lehet nagyítani a helyszínre (alaptérképpel, utcákkal),
+   és a **✏️ Hiányzó szakasz berajzolása** gombbal megrajzolható a bejárt
+   útvonal. Ez lesz a jegyzőkönyvben az útvonal.
+4. **Helyszín a fotókhoz**: az elemre koppintva *📍 Hely megadása* →
+   *Kijelölés a térképen* → ráközelítve koppintson a pontos helyre.
+5. Innentől minden ugyanúgy megy, mint a GPS-es bejárásnál: jelölés és
+   méretek a fotókon, iránytű, állapotok és táblák, **jegyzőkönyv**,
+   **térképfájl**, **Közút-űrlapok**.
+
+#### Útpontok felvétele és szerkesztése a térképen
+
+A nyomvonal-szerkesztőben minden megvan, amit a terepen is tennél:
+
+| Mit szeretne | Hogyan |
+|---|---|
+| **Odaugrani egy helyre** | *🔍 Ugrás helyre* — koordináta (`47.4979, 19.0402`), EOV (`650000, 240000`), útszám szelvénnyel (`81 27+387`) vagy **település neve** (az utóbbi kettőhöz a betöltött úthálózati adat kell) |
+| **Új pontot létrehozni** | *➕ Pont felvétele a térképre* → koppintás a helyére → megnevezés, típus (jegyzet/útpont vagy állapot, tábla), megjegyzés |
+| **Meglévő pontot megnyitni** | koppintson rá a térképen a pöttyre — megnyílik az adatlapja |
+| **Fotót, hangot, jegyzetet hozzáadni** | az elem adatlapján: *📷 Fotó csatolása*, *🎙️ Hangjegyzet*, *📝 Megjegyzés*, *✏️ Jelölés / méretek* |
+| **Pontot áthelyezni** | adatlap → *📍 Hely javítása* → *Kijelölés a térképen* |
+| **Útvonalat rajzolni** | *✏️ Hiányzó szakasz berajzolása* — koppintás pontról pontra, a vonal magától követi az utat |
+
+> A térkép nem ugrik el munka közben: az éppen rajzolt vonal nem mozdítja a
+> nézetet, új pont felvételekor a nagyított kivágat a helyén marad, és
+> egyetlen pont körül is értelmes nagyítás marad. Rajzolás közben is kézben
+> van a *🔍 Ugrás helyre* gomb, tehát a következő szakaszhoz el lehet ugrani
+> anélkül, hogy a félbehagyott vonalat el kellene dobni.
+
+#### Az útvonal magától az útra illeszkedik
+
+Rajzoláskor nem kell minden kanyart végigkattintani. Elég a szakasz elejére
+és a végére koppintani — a program a **🛣️ Úthoz illesztés** bekapcsolt
+állapotában:
+
+- a koppintást **ráteszi a legközelebbi útra** (kb. 80 méteren belül), így
+  nem az út mellé kerül a pont,
+- a két koppintás **közé beilleszti az úthálózat szerinti útvonalat**, tehát
+  a vonal a valódi kanyarokat követi, nem egyenesen vág át,
+- ha az úthálózaton nincs út a két pont között (pl. két külön útról van szó),
+  **egyenes vonallal** köti össze, és ezt ki is írja — nem rajzol ki
+  valótlan kerülőt.
+
+Ehhez a **betöltött úthálózati (NAP) adat** kell (lásd *Útszám és szelvény
+automatikusan*). Ha nincs betöltve, a gomb jelzi, és a rajzolás a korábbi
+módon, koppintásról koppintásra, egyenes szakaszokkal megy — ugyanúgy
+használható, csak több koppintás kell hozzá. A gomb bármikor kikapcsolható,
+ha szándékosan nem úton (pl. telephelyen, gyárudvaron) kell vonalat húzni.
+
+A berajzolt pontok a nyomvonalhoz és a már berajzolt szakaszokhoz is
+hozzátapadnak, ezért a szakaszok hézag nélkül állnak össze.
+
+### A kísérőautó jelzésképei
+
+A túlméretes szerelvény előtt-mögött haladó kísérőautóra az útvonal egyes
+pontjain más-más táblát kell kitenni. Az app ezt külön bejegyzésként kezeli,
+mert ez nem „állapot”, hanem **utasítás a szállítás napjára**.
+
+**Mikor adható meg:**
+
+| Helyzet | Hogyan |
+|---|---|
+| **A bejáráson**, ott helyben, ahol kiderül | *🚧 Jelzéskép* gomb — a hely a GPS-ből jön |
+| **Otthon, tervezéskor**, térképen | *Nyomvonal szerkesztése* → *➕ Pont felvétele a térképre* → típus: *Jelzéskép a kísérőautóra* |
+| **A szállítás közben**, ha menet közben derül ki | Élő kísérés → *🚧 Jelzéskép* |
+| **Utólag módosítani** | az elem adatlapján: *🚧 Jelzéskép szerkesztése* |
+
+**A választható táblák** (a lapkákra koppintva, a tábla képével):
+
+- **Előzni tilos**, **Tehergépkocsival előzni tilos**, **Előzési tilalom vége**
+- **Sebességkorlátozás** 10, 20, 30, 40, 50, 60, 70, 80, 90 km/h, és
+  **Sebességkorlátozás vége**
+- **Balra / jobbra kikerülni kötelező**
+- **Egyéb jelzéskép** — beírt szöveggel, ha a készlet nem fedi le
+
+Egy ponthoz **több tábla is kijelölhető** (pl. *előzni tilos + 30 km/h*),
+mert a kísérőautó egyszerre kettőt is kitesz. Megadható, hogy **miért kell**
+(pl. „szűk híd”) — ezt a közút felé beadott anyag is kéri.
+
+**Hol jelenik meg utána:**
+
+- **a térképen magával a táblával** — nem pöttyel, így egy pillantásra
+  látszik, hol melyik tábla kell (a bejárás térképén, a szerkesztőben, az
+  élő kísérésben és a megosztható térképfájlban is);
+- **az élő kísérésben**: a helyszín előtt a tábla nagyban kiugrik a
+  képernyőre, „Kitenni: …” felirattal és az indokkal — ezért a jelzésképre
+  akkor is szól, ha a *csak a lényeges pontok* szűrő be van kapcsolva;
+- **a jegyzőkönyvben**: külön *A kísérőautó jelzésképei* jegyzék, útvonal
+  menti sorrendben, a tábla képével, az indoklással és a koordinátával, a
+  térképi sorszámra kattintva a megfelelő részletre ugorva;
+- **a Közút Word-űrlapjain**: a bejegyzés az *Elvégzendő munka* soraiba
+  „Kísérőautó jelzésképe: …” alakban kerül, a településsel, útszámmal és
+  szelvénnyel együtt, amit a NAP-adatból vagy kézzel adunk meg.
+
+> A táblarajzok **sematikusak** — a felismerést segítik, nem hivatalos
+> KRESZ-ábrák. A kitett tábla mindig a hatályos engedély és a KRESZ szerint
+> kell, hogy legyen.
+
 ### Nagyítható térkép
 
 Mindhárom térképnézet — a bejárás képernyőjén lévő kis térkép, a
@@ -127,7 +236,12 @@ nyomvonal-szerkesztő és az élő kísérés — ugyanúgy kezelhető:
 - **dupla koppintás** a megkoppintott helyre nagyít,
 - a sarokban lévő **＋ / −** gombok, és a **⤢** gomb visszaáll a teljes
   nyomvonalra,
-- asztali gépen az **egérgörgő** nagyít.
+- asztali gépen az **egérgörgő** nagyít, mindig oda, ahol az egér áll.
+
+A nagyítás **utcaszintig** elmegy akkor is, ha a kiindulás az egész ország
+(üres bejárás, otthoni szerkesztés): a térkép csempéi a legnagyobb
+szinteken már nagyítva látszanak, de a tájékozódáshoz és a pontos
+kattintáshoz elég élesek.
 
 A nyomvonal-szerkesztőben a dupla koppintás szándékosan nem nagyít: ott a
 koppintás jelöli ki a szakaszt és rakja le a berajzolt csúcsokat.
@@ -166,6 +280,85 @@ A bejárás adatlapján a **📋 Közút dokumentumok kitöltése** gomb nyitja 
    értékek a bejáráshoz mentődnek, legközelebb már ott vannak.
    Ha egy sorhoz nincs megadva település/útszám, a leírás végére a
    **koordináta** kerül, hogy a helyszín akkor is beazonosítható legyen.
+
+   **Ha betöltötte az úthálózati adatot** (lásd a következő pontot), az
+   útszám és a km szelvény magától megjelenik minden sornál, és egy gombbal
+   beírható. Enélkül kézi úton:
+
+   Úthálózati adat nélkül, az útszámkeresővel három lépés soronként:
+
+   1. **🔎 Útszám és szelvény keresése** — a koordináta a vágólapra kerül
+      (EOV-ban, mert a kereső azt várja), és megnyílik a kereső.
+   2. A *Koordinátakeresőben*: **Beilleszt → Keres**, majd **rá kell
+      kattintani a megjelölt pontra** — csak ekkor jön elő jobb oldalt az
+      *Útszám* és a *Szelvény*.
+   3. A panel szövegét kijelölve és kimásolva itt a **📋 Beillesztés a
+      keresőből** gomb kiszedi belőle az útszámot és a szelvényt (ha a
+      böngésző nem engedi a vágólap olvasását, kér egy beillesztő mezőt).
+
+   A gombról bővebben: A Magyar Közút
+   [útszámkeresője](https://utszamkereso.kozut.hu/) a *Koordinátakeresőben*
+   **EOV** (Y, X) koordinátát vár, a telefon GPS-e viszont WGS84 szerinti
+   szélességet és hosszúságot ad — az app ezért **átszámítja EOV-ba**, a
+   vágólapra teszi, és megnyitja a keresőt (mindig ugyanabban a fülben).
+   Ott: *Beilleszt* → *Keres*, és a jobb oldali panelen megjelenik az
+   **Útszám** és a **Szelvény** (pl. „81” és „27 km + 387 m”), amit ide
+   visszaírva a bejáráshoz mentődik. Az EOV koordináta a sorban is ott van,
+   ha kézzel kell beírni.
+
+   > Az átszámítás az EPSG:23700 szokásos paramétereivel dolgozik
+   > (somerc vetület, GRS67 ellipszoid, 3 paraméteres HD72-eltolás). Az
+   > útszámkereső saját adatán ellenőrizve az eltérés **10 cm alatti** — ezt
+   > teszt is őrzi. Automatikus lekérdezés nincs: az útszámkeresőnek nincs
+   > nyilvános, böngészőből hívható felülete.
+
+#### Úthálózati adat (NAP) — az útszám és a szelvény magától
+
+A [Nemzeti Adathozzáférési Pontról](https://napportal.kozut.hu/) (az EU által
+előírt, országos adatkapu a közúti adatokhoz) regisztráció után ingyen
+letölthető az **országos úthálózat vonalas állománya**, többek között GeoJSON
+formátumban. A *Közút dokumentumok* képernyőn betöltve az app minden
+rögzített ponthoz kiírja, melyik út melyik szelvényénél van:
+
+- a fájl lehet **WGS84** vagy **EOV** vetületű — az app felismeri és
+  átszámítja (ZIP-be csomagolt GeoJSON-t is elfogad);
+- a mezőneveket (útszám, kezdő és vég szelvény, település) megpróbálja
+  kitalálni — `KEZDOSZELVENY`, `km szelvény -tól`, `szelv_kezd`, `km_from`
+  mind megy —, és a *Mezők módosítása* gombbal felül lehet bírálni;
+- a szelvény a szakasz kezdő és vég szelvénye közé arányosan osztva, a
+  ponthoz legközelebbi útszakaszon mérve adódik („27 km + 387 m”), a sorban
+  az is látszik, hány méterre van a pont az úttól;
+- egy gombbal minden üres mező kitölthető, soronként is beírható;
+- a feldolgozott hálózat a készüléken marad (egyszer kell betölteni, nem
+  bejárásonként), és **hálózat nélkül is működik**.
+
+**A szelvény a rögzítés pillanatában rákerül a pontra.** Ha az úthálózati
+adat be van töltve, minden felvett helyszín — fotó, hangjegyzet, állapot,
+jelzéskép, térképen felvett pont — megkapja az **útszámot, a km szelvényt és
+a települést** abban a pillanatban, amikor rögzítjük. Nem kell utólag
+kikeresni, és nem vész el, ha később máshol nézzük meg:
+
+- a **listában** a sor alatt ott áll (`🛣️ 81 · 27 km + 387 m`);
+- az **adatlapon** külön sorban, a településsel és azzal, hogy hány méterre
+  volt a pont az úttól (ez mutatja, mennyire megbízható a hozzárendelés);
+- az **élő kísérésben** a figyelt pont mellett;
+- a **jegyzőkönyv** minden táblázatában külön *Útszám, szelvény* oszlopként,
+  és az elem adatlapján;
+- a **GPX** leírásában és a **GeoJSON** `utszam` / `szelveny` / `telepules`
+  tulajdonságaiban;
+- a **Közút Word-űrlapjain** a helyszínoszlopokban — kitöltés nélkül, mert
+  már a bejáráskor megvolt.
+
+Ha az úthálózat csak később kerül be (pl. a bejárás után otthon), a
+betöltéskor az app **visszamenőleg is ráírja** a szelvényt minden korábbi
+pontra, és kiírja, hány helyszínt pótolt. A hely utólagos javításakor
+(*📍 Hely javítása*) a szelvény újraszámolódik.
+
+> A hozzárendelés a ponthoz **legközelebbi** útszakaszra történik, legfeljebb
+> 150 méteren belül. Ami ennél messzebb van (telephely, gyárudvar, letérő),
+> az szándékosan szelvény nélkül marad, hogy ne kerüljön rá tévesen a
+> szomszédos országos út száma. Az adatlapon látszó „az úttól X m” érték
+> ennek az ellenőrzésére való.
 
 Minden dokumentum kártyáján látszik, **mi fog belekerülni** („Bekerül: 2 sor
 az elvégzendő munkákhoz · dátum”), és ott a saját **Kitöltés** gombja: egy
@@ -318,7 +511,10 @@ tenni — a *Nyomvonal szerkesztése* gombbal.
 nem ment végig, nincs róla GPS-nyom — ilyenkor a *Hiányzó szakasz berajzolása*
 gombbal közvetlenül a térképre rajzolható. Koppintson sorban a szakasz
 pontjaira; a meglévő nyomvonal (vagy egy másik berajzolt szakasz) közelében a
-csúcs automatikusan **odailleszkedik**, így hézag nélkül csatlakozik. Az
+csúcs automatikusan **odailleszkedik**, így hézag nélkül csatlakozik. A
+**🛣️ Úthoz illesztés** bekapcsolva a koppintásokat az útra teszi, és a
+köztük lévő útvonalat az úthálózat szerint rajzolja ki (lásd *Az útvonal
+magától az útra illeszkedik*). Az
 *Utolsó pont* visszavon, a *Szakasz kész* menti névvel és megjegyzéssel. A kész
 szakasz zölden jelenik meg, a listából kijelölhető, átnevezhető és törölhető.
 
@@ -581,6 +777,8 @@ utvonalbejaras/
     ├── terkepnezet.js      nagyítás/mozgatás a térképes vásznakon
     ├── terkepfajl.js       önálló, nagyítható HTML-térkép a nyomvonalról
     ├── docx.js             Word-fájlok (.docx) kibontása, kitöltése, mentése
+    ├── eov.js              GPS ↔ EOV átszámítás (EPSG:23700)
+    ├── uthalozat.js        NAP úthálózati adat: betöltés, útszám- és szelvénykeresés
     ├── kozut.js            a Közút űrlapjainak kitöltése a bejárás adataiból
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés

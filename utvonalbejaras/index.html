@@ -87,10 +87,18 @@
       <button id="cap-condition" class="cap">
         <span class="cap-icon">⚠️</span><span>Állapot / tábla</span>
       </button>
+      <button id="cap-sign" class="cap">
+        <span class="cap-icon">🚧</span><span>Jelzéskép</span>
+      </button>
       <button id="cap-note" class="cap">
         <span class="cap-icon">📝</span><span>Jegyzet</span>
       </button>
+      <button id="cap-import" class="cap">
+        <span class="cap-icon">📁</span><span>Képek a gépről</span>
+      </button>
       <input id="photo-input" type="file" accept="image/*" capture="environment" hidden multiple>
+      <!-- capture nélkül: meglévő képek behozatalához (otthoni szerkesztés) -->
+      <input id="photo-import-input" type="file" accept="image/*" hidden multiple>
       <input id="video-input" type="file" accept="video/*" capture="environment" hidden>
       <input id="attach-photo-input" type="file" accept="image/*" capture="environment" hidden>
     </div>
@@ -104,6 +112,7 @@
           <button class="chip" data-f="audio">Hang</button>
           <button class="chip" data-f="video">Videó</button>
           <button class="chip" data-f="condition">Állapot</button>
+          <button class="chip" data-f="jelzes">Jelzéskép</button>
           <button class="chip" data-f="note">Jegyzet</button>
         </div>
       </div>
@@ -252,11 +261,35 @@
     <h3 class="section-head">2. Közös adatok</h3>
     <div id="kozut-form" class="kozut-fields"></div>
 
-    <h3 class="section-head">3. Helyszínek (a jegyzékhez és a részletezőhöz)</h3>
+    <h3 class="section-head">3. Úthálózati adat (NAP) — nem kötelező</h3>
     <p class="hint">
-      A település, az útszám és a km szelvény nem derül ki a GPS-ből — ezeket
-      itt lehet megadni. A beírt értékek megmaradnak a következő kitöltéshez.
+      A <a href="https://napportal.kozut.hu/" target="_blank" rel="noopener">Nemzeti
+      Adathozzáférési Pontról</a> (regisztráció után, ingyen) letölthető az országos
+      úthálózat <b>GeoJSON</b> állománya. Ha betölti, az app minden ponthoz magától
+      kiírja az útszámot — és ha az adat tartalmazza a szelvényezést, a km szelvényt is.
+      Az adat a készüléken marad, hálózat nélkül is működik.
     </p>
+    <div id="kozut-net" class="kozut-net"></div>
+    <input id="kozut-net-file" type="file" hidden accept=".geojson,.json,.zip,application/geo+json,application/json,application/zip">
+    <button id="kozut-net-add" class="btn ghost small block">🛣️ Úthálózati fájl betöltése</button>
+
+    <h3 class="section-head">4. Helyszínek (a jegyzékhez és a részletezőhöz)</h3>
+    <p class="hint">
+      A település, az útszám és a km szelvény nem derül ki a GPS-ből.
+      Ha betöltötte az úthálózati adatot (3. pont), magától megjelenik.
+      Enélkül soronként három lépés a Magyar Közút
+      <a href="https://utszamkereso.kozut.hu/" target="_blank" rel="noopener">útszámkeresőjével</a>:
+    </p>
+    <ol class="hint">
+      <li><b>🔎 Útszám és szelvény keresése</b> — a koordináta a vágólapra kerül,
+        és megnyílik a kereső.</li>
+      <li>A <i>Koordinátakeresőben</i>: <b>Beilleszt</b> → <b>Keres</b>, majd
+        <b>kattintson rá a megjelölt pontra</b> — csak ekkor jön elő jobb oldalt az
+        <i>Útszám</i> és a <i>Szelvény</i>.</li>
+      <li>Jelölje ki és másolja ki azt a panelt, itt pedig nyomja meg a
+        <b>📋 Beillesztés a keresőből</b> gombot — az app kiszedi belőle az
+        útszámot és a szelvényt.</li>
+    </ol>
     <div id="kozut-rows" class="kozut-rows"></div>
   </div>
 
@@ -295,6 +328,7 @@
       <button id="escort-add-video" class="btn ghost tiny">🎬 Videó</button>
       <button id="escort-add-audio" class="btn ghost tiny">🎙️ Hang</button>
       <button id="escort-add-condition" class="btn ghost tiny">⚠️ Állapot</button>
+      <button id="escort-add-sign" class="btn ghost tiny">🚧 Jelzéskép</button>
     </div>
 
     <div class="editor-row">
@@ -379,6 +413,11 @@
       húzással mozgathatja a térképet.
     </p>
 
+    <div class="editor-row" id="trackedit-pointbar">
+      <button id="trackedit-addpoint" class="btn primary small">➕ Pont felvétele a térképre</button>
+      <button id="trackedit-goto" class="btn ghost small">🔍 Ugrás helyre</button>
+    </div>
+
     <button id="trackedit-turnaround" class="btn ghost small block" disabled>
       ↩️ Innen fordultunk vissza
     </button>
@@ -397,6 +436,7 @@
     </div>
 
     <div class="editor-row" id="trackedit-drawbar" hidden>
+      <button id="trackedit-roadsnap" class="btn ghost small" hidden>🛣️ Úthoz illesztés</button>
       <button id="trackedit-draw-done" class="btn primary small">✓ Szakasz kész</button>
       <button id="trackedit-draw-undo" class="btn ghost small">↶ Utolsó pont</button>
       <button id="trackedit-draw-cancel" class="btn ghost small">Mégse</button>

@@ -1,7 +1,7 @@
 // IndexedDB réteg — bejárások, nyomvonalpontok, elemek (fotó / hang / jegyzet)
 
 const DB_NAME = 'utvonalbejaras';
-const DB_VER = 1;
+const DB_VER = 2;
 
 let dbPromise = null;
 
@@ -25,6 +25,10 @@ function open() {
         const p = db.createObjectStore('points', { keyPath: 'id', autoIncrement: true });
         p.createIndex('sessionId', 'sessionId');
         p.createIndex('sessionTime', ['sessionId', 't']);
+      }
+      // az országos úthálózati adat (NAP) feldolgozott változata
+      if (!db.objectStoreNames.contains('net')) {
+        db.createObjectStore('net');
       }
       if (!db.objectStoreNames.contains('items')) {
         const i = db.createObjectStore('items', { keyPath: 'id' });
@@ -171,6 +175,20 @@ export async function deleteItem(id) {
 }
 
 /* ------------------------------------------------------------ statisztika */
+
+/* ------------------------------------------------- úthálózati adat */
+
+export function saveNetwork(index) {
+  return tx('net', 'readwrite', (n) => wrap(n.put(index, 'uthalozat')));
+}
+
+export function getNetwork() {
+  return tx('net', 'readonly', (n) => wrap(n.get('uthalozat')));
+}
+
+export function clearNetwork() {
+  return tx('net', 'readwrite', (n) => wrap(n.delete('uthalozat')));
+}
 
 export async function storageEstimate() {
   if (!navigator.storage || !navigator.storage.estimate) return null;

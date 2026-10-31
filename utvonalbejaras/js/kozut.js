@@ -14,7 +14,11 @@ import {
   textOf, tablesOf, fillTable, findLeafParagraphs, addParagraphAfter, fillDotsNear,
   insertImageAfter,
 } from './docx.js';
+import { signsLabel } from './jelzes.js';
 import { formatCoord, formatDistance, typeLabel, categoryLabel, conditionLabel, severityLabel, isRejected, trackLength } from './geo.js';
+import { formatEov } from './eov.js';
+import { buildNetwork, lookupRoad } from './uthalozat.js';
+import * as db from './db.js';
 import { $, el, toast, modal, download, formatDateTime } from './ui.js';
 
 /** A felismert dokumentumtípusok — a sorrend számít (az első találat nyer). */
@@ -40,6 +44,55 @@ const timeHu = (t) => {
   return `${dateHu(t)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
+/**
+ * A Magyar Közút útszámkeresője. A GPS-ből az útszám és a km szelvény nem
+ * derül ki, de ezen az oldalon a koordináta alapján kikereshető.
+ */
+const UTSZAM_KERESO = 'https://utszamkereso.kozut.hu/';
+
+/**
+ * Az útszámkereső jobb oldali paneljéből kimásolt szöveg feldolgozása.
+ * Elég a panelt kijelölni és másolni — ebből kiszedjük, ami kell.
+ */
+export function parseKeresoSzoveg(text) {
+  const t = String(text || '').replace(/\s+/g, ' ');
+  const out = {};
+  const ut = /[ÚUÚ]tsz[áa]m\s*:?\s*([A-Za-z0-9][A-Za-z0-9./-]*)/i.exec(t);
+  if (ut) out.utszam = ut[1];
+  const sz = /Szelv[ée]ny\s*:?\s*(\d+)\s*km\s*\+\s*(\d+)\s*m/i.exec(t)
+    || /(\d+)\s*km\s*\+\s*(\d+)\s*m/i.exec(t);
+  if (sz) out.szelveny = `${Number(sz[1])} km + ${Number(sz[2])} m`;
+  else {
+    const plus = /\b(\d{1,3})\s*\+\s*(\d{1,3})\b/.exec(t);      // „27+387”
+    if (plus) out.szelveny = `${Number(plus[1])} km + ${Number(plus[2])} m`;
+  }
+  const hely = /Telep[üu]l[ée]s\s*:?\s*([^·|,;]+)/i.exec(t);
+  if (hely) out.telepules = hely[1].trim();
+  return out;
+}
+
+/** Szöveg a vágólapra — hogy a keresőbe csak be kelljen illeszteni. */
+async function toClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_) { /* jöhet a tartalék */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (_) {
+    return false;
+  }
+}
+
 /** Egy elem leírása a dokumentumokba — minden, amit róla tudunk. */
 function describeForDoc(it) {
   const bits = [];
@@ -48,6 +101,10 @@ function describeForDoc(it) {
     if (it.what) bits.push(it.what);
     if (it.condition) bits.push(conditionLabel(it.condition));
     if (it.severity) bits.push(severityLabel(it.severity));
+  } else if (it.type === 'jelzes') {
+    // a kísérőautó táblája: a közút felé ez is elvégzendő feladat
+    bits.push('Kísérőautó jelzésképe: ' + signsLabel(it));
+    if (it.reason) bits.push(it.reason);
   } else {
     bits.push(it.title || typeLabel(it.type));
   }
@@ -73,13 +130,23 @@ export class KozutDocs {
       this.addFiles(files);
     });
     $('#kozut-fill', this.root).addEventListener('click', () => this.fillAll());
+
+    $('#kozut-net-add', this.root).addEventListener('click', () => $('#kozut-net-file', this.root).click());
+    $('#kozut-net-file', this.root).addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      e.target.value = '';
+      if (f) this.loadNetwork(f);
+    });
   }
 
-  async open({ session, points, items, onSave }) {
+  async open({ session, points, items, onSave, onNetwork }) {
     this.session = session;
     this.points = points;
     this.items = items;
     this.onSave = onSave;
+    // az app a betöltött úthálózatot gyorsítótárazza — szólni kell neki,
+    // ha változott, különben az új pontok nem kapnának szelvényt
+    this.onNetwork = onNetwork;
     this.form = Object.assign({
       nevek: '',
       datum: dateHu(session.created),
@@ -101,6 +168,14 @@ export class KozutDocs {
     this.root.hidden = false;
     document.body.classList.add('modal-open');
     this.render();
+
+    // a korábban betöltött úthálózati adat a készüléken marad
+    if (!this.net) {
+      try {
+        this.net = await db.getNetwork();
+      } catch (_) { /* nincs tárolt hálózat */ }
+      if (this.net) this.render();
+    }
   }
 
   close() {
@@ -124,7 +199,9 @@ export class KozutDocs {
     }
     if (!this.form.feltetelek) {
       const kritikus = this.items.filter((i) => i.severity === 'kritikus').length;
-      const valid = formatDistance(trackLength(this.points.filter((p) => !isRejected(p))));
+      // a térképen megadott (otthon megrajzolt) szakasz is az útvonal része
+      const drawn = (this.session.drawn || []).reduce((sum, d) => sum + trackLength(d.pts || []), 0);
+      const valid = formatDistance(trackLength(this.points.filter((p) => !isRejected(p))) + drawn);
       this.form.feltetelek = kritikus
         ? `A bejárás ${valid} hosszú útvonalon megtörtént. ${kritikus} kritikus helyszín a részletezőben felsorolva.`
         : `A bejárás ${valid} hosszú útvonalon megtörtént, kritikus helyszín nem merült fel.`;
@@ -132,8 +209,10 @@ export class KozutDocs {
 
     // elemenkénti adatok: amit tudunk, azt kitöltjük
     for (const it of this.items) {
+      const r = it.road || {};
       it.kozut = Object.assign({
-        telepules: '', utszam: '', km: '',
+        // amit a bejáráskor az úthálózatból már tudtunk
+        telepules: r.telepules || '', utszam: r.utszam || '', km: r.szelveny || '',
         // minden rögzített helyszín bekerül a részletezőbe — a fotók is,
         // nemcsak az állapotbejegyzések; ami nem kell, az kivehető
         munka: describeForDoc(it),
@@ -142,6 +221,13 @@ export class KozutDocs {
         megnevezes: it.type === 'condition' ? (it.what || categoryLabel(it.category)) : (it.title || ''),
         ideiglenes: '', vegleges: '', technologia: '', jovahagyas: '',
       }, it.kozut || {});
+      // korábban megnyitott bejárásnál a mezők már léteznek üresen — a
+      // bejáráskor rögzített útszám és szelvény ilyenkor is kerüljön be
+      if (it.road) {
+        if (!it.kozut.utszam) it.kozut.utszam = it.road.utszam || '';
+        if (!it.kozut.km) it.kozut.km = it.road.szelveny || '';
+        if (!it.kozut.telepules) it.kozut.telepules = it.road.telepules || '';
+      }
     }
   }
 
@@ -178,6 +264,184 @@ export class KozutDocs {
     const text = new TextDecoder().decode(main.data).replace(/<[^>]+>/g, ' ');
     const hit = TYPES.find((t) => t.test(text));
     return hit ? hit.id : 'ismeretlen';
+  }
+
+  /* ------------------------------------------- úthálózati adat (NAP) */
+
+  async loadNetwork(file, fields) {
+    this.netFile = file;
+    toast('Úthálózati adat feldolgozása… ez nagyobb fájlnál eltarthat egy percig.');
+    try {
+      const net = await buildNetwork(file, fields, (msg) => toast(msg));
+      this.net = net;
+      await db.saveNetwork(net);
+      toast(`Úthálózat betöltve: ${net.roads.length} útszám, ${net.count} szakasz`
+        + (net.hasSzelveny ? ', szelvényezéssel.' : ' (szelvény nincs benne).'));
+      if (this.onNetwork) this.onNetwork();
+      // a korábban rögzített pontokra is felírjuk az útszámot és a szelvényt
+      const n = this.stampItems();
+      if (n) toast(`${n} korábbi helyszín megkapta az útszámot és a szelvényt.`);
+    } catch (err) {
+      toast('Az úthálózati adat nem olvasható: ' + err.message, 'error');
+    }
+    this.render();
+  }
+
+  /**
+   * Útszám + szelvény ráírása a már rögzített helyszínekre. A bejáráskor még
+   * nem biztos, hogy be volt töltve az úthálózat — ilyenkor itt pótoljuk.
+   */
+  stampItems() {
+    if (!this.net) return 0;
+    let n = 0;
+    for (const it of this.items) {
+      if (it.lat == null || it.road) continue;
+      const hit = lookupRoad(this.net, it.lat, it.lon, 150);
+      if (!hit) continue;
+      it.road = {
+        utszam: hit.utszam || '', szelveny: hit.szelveny || '', meters: hit.meters,
+        telepules: hit.telepules || '', tavolsag: hit.distance,
+      };
+      const k = it.kozut || (it.kozut = {});
+      if (!k.utszam) k.utszam = it.road.utszam;
+      if (!k.km) k.km = it.road.szelveny;
+      if (!k.telepules) k.telepules = it.road.telepules;
+      n += 1;
+    }
+    if (n) this.save();
+    return n;
+  }
+
+  async dropNetwork() {
+    this.net = null;
+    this.netFile = null;
+    try { await db.clearNetwork(); } catch (_) {}
+    if (this.onNetwork) this.onNetwork();
+    this.render();
+  }
+
+  /** Mezőhozzárendelés módosítása — ha rosszat tippelt az app. */
+  async remapNetwork() {
+    if (!this.netFile) {
+      toast('A mezők módosításához töltse be újra a fájlt.', 'error');
+      $('#kozut-net-file', this.root).click();
+      return;
+    }
+    const keys = this.net.sampleKeys || [];
+    const options = [{ value: '', label: '— nincs —' }]
+      .concat(keys.map((k) => ({ value: k, label: k })));
+    const res = await modal({
+      title: 'Melyik mező mit jelent?',
+      text: 'Az úthálózati fájl oszlopai közül válassza ki a megfelelőt.',
+      fields: [
+        { name: 'utszam', label: 'Útszám', type: 'select', value: this.net.fields.utszam || '', options },
+        { name: 'kmKezd', label: 'Kezdő szelvény', type: 'select', value: this.net.fields.kmKezd || '', options },
+        { name: 'kmVeg', label: 'Vég szelvény', type: 'select', value: this.net.fields.kmVeg || '', options },
+        { name: 'telepules', label: 'Település', type: 'select', value: this.net.fields.telepules || '', options },
+      ],
+      okText: 'Újrafeldolgozás',
+    });
+    if (!res) return;
+    const fields = {};
+    for (const [k, v] of Object.entries(res)) if (v) fields[k] = v;
+    await this.loadNetwork(this.netFile, fields);
+  }
+
+  /**
+   * Az útszámkeresőből kimásolt panel feldolgozása egy sorba.
+   * Először a vágólapot nézzük; ha nem megy (a böngésző nem engedi), kérünk
+   * egy beillesztő mezőt.
+   */
+  async pasteFromKereso(it, k) {
+    let text = '';
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        text = await navigator.clipboard.readText();
+      }
+    } catch (_) { /* jöhet a kézi beillesztés */ }
+
+    let data = parseKeresoSzoveg(text);
+    if (!data.utszam && !data.szelveny) {
+      const res = await modal({
+        title: 'Beillesztés az útszámkeresőből',
+        text: 'Az útszámkeresőben a találatra kattintva megjelenik a jobb oldali panel '
+          + '(Útszám, Szelvény). Jelölje ki és másolja ki a panel szövegét, majd illessze be ide.',
+        fields: [{ name: 'szoveg', label: 'Kimásolt szöveg', type: 'textarea', value: '' }],
+        okText: 'Feldolgozás',
+      });
+      if (!res) return;
+      data = parseKeresoSzoveg(res.szoveg);
+    }
+
+    if (!data.utszam && !data.szelveny) {
+      toast('Ebből nem tudtam kiolvasni útszámot vagy szelvényt.', 'error');
+      return;
+    }
+    if (data.utszam) k.utszam = data.utszam;
+    if (data.szelveny) k.km = data.szelveny;
+    if (data.telepules && !k.telepules) k.telepules = data.telepules;
+    this.save();
+    this.render();
+    toast(`Beírva: ${[data.utszam, data.szelveny].filter(Boolean).join(' · ')}`);
+  }
+
+  /** Egy sor adatai az úthálózatból. */
+  netHit(it) {
+    if (!this.net || it.lat == null) return null;
+    return lookupRoad(this.net, it.lat, it.lon);
+  }
+
+  /** Üres mezők kitöltése a hálózatból. */
+  fillFromNetwork(only) {
+    if (!this.net) return;
+    let n = 0;
+    for (const it of this.items) {
+      if (only && it !== only) continue;
+      const hit = it.road || this.netHit(it);
+      if (!hit) continue;
+      const k = it.kozut;
+      const km = hit.szelveny;
+      if (!k.utszam && hit.utszam) { k.utszam = hit.utszam; n += 1; }
+      if (!k.km && km) { k.km = km; n += 1; }
+      if (!k.telepules && hit.telepules) { k.telepules = hit.telepules; n += 1; }
+    }
+    this.save();
+    this.render();
+    toast(n ? `${n} mező kitöltve az úthálózatból.` : 'Nem volt mit kitölteni.');
+  }
+
+  renderNetwork() {
+    const box = $('#kozut-net', this.root);
+    box.innerHTML = '';
+    if (!this.net) {
+      box.appendChild(el('p', { class: 'hint', text: 'Nincs betöltve úthálózati adat.' }));
+      return;
+    }
+    const n = this.net;
+    const fields = Object.entries(n.fields).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    box.appendChild(el('div', { class: 'net-card' }, [
+      el('b', { text: n.name }),
+      el('span', {
+        class: 'muted small',
+        text: `${n.roads.length} útszám · ${n.count} szakasz · `
+          + (n.hasSzelveny ? 'szelvényezéssel' : 'szelvény nélkül'),
+      }),
+      el('span', { class: 'muted small', text: 'Mezők — ' + fields }),
+      el('div', { class: 'editor-row' }, [
+        el('button', {
+          class: 'btn primary tiny', type: 'button', text: '⤵ Üres mezők kitöltése',
+          onclick: () => this.fillFromNetwork(),
+        }),
+        el('button', {
+          class: 'btn ghost tiny', type: 'button', text: 'Mezők módosítása',
+          onclick: () => this.remapNetwork(),
+        }),
+        el('button', {
+          class: 'btn ghost tiny', type: 'button', text: 'Eltávolítás',
+          onclick: () => this.dropNetwork(),
+        }),
+      ]),
+    ]));
   }
 
   /* ------------------------------------------------------- felület */
@@ -249,6 +513,7 @@ export class KozutDocs {
     field('zarasi', 'Zárási terv', { multiline: true, rows: 4 });
     field('rendkivuli', 'Rendkívüli jegyzék — további megjegyzés', { multiline: true, rows: 2 });
 
+    this.renderNetwork();
     this.renderRows();
   }
 
@@ -289,18 +554,67 @@ export class KozutDocs {
           input('utszam', 'Útszám'),
           input('km', 'km szelvény'),
         ]),
+        // a Közút útszámkeresője koordináta alapján megmondja az útszámot és
+        // a szelvényt; a koordinátát a vágólapra tesszük, hogy csak be
+        // kelljen illeszteni
+        // amit az úthálózati adat mond erre a pontra
+        (() => {
+          const hit = this.netHit(it);
+          if (!hit) return null;
+          return el('div', { class: 'kozut-hit' }, [
+            el('span', { text: `🛣️ ${hit.utszam}${hit.szelveny ? ' · ' + hit.szelveny : ''} (${hit.distance} m-re)` }),
+            el('button', {
+              class: 'btn ghost tiny', type: 'button', text: '⤵ beírom',
+              onclick: () => {
+                k.utszam = hit.utszam;
+                if (hit.szelveny) k.km = hit.szelveny;
+                this.save();
+                this.render();
+              },
+            }),
+          ]);
+        })(),
+        it.lat != null ? el('div', { class: 'kozut-eov' }, [
+          el('button', {
+            class: 'btn ghost tiny', type: 'button',
+            text: '🔎 Útszám és szelvény keresése',
+            onclick: async (e) => {
+              e.preventDefault();
+              // az útszámkereső koordinátakeresője EOV Y–X értéket vár
+              const eov = formatEov(it.lat, it.lon);
+              const copied = await toClipboard(eov);
+              // ugyanabban a fülben nyílik meg, nem szaporodnak a lapok
+              window.open(UTSZAM_KERESO, 'utszamkereso');
+              toast(copied
+                ? 'EOV koordináta a vágólapon. A Koordinátakeresőben: Beilleszt → Keres. '
+                  + 'A jobb oldali panelből írja ide az útszámot és a szelvényt.'
+                : `Koordinátakereső, EOV: ${eov}`);
+            },
+          }),
+          el('button', {
+            class: 'btn ghost tiny', type: 'button',
+            text: '📋 Beillesztés a keresőből',
+            onclick: (e) => { e.preventDefault(); this.pasteFromKereso(it, k); },
+          }),
+          el('span', { class: 'muted small', text: 'EOV: ' + formatEov(it.lat, it.lon) }),
+        ]) : null,
         // egy bejárás rendszerint ugyanazon az úton halad: elég egyszer beírni
         el('button', {
           class: 'btn ghost tiny', type: 'button', text: '⤓ Település és útszám a többi üres sorba',
           onclick: () => {
+            if (!k.telepules && !k.utszam) {
+              toast('Előbb töltse ki ebben a sorban a települést vagy az útszámot.', 'error');
+              return;
+            }
+            let n = 0;
             for (const other of rows) {
               if (other === it) continue;
-              if (!other.kozut.telepules) other.kozut.telepules = k.telepules || '';
-              if (!other.kozut.utszam) other.kozut.utszam = k.utszam || '';
+              if (!other.kozut.telepules && k.telepules) { other.kozut.telepules = k.telepules; n += 1; }
+              if (!other.kozut.utszam && k.utszam) { other.kozut.utszam = k.utszam; n += 1; }
             }
             this.save();
             this.renderRows();
-            toast('Átmásolva az üres sorokba.');
+            toast(n ? `Átmásolva ${n} mezőbe.` : 'Minden sor ki volt már töltve.');
           },
         }),
         input('munka', 'Elvégzendő munka / leírás (részletező)'),

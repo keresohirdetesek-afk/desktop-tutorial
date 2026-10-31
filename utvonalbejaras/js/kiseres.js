@@ -12,6 +12,7 @@ import {
   haversine, renderTrack, formatDistance, formatDuration, formatHeading,
   typeLabel, categoryLabel, severityLabel, isRejected,
 } from './geo.js';
+import { signSvg, itemSigns, signsLabel } from './jelzes.js';
 import { onTileLoad } from './tiles.js';
 import { MapView } from './terkepnezet.js';
 import { $, el, toast, modal, formatTime } from './ui.js';
@@ -162,6 +163,7 @@ export class EscortMode {
     for (const [id, kind] of [
       ['#escort-add-photo', 'photo'], ['#escort-add-video', 'video'],
       ['#escort-add-audio', 'audio'], ['#escort-add-condition', 'condition'],
+      ['#escort-add-sign', 'sign'],
     ]) {
       $(id, this.root).addEventListener('click', () => {
         if (this.capture[kind]) this.capture[kind]();
@@ -251,6 +253,8 @@ export class EscortMode {
     return this.items.filter((i) => {
       if (i.lat == null) return false;
       if (!this.onlyCritical) return true;
+      // a jelzéskép mindig fontos: azt ki KELL tenni, ez nem észrevétel
+      if (i.type === 'jelzes') return true;
       if (i.type === 'condition') return i.severity && i.severity !== 'megfelelo';
       return (i.dims || []).length > 0;
     });
@@ -293,6 +297,13 @@ export class EscortMode {
         onclick: () => this.showAlert(item, d, true),
       }, [
         el('span', { class: 'escort-dist', text: formatDistance(d) }),
+        item.type === 'jelzes'
+          ? el('span', {
+              class: 'escort-sign',
+              html: itemSigns(item).slice(0, 2)
+                .map((id) => signSvg(id, { size: 34, text: item.signText })).join(''),
+            })
+          : null,
         el('span', { class: 'escort-body' }, [
           el('span', { class: 'escort-title', text: item.title || typeLabel(item.type) }),
           el('span', { class: 'escort-sub', text: this.describe(item) }),
@@ -319,9 +330,13 @@ export class EscortMode {
     if (item.type === 'condition') {
       bits.push(categoryLabel(item.category));
       if (item.severity) bits.push(severityLabel(item.severity));
+    } else if (item.type === 'jelzes') {
+      bits.push('Kitenni: ' + signsLabel(item));
+      if (item.reason) bits.push(item.reason);
     } else {
       bits.push(typeLabel(item.type));
     }
+    if (item.road) bits.push([item.road.utszam, item.road.szelveny].filter(Boolean).join(' '));
     if ((item.dims || []).length) bits.push(item.dims.join(' · '));
     if (item.phase === 'transport') bits.push('szállítás közben rögzítve');
     return bits.join(' · ');
@@ -357,6 +372,17 @@ export class EscortMode {
 
     $('#escort-alert-title', this.root).textContent = item.title || typeLabel(item.type);
     this.setAlertDistance(distance);
+
+    // A jelzéskép a riasztás legfontosabb tartalma: vezetés közben erre
+    // kell egy pillantás, ezért a fotó és minden más fölé kerül, nagyban.
+    if (item.type === 'jelzes') {
+      body.appendChild(el('div', {
+        class: 'escort-sign-big',
+        html: itemSigns(item).map((id) => signSvg(id, { size: 120, text: item.signText })).join(''),
+      }));
+      body.appendChild(el('p', { class: 'escort-note strong', text: 'Kitenni: ' + signsLabel(item) }));
+      if (item.reason) body.appendChild(el('p', { class: 'escort-sub', text: 'Indok: ' + item.reason }));
+    }
 
     const picture = item.flat || item.photo;
     if (picture) body.appendChild(el('img', { class: 'escort-shot', src: this.objectUrl(picture), alt: '' }));

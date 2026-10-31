@@ -1,6 +1,7 @@
 // GPS: nyomvonal rögzítés, számítások, rajzolás, GPX/GeoJSON export
 
 import { getTile, tilesEnabled, TILE_SIZE, ATTRIBUTION } from './tiles.js';
+import { drawSign, itemSigns, signsLabel } from './jelzes.js';
 
 export const ATTRIBUTION_TEXT = ATTRIBUTION;
 
@@ -415,16 +416,17 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   const markerPts = markers.filter((m) => m.lat != null && m.lon != null);
   const drawn = opts.drawn || [];        // kézzel berajzolt szakaszok
   const draft = opts.draft || null;      // éppen rajzolt szakasz
-  const drawnPts = drawn.flatMap((s) => s.pts).concat(draft ? draft.pts || [] : []);
+  const drawnPts = drawn.flatMap((s) => s.pts);
+  // az éppen rajzolt vonal szándékosan NEM számít bele a térkép
+  // illesztésébe: különben az első csúcs letétele után a nézet ráugrana, és
+  // a következő koppintás már máshová esne
   const all = coords.concat(markerPts, drawnPts);
 
-  if (!all.length) {
-    ctx.fillStyle = dim;
-    ctx.font = '13px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Nincs rögzített nyomvonal', w / 2, h / 2);
-    return { project: null };
-  }
+  // Nincs még semmi (otthoni szerkesztés GPS nélkül): az ország látszik,
+  // és onnan lehet ráközelíteni a helyszínre. A rajzolás, a koppintás és a
+  // térképcsempék így is működnek.
+  const empty = !all.length;
+  if (empty) all.push({ lat: 45.74, lon: 16.11 }, { lat: 48.59, lon: 22.9 });
 
   // Web Mercator vetítés: ebben dolgoznak a térképcsempék is, így a
   // nyomvonal és az alaptérkép pontosan fedésbe kerül.
@@ -443,6 +445,18 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     minY = c.y - r; maxY = c.y + r;
   }
 
+  // Egyetlen pont (vagy pár méteres nyomvonal) esetén a befoglaló téglalap
+  // egy pontra zsugorodna, és a nagyítás értelmetlenül nagy lenne — ezért
+  // legalább ekkora környezetet mutatunk (kb. 400 m).
+  const MIN_SPAN = 1e-5;
+  if (maxX - minX < MIN_SPAN) {
+    const c = (minX + maxX) / 2;
+    minX = c - MIN_SPAN / 2; maxX = c + MIN_SPAN / 2;
+  }
+  if (maxY - minY < MIN_SPAN) {
+    const c = (minY + maxY) / 2;
+    minY = c - MIN_SPAN / 2; maxY = c + MIN_SPAN / 2;
+  }
   const spanX = Math.max(maxX - minX, 1e-9);
   const spanY = Math.max(maxY - minY, 1e-9);
   const pad = opts.focus ? 0 : 22;      // kivágatnál a megadott sugár pontos legyen
@@ -473,6 +487,15 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   const tileStats = opts.tiles !== false
     ? drawTiles(ctx, w, h, px, worldToScreen, screenToWorld)
     : { wanted: 0, drawn: 0 };
+
+  if (empty) {
+    ctx.save();
+    ctx.fillStyle = tilesEnabled() && opts.tiles !== false ? '#1b1b1b' : dim;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nincs rögzített nyomvonal — nagyítson rá a helyszínre', w / 2, 20);
+    ctx.restore();
+  }
 
   const rejectColor = opts.rejectLine || '#ff8a4d';
   const lineW = (opts.lineWidth || 4) * Math.min(2, Math.max(1, view.k * 0.5 + 0.5));
@@ -596,8 +619,16 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   const hitboxes = [];
   markerPts.forEach((m) => {
     const p = project(m.lat, m.lon);
+    // a kísérőautó jelzésképe magával a táblával látszik: egy pöttyről nem
+    // derülne ki, hogy ott előzési tilalmat vagy 30-at kell kitenni
+    if (m.type === 'jelzes' && opts.signs !== false) {
+      drawSign(ctx, p, itemSigns(m), m.signText, opts.signSize || 26);
+      hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 14 });
+      return;
+    }
     const color = {
       audio: '#ffbe4d', note: '#c58cff', video: '#6fd3ff', condition: '#ff5f56',
+      jelzes: '#ffd60a',
     }[m.type] || '#ffffff';
     dot(ctx, p, 5, color, '#0b0f16');
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 12 });
@@ -683,6 +714,8 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   return {
     project, unproject, hitboxes, nearest, nearestDrawn, coords,
     tiles: tileStats, labelBoxes, width: w, height: h,
+    // az illesztés adatai — ebből lehet kiszámolni, hogyan ugorjunk egy helyre
+    fit: { scale, cx, cy, w, h },
   };
 }
 
@@ -780,6 +813,9 @@ export function toGeoJSON(session, points, items = [], opts = {}) {
         nev: i.title || typeLabel(i.type),
         tipus: i.type,
         megjegyzes: i.note || '',
+        utszam: (i.road && i.road.utszam) || '',
+        szelveny: (i.road && i.road.szelveny) || '',
+        telepules: (i.road && i.road.telepules) || '',
         meretek: (i.dims || []).join('; '),
         ido: new Date(i.created).toISOString(),
       },
@@ -791,6 +827,34 @@ export function toGeoJSON(session, points, items = [], opts = {}) {
 }
 
 /** Kézzel berajzolt szakaszok együttes hossza. */
+/**
+ * A nagyítás/mozgatás a térkép illesztésére ül rá. Ha az illesztés
+ * megváltozik (új pont kerül fel, vagy berajzolunk egy szakaszt), a nézet
+ * elcsúszna — ez számolja át úgy, hogy ugyanaz a terület maradjon a
+ * képernyőn, ugyanakkora nagyításban.
+ */
+export function rebaseView(view, prev, next) {
+  if (!view || !prev || !next) return false;
+  // ha a felhasználó nem nagyított és nem mozgatott, hagyjuk, hogy a térkép
+  // magától illeszkedjen az új tartalomra
+  const moved = view.k > 1.02 || Math.abs(view.tx) > 1 || Math.abs(view.ty) > 1;
+  if (!moved) return false;
+  if (prev.scale === next.scale && prev.cx === next.cx && prev.cy === next.cy
+      && prev.w === next.w && prev.h === next.h) return false;
+  if (!isFinite(prev.scale) || !isFinite(next.scale) || !next.scale) return false;
+
+  // a képernyő közepének világkoordinátája a RÉGI illesztéssel és mérettel
+  // (a vászon mérete is változhat, pl. ha megjelenik a rajzoló sáv)
+  const wx = prev.cx + ((prev.w / 2 - view.tx) / view.k - prev.w / 2) / prev.scale;
+  const wy = prev.cy + ((prev.h / 2 - view.ty) / view.k - prev.h / 2) / prev.scale;
+  const px = prev.scale * view.k;          // képpont / világegység: ez marad
+
+  view.k = px / next.scale;
+  view.tx = next.w / 2 - (next.w / 2 + (wx - next.cx) * next.scale) * view.k;
+  view.ty = next.h / 2 - (next.h / 2 + (wy - next.cy) * next.scale) * view.k;
+  return true;
+}
+
 export function drawnLength(list = []) {
   return list.reduce((sum, s) => sum + trackLength(s.pts || []), 0);
 }
@@ -1037,6 +1101,7 @@ export function typeLabel(type) {
     audio: 'Hangjegyzet',
     condition: 'Állapot / tábla',
     note: 'Jegyzet',
+    jelzes: 'Jelzéskép (kísérőautó)',
   }[type] || 'Jegyzet';
 }
 
@@ -1090,6 +1155,11 @@ export const severityLabel = (id) => byId(SEVERITIES, id);
 
 export function describeItem(i) {
   const parts = [];
+  if (i.type === 'jelzes') parts.push(signsLabel(i));
+  if (i.road && (i.road.utszam || i.road.szelveny)) {
+    parts.push([i.road.utszam, i.road.szelveny].filter(Boolean).join(' '));
+  }
+  if (i.reason) parts.push('Indok: ' + i.reason);
   if (i.note) parts.push(i.note);
   if (i.dims && i.dims.length) parts.push('Méretek: ' + i.dims.join('; '));
   return parts.join(' | ');
