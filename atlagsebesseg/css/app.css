@@ -1160,6 +1160,34 @@ input[type="number"], select {
 a.hirdetes:hover strong, a.hirdetes:focus-visible strong { text-decoration: underline; }
 a.hirdetes:hover, a.hirdetes:focus-visible { border-color: var(--accent); }
 
+/* Eladott felület: a kép a teljes szélességet kitölti, alatta a
+   kötelező „Hirdetés” címke. A szaggatott keret helyett folytonos —
+   a szaggatott azt jelzi, hogy a hely szabad. */
+.hirdetes-elo {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  border-style: solid;
+}
+.hirdetes-elo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* A kép a saját arányát tartja; a magasságot a `width`/`height`
+     attribútum adja meg előre, hogy betöltéskor ne ugorjon a tartalom. */
+}
+.hirdetes-cimke {
+  display: block;
+  padding: 6px 10px;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
+
 .leaflet-container { background: var(--surface-2); font: inherit; }
 .leaflet-control-attribution { font-size: 10px; }
 

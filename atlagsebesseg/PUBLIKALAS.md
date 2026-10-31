@@ -88,17 +88,20 @@ A feltöltendő állomány a repó `atlagsebesseg/` mappája, **teszt és
 dokumentáció nélkül** — pontosan ez a 34 fájl:
 
 ```
-.htaccess           index.html          adatvedelem.html
+.htaccess           index.html          adatvedelem.html    hirdetes.html
 manifest.webmanifest  sw.js             robots.txt          sitemap.xml
 css/app.css
-js/  (11 modul)     icons/ (5 fájl)     vendor/ (leaflet + fonts)
+js/  (12 modul)     icons/ (5 fájl)     vendor/ (leaflet + fonts)
+hirdetes/  (az eladott hirdetések képei, ha van ilyen)
 ```
 
 Ez a csomag külön ki van gyűjtve, és a teljes tesztkészlet lefut rajta
 önmagában is — tehát ha ezt felmásolod, semmi nem hiányzik.
 
-A `teszt/` mappát, a `README.md`-t és ezt a `PUBLIKALAS.md`-t **ne** töltsd
-fel: az élesben semmit nem csinálnak.
+A `teszt/`, a `media/` mappát, a `README.md`-t, a `HIRDETES.md`-t és ezt
+a `PUBLIKALAS.md`-t **ne** töltsd fel: az élesben semmit nem csinálnak.
+A `HIRDETES.md` ráadásul árazási megjegyzéseket tartalmaz, amiket nem
+kell a hirdetőnek látnia.
 
 ### 2.2 A feltöltés menete
 

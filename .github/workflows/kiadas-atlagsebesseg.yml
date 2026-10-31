@@ -73,9 +73,15 @@ jobs:
           set -euo pipefail
           mkdir -p kiadas
           cd atlagsebesseg
-          cp .htaccess index.html adatvedelem.html manifest.webmanifest \
-             sw.js robots.txt sitemap.xml ../kiadas/
+          cp .htaccess index.html adatvedelem.html hirdetes.html \
+             manifest.webmanifest sw.js robots.txt sitemap.xml ../kiadas/
           cp -r css js icons vendor ../kiadas/
+          # Az eladott hirdetések képei; a mappa leírója nem kell élesbe.
+          if [ -d hirdetes ]; then
+            mkdir -p ../kiadas/hirdetes
+            find hirdetes -maxdepth 1 -type f ! -name '*.md' \
+              -exec cp {} ../kiadas/hirdetes/ \;
+          fi
           cd ..
           echo "Feltöltendő fájlok: $(find kiadas -type f | wc -l)"
           find kiadas -type f | sort
