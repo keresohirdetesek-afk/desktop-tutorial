@@ -1119,6 +1119,59 @@ input[type="number"], select {
 .jogi { max-width: 720px; margin: 0 auto; padding-bottom: 32px; }
 .jog-focim { margin: 4px 0 0; font-size: 22px; line-height: 1.2; letter-spacing: -0.4px; }
 .jog-alcim { margin: 6px 0 0; font-size: 14px; font-weight: 650; }
+
+/* ------------------------------------------------ tudástár-aloldalak */
+
+/* A táblázat a keskeny telefonnál is olvasható marad: ha nem fér ki,
+   saját maga görgethető, a lap törzse nem lóg ki tőle. */
+.tabla-gorgo { overflow-x: auto; }
+.birsag-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.birsag-tabla th,
+.birsag-tabla td {
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.birsag-tabla th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  font-weight: 650;
+}
+.birsag-tabla td:last-child { text-align: right; font-weight: 650; }
+.birsag-tabla tbody tr:last-child td { border-bottom: 0; }
+
+/* Kiemelt számpélda a cikkekben. */
+.pelda {
+  border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 14px;
+  margin: 2px 0;
+  font-size: 14px;
+}
+.pelda strong { color: var(--text); }
+
+/* A cikkek végén a többi aloldal. */
+.tovabb { display: grid; gap: 8px; }
+.tovabb a {
+  display: block;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 650;
+  font-size: 14px;
+}
+.tovabb a span { display: block; font-weight: 400; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.tovabb a:hover, .tovabb a:focus-visible { border-color: var(--accent); }
 .jogi code { font-size: 12px; word-break: break-all; }
 /* Itt nevek és címek állnak, nem műszeradatok: nem kell műszer-betű. */
 .jogi .kv dd { font-family: inherit; }
@@ -1159,6 +1212,34 @@ input[type="number"], select {
 }
 a.hirdetes:hover strong, a.hirdetes:focus-visible strong { text-decoration: underline; }
 a.hirdetes:hover, a.hirdetes:focus-visible { border-color: var(--accent); }
+
+/* Eladott felület: a kép a teljes szélességet kitölti, alatta a
+   kötelező „Hirdetés” címke. A szaggatott keret helyett folytonos —
+   a szaggatott azt jelzi, hogy a hely szabad. */
+.hirdetes-elo {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  border-style: solid;
+}
+.hirdetes-elo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* A kép a saját arányát tartja; a magasságot a `width`/`height`
+     attribútum adja meg előre, hogy betöltéskor ne ugorjon a tartalom. */
+}
+.hirdetes-cimke {
+  display: block;
+  padding: 6px 10px;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
 
 .leaflet-container { background: var(--surface-2); font: inherit; }
 .leaflet-control-attribution { font-size: 10px; }

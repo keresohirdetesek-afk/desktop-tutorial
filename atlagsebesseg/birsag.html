@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e10">
+<script>
+/* A téma a stíluslap előtt dől el, különben felvillanna a másik szín. */
+(function () {
+  var m = null;
+  try { m = localStorage.getItem('atlagsebesseg-tema'); } catch (e) { /* privát ablak */ }
+  var sotet = m === 'sotet' ||
+    (m !== 'vilagos' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', sotet ? 'dark' : 'light');
+  if (!sotet) {
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#eef0f5');
+  }
+})();
+</script>
+<meta name="description" content="Mennyi a gyorshajtás bírsága? A teljes táblázat mindhárom kategóriára, a küszöbökkel és példákkal. 50 000 Ft-tól 468 000 Ft-ig.">
+<title>Gyorshajtás bírság 2026 — a teljes táblázat | Átlagsebesség.hu</title>
+<link rel="canonical" href="https://atlagsebesseg.hu/birsag.html">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Átlagsebesség.hu">
+<meta property="og:locale" content="hu_HU">
+<meta property="og:url" content="https://atlagsebesseg.hu/birsag.html">
+<meta property="og:title" content="Gyorshajtás bírság 2026 — a teljes táblázat | Átlagsebesség.hu">
+<meta property="og:description" content="Mennyi a gyorshajtás bírsága? A teljes táblázat mindhárom kategóriára, a küszöbökkel és példákkal. 50 000 Ft-tól 468 000 Ft-ig.">
+<meta property="og:image" content="https://atlagsebesseg.hu/icons/megosztas.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header id="topbar">
+  <a class="jog-vissza-jel" href="index.html" aria-label="Vissza az alkalmazáshoz">
+    <svg class="logo" aria-hidden="true" viewBox="60 118 392 344">
+      <path d="M78 452 C140 392 250 330 322 266 L348 266 C392 330 430 392 428 452 Z" fill="currentColor"/>
+      <g fill="var(--surface)">
+        <path d="M331.0 272 L335.4 272 L329.0 296 L323.1 296 Z"/>
+        <path d="M318.5 310 L325.3 310 L313.9 340 L305.1 340 Z"/>
+        <path d="M297.8 356 L307.6 356 L295.0 392 L282.8 392 Z"/>
+        <path d="M269.0 410 L282.3 410 L261.0 452 L245.0 452 Z"/>
+      </g>
+      <path d="M100 258 A161 161 0 0 1 238.2 141.4" fill="none" stroke="var(--marka)" stroke-width="26" stroke-linecap="round"/>
+      <path d="M271.8 141.4 A161 161 0 0 1 410 258" fill="none" stroke="currentColor" stroke-width="26" stroke-dasharray="30 20"/>
+      <g fill="var(--marka)">
+        <path d="M71.5 308.8 A42 42 0 1 1 148.5 308.8 L110 397 Z"/>
+        <path d="M361.5 308.8 A42 42 0 1 1 438.5 308.8 L400 397 Z"/>
+      </g>
+    </svg>
+  </a>
+  <h1><span class="wm-elso">átlag</span>sebesség.hu</h1>
+  <a class="btn ghost small" href="index.html">Vissza</a>
+</header>
+
+<main id="main">
+  <div class="pad jogi">
+
+    <h2 class="jog-focim">Gyorshajtás bírságtételei</h2>
+    <p class="muted small">Mennyi a bírság, ha elkapnak? A teljes táblázat, a küszöbök, és három példa arra, miért félrevezető fejben számolni.</p>
+
+    <section class="card kiemelt">
+      <h3 class="card-title">A lényeg</h3>
+      <p>
+        A gyorshajtásért kiszabott közigazgatási bírság Magyarországon
+        <strong>kötött összeg</strong>: jogszabály rendeli hozzá a túllépés
+        mértékéhez. Nem alku kérdése, és nem a helyszínen dől el. Három
+        dolog határozza meg, semmi más:
+      </p>
+      <div class="lepesek">
+        <div><span class="lepes-szam">1</span> Mennyi volt ott a megengedett legnagyobb sebesség.</div>
+        <div><span class="lepes-szam">2</span> Mennyivel mentél gyorsabban ennél.</div>
+        <div><span class="lepes-szam">3</span> Melyik sávba esik ez a különbség.</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Van egy küszöb, ami alatt nincs bírság</h3>
+      <p>
+        A legkisebb kiszabható összeg <strong>50 000 Ft</strong> — de csak
+        akkor, ha a túllépés elér egy küszöböt. A küszöb a korlátozás
+        nagyságától függ:
+      </p>
+      <dl class="kv szeles">
+        <dt>50 km/h-ig</dt><dd>15 km/h túllépésig nincs bírság</dd>
+        <dt>51–100 km/h</dt><dd>15 km/h túllépésig nincs bírság</dd>
+        <dt>100 km/h fölött</dt><dd>20 km/h túllépésig nincs bírság</dd>
+      </dl>
+      <p class="muted small">
+        Ez nem engedély, hanem mérési tűrés: a küszöb alatt is
+        szabálytalan a gyorshajtás, csak közigazgatási bírság nem jár érte.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">A teljes táblázat</h3>
+      <p>
+        A sávhatárok <strong>bezárólag</strong> értendők. A legnagyobb
+        összeg 468 000 Ft.
+      </p>
+      <h4 class="jog-alcim">Lakott területen</h4>
+      <p class="muted small">Legfeljebb 50 km/h megengedett sebesség — bírság a <strong>15 km/h</strong> túllépés fölött.</p>
+      <div class="tabla-gorgo">
+      <table class="birsag-tabla">
+        <thead><tr><th>Túllépés</th><th>Bírság</th></tr></thead>
+        <tbody>
+          <tr><td>16–25 km/h</td><td>50 000 Ft</td></tr>
+          <tr><td>26–35 km/h</td><td>70 000 Ft</td></tr>
+          <tr><td>36–45 km/h</td><td>100 000 Ft</td></tr>
+          <tr><td>46–55 km/h</td><td>140 000 Ft</td></tr>
+          <tr><td>56–65 km/h</td><td>210 000 Ft</td></tr>
+          <tr><td>66–75 km/h</td><td>312 000 Ft</td></tr>
+          <tr><td>76 km/h fölött</td><td>468 000 Ft</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <h4 class="jog-alcim">Lakott területen kívül, főúton</h4>
+      <p class="muted small">50 km/h feletti, de legfeljebb 100 km/h — bírság a <strong>15 km/h</strong> túllépés fölött.</p>
+      <div class="tabla-gorgo">
+      <table class="birsag-tabla">
+        <thead><tr><th>Túllépés</th><th>Bírság</th></tr></thead>
+        <tbody>
+          <tr><td>16–30 km/h</td><td>50 000 Ft</td></tr>
+          <tr><td>31–45 km/h</td><td>70 000 Ft</td></tr>
+          <tr><td>46–60 km/h</td><td>100 000 Ft</td></tr>
+          <tr><td>61–75 km/h</td><td>140 000 Ft</td></tr>
+          <tr><td>76–90 km/h</td><td>210 000 Ft</td></tr>
+          <tr><td>91–105 km/h</td><td>312 000 Ft</td></tr>
+          <tr><td>106 km/h fölött</td><td>468 000 Ft</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <h4 class="jog-alcim">Autóúton, autópályán</h4>
+      <p class="muted small">100 km/h feletti megengedett sebesség — bírság a <strong>20 km/h</strong> túllépés fölött.</p>
+      <div class="tabla-gorgo">
+      <table class="birsag-tabla">
+        <thead><tr><th>Túllépés</th><th>Bírság</th></tr></thead>
+        <tbody>
+          <tr><td>21–35 km/h</td><td>50 000 Ft</td></tr>
+          <tr><td>36–50 km/h</td><td>70 000 Ft</td></tr>
+          <tr><td>51–65 km/h</td><td>100 000 Ft</td></tr>
+          <tr><td>66–80 km/h</td><td>140 000 Ft</td></tr>
+          <tr><td>81–95 km/h</td><td>210 000 Ft</td></tr>
+          <tr><td>96–110 km/h</td><td>312 000 Ft</td></tr>
+          <tr><td>111 km/h fölött</td><td>468 000 Ft</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Három példa</h3>
+      <p class="pelda">
+        Lakott területen, <strong>50-es táblánál 70 km/h</strong>: a
+        túllépés 20 km/h. A küszöb 15, tehát bírságos; a 16–25-ös sávba
+        esik → <strong>50 000 Ft</strong>.
+      </p>
+      <p class="pelda">
+        Főúton, <strong>90-es táblánál 140 km/h</strong>: a túllépés
+        50 km/h, a 46–60-as sávba esik → <strong>100 000 Ft</strong>.
+      </p>
+      <p class="pelda">
+        Autópályán, <strong>130-as táblánál 180 km/h</strong>: a túllépés
+        50 km/h. Itt a küszöb 20, és a sávok is tágabbak: a 36–50-es sávba
+        esik → <strong>70 000 Ft</strong>. Egy km/h-val több, 181-nél már
+        100 000 Ft.
+      </p>
+      <p class="muted small">
+        A harmadik példa mutatja, miért félrevezető fejben számolni:
+        ugyanaz az 50 km/h túllépés háromféle összeget jelent attól
+        függően, hol történt.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Mire nem terjed ki ez a táblázat</h3>
+      <p>
+        Ez a lap a <strong>gyorshajtás miatti közigazgatási bírságot</strong>
+        írja le. A gyorshajtásnak más következménye is lehet — ezekről itt
+        nem adunk tájékoztatást, mert nem ez az oldal tárgya, és mert a
+        részletek a konkrét ügytől függnek.
+      </p>
+      <p>
+        Azt sem tudjuk megmondani, hogy egy adott helyen mennyi a
+        megengedett sebesség: a táblák, az ideiglenes korlátozások és az
+        útviszonyok döntenek. Az alkalmazás a táblák szerinti határokat az
+        OpenStreetMap adataiból kéri le, ami hasznos tájékozódásra, de
+        <strong>nem hatósági adat</strong>.
+      </p>
+    </section>
+
+    <section class="card kiemelt">
+      <h3 class="card-title">Átlagsebesség-mérésnél ugyanez a táblázat</h3>
+      <p>
+        Ha egy szakaszon az átlagsebességet mérik, a bírság kiszámítása
+        nem változik — csak az kerül a „mért sebesség” helyére, amit a
+        szakaszon az <strong>átlagod</strong> mutat. Ettől viszont
+        meglepően könnyű bírságos sávba esni: elég néhány gyorsabb perc,
+        és az átlag felviszi az egészet.
+      </p>
+      <p>
+        Az <a href="index.html">Átlagsebesség.hu</a> ezt számolja ki:
+        beírod a szakasz hosszát és a menetidőt, vagy lemered GPS-szel a
+        saját utadon.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Forrás</h3>
+      <p class="muted small">
+        A bírságtételek forrása a <strong>410/2007. (XII. 29.) Korm. rendelet</strong>.
+        Az oldalon szereplő összegeket utoljára 2026. 08. 10
+        napján ellenőriztük. Jogszabály változhat; a hatályos szöveg a
+        Nemzeti Jogszabálytárban érhető el.
+      </p>
+    </section>
+
+
+    <section class="card">
+      <h3 class="card-title">Tovább</h3>
+      <div class="tovabb">
+        <a href="szakaszellenorzes.html">Mi az a szakaszellenőrzés?<span>Két kapu, egy átlag — így működik.</span></a>
+        <a href="atlagsebesseg-szamitas.html">Hogyan számolódik az átlagsebesség?<span>A képlet, és miért csal a megérzés.</span></a>
+        <a href="sebessegmero-pontossag.html">Mennyit mutat többet a kilométeróra?<span>A műszered szabály szerint túloz.</span></a>
+        <a href="index.html">Mérd le a saját utadon<span>Ingyenes, regisztráció nélkül, a böngésződben.</span></a>
+      </div>
+    </section>
+
+    <p class="muted small">
+      Ez az oldal tájékoztató jellegű, nem hatósági eszköz, és nem minősül
+      jogi tanácsadásnak. Hatósági eljárásban a hatóság saját mérése az
+      irányadó. Részletek az
+      <a href="adatvedelem.html">adatvédelmi tájékoztatóban</a>.
+    </p>
+
+  </div>
+</main>
+
+</body>
+</html>

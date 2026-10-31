@@ -11,6 +11,7 @@ if (!chromium) throw new Error('A playwright-core nem található. Telepítsd, v
 /* A kiszolgáló címe és a böngésző helye környezeti változóval állítható:
    ATLAG_URL, ATLAG_CHROME. Alapértelmezésben a helyi kiszolgálót nézi. */
 const CIM = process.env.ATLAG_URL || 'http://127.0.0.1:8768/index.html';
+const CIM_ORIGIN = CIM;
 const BONGESZO = process.env.ATLAG_CHROME ||
   '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 
@@ -1556,7 +1557,8 @@ async function jogiTeszt(b) {
     const dobozok = [...document.querySelectorAll('.hirdetes')];
     return {
       db: dobozok.length,
-      linkek: dobozok.filter((d) => d.tagName === 'A' && d.href.startsWith('mailto:')).length,
+      linkek: dobozok.filter((d) => d.tagName === 'A' &&
+                                    /hirdetes\.html$/.test(d.getAttribute('href') || '')).length,
       cimkek: dobozok.filter((d) => /Hirdessen itt/.test(d.textContent)).length,
       regi: /Hirdetés helye/.test(document.body.textContent),
       lap: !!document.querySelector('a[href="adatvedelem.html"]'),
@@ -1564,7 +1566,7 @@ async function jogiTeszt(b) {
     };
   });
   all('minden hirdetési hely megvan', h.db === 4, String(h.db));
-  all('mindegyik kattintható mailto-link', h.linkek === h.db, `${h.linkek}/${h.db}`);
+  all('mindegyik a hirdetési oldalra visz', h.linkek === h.db, `${h.linkek}/${h.db}`);
   all('mindegyiken a „Hirdessen itt” felirat áll', h.cimkek === h.db, `${h.cimkek}/${h.db}`);
   all('nem maradt „Hirdetés helye” helykitöltő', !h.regi);
   all('a Tudnivalókból elérhető az adatvédelmi tájékoztató', h.lap);
@@ -2013,6 +2015,239 @@ async function elemzesTeszt(b) {
 /* Egy átlagsebesség-mérő két pont között méri az időt, és nem tudja, hol
    mentél gyorsabban a szakaszon belül. A bírság ezért a teljes szakasz
    egyetlen átlagából jön, nem a korlátozás szerinti részekből. */
+
+/* ------------------------------------------------------------------ 29 */
+
+/* A hirdetés az oldal legérzékenyebb pontja: ez az egyetlen hely, ahol
+   idegen tartalom kerülhet a lapra. Az ígéret az, hogy a hirdető nem lát
+   semmit a látogatóból — ezt a kódnak kell kikényszerítenie, nem a
+   figyelemnek. */
+/* ------------------------------------------------------------------ 30 */
+
+/* A tudástár-aloldalak. A legfontosabb ellenőrzés az utolsó: a
+   bírságtáblázat a cikkben KÉZZEL írt HTML, a kalkulátor viszont a
+   `birsag.js`-ből számol. Ha a kettő elcsúszik, az oldal saját magának
+   mond ellent — ezt csak gép veszi észre. */
+async function tudastarTeszt(b) {
+  console.log('\n30. Tudástár-aloldalak');
+
+  const LAPOK = ['birsag.html', 'szakaszellenorzes.html',
+                 'atlagsebesseg-szamitas.html', 'sebessegmero-pontossag.html'];
+
+  for (const lap of LAPOK) {
+    const p = await ujLap(b, { szelesseg: 390 });
+    await p.goto(CIM.replace(/index\.html$/, lap));
+    const r = await p.evaluate(() => ({
+      cim: document.title,
+      h2: document.querySelector('.jog-focim')?.textContent.trim() || '',
+      kanonikus: document.querySelector('link[rel="canonical"]')?.href || '',
+      ogKep: document.querySelector('meta[property="og:image"]')?.content || '',
+      leiras: document.querySelector('meta[name="description"]')?.content || '',
+      vissza: !!document.querySelector('a[href="index.html"]'),
+      belsok: [...document.querySelectorAll('a[href$=".html"]')]
+        .map((a) => a.getAttribute('href')),
+      tul: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      hossz: document.querySelector('#main').textContent.trim().length,
+    }));
+    all(`${lap}: betölt és van címe`, r.cim.length > 10, r.cim);
+    all(`${lap}: van főcím a lapon`, r.h2.length > 5, r.h2);
+    all(`${lap}: a kanonikus cím a végleges domainen van`,
+        r.kanonikus === `https://atlagsebesseg.hu/${lap}`, r.kanonikus);
+    all(`${lap}: van megosztási kép`, /megosztas\.png$/.test(r.ogKep), r.ogKep);
+    all(`${lap}: van leírás a keresőnek`, r.leiras.length > 60, String(r.leiras.length));
+    all(`${lap}: nincs vízszintes túllógás`, !r.tul);
+    all(`${lap}: visszavezet az alkalmazásba`, r.vissza);
+    /* Vékony tartalomra a Google sem rangsorol. Ez nem szépségdíj:
+       ha egy lap 1500 karakter alatt marad, nincs értelme kitenni. */
+    all(`${lap}: van rajta elég tartalom`, r.hossz > 1500, String(r.hossz));
+    const tarsak = LAPOK.filter((x) => x !== lap);
+    all(`${lap}: hivatkozik a többi aloldalra`,
+        tarsak.every((t) => r.belsok.includes(t)), r.belsok.join(','));
+    await p.close();
+  }
+
+  /* A Tudnivalók fülről el kell érni mind a négyet, különben a
+     látogató sosem talál rájuk. */
+  const f = await ujLap(b);
+  await f.goto(CIM);
+  await f.click('#tabs .tab[data-scr="scr-info"]');
+  await f.waitForTimeout(150);
+  const linkek = await f.evaluate(() =>
+    [...document.querySelectorAll('#scr-info a')].map((a) => a.getAttribute('href')));
+  for (const lap of LAPOK) {
+    all(`a Tudnivalók fülről elérhető: ${lap}`, linkek.includes(lap));
+  }
+
+  /* A cikkbeli táblázat és a kalkulátor ugyanazt mondja-e. */
+  const egyezes = await f.evaluate(async (lapCim) => {
+    const m = await import('./js/birsag.js');
+    const varhato = [];
+    for (const k of m.KATEGORIAK) {
+      let also = k.kuszob + 1;
+      for (const s of k.savok) {
+        const felso = s.max === Infinity ? null : s.max;
+        varhato.push({ also, felso, osszeg: s.osszeg });
+        if (felso !== null) also = felso + 1;
+      }
+    }
+    const sz = await (await fetch(lapCim)).text();
+    const doc = new DOMParser().parseFromString(sz, 'text/html');
+    const kapott = [...doc.querySelectorAll('.birsag-tabla tbody tr')].map((tr) => {
+      const [a, b] = [...tr.children].map((td) => td.textContent.trim());
+      const sz2 = a.match(/(\d+)(?:–(\d+))?/);
+      return {
+        also: Number(sz2[1]),
+        felso: sz2[2] ? Number(sz2[2]) : null,
+        osszeg: Number(b.replace(/[^\d]/g, '')),
+      };
+    });
+    return { varhato, kapott };
+  }, 'birsag.html');
+
+  all('a bírságtáblázat ugyanannyi sorból áll, mint a kalkulátoré',
+      egyezes.kapott.length === egyezes.varhato.length,
+      `${egyezes.kapott.length} / ${egyezes.varhato.length}`);
+  const elter = egyezes.varhato.filter((v, i) => {
+    const k = egyezes.kapott[i];
+    return !k || k.also !== v.also || k.felso !== v.felso || k.osszeg !== v.osszeg;
+  });
+  all('a bírságtáblázat minden sora egyezik a kalkulátoréval',
+      elter.length === 0,
+      elter.map((v) => `${v.also}-${v.felso}:${v.osszeg}`).join(', '));
+  await f.close();
+}
+
+async function hirdetesTeszt(b) {
+  console.log('\n29. Hirdetési rendszer');
+
+  const p = await ujLap(b);
+  await p.goto(CIM);
+
+  const r = await p.evaluate(async () => {
+    const m = await import('./js/hirdetes.js');
+    const ma = new Date();
+    const nap = (el) => {
+      const d = new Date(ma.getTime() + el * 86400000);
+      const z = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
+    };
+
+    const doboz = (slot) => {
+      const a = document.createElement('a');
+      a.className = 'hirdetes';
+      a.dataset.slot = slot;
+      a.href = 'hirdetes.html';
+      a.innerHTML = '<strong>Hirdessen itt</strong>';
+      return a;
+    };
+    const keret = (slotok) => {
+      const d = document.createElement('div');
+      for (const s of slotok) d.appendChild(doboz(s));
+      document.body.appendChild(d);
+      return d;
+    };
+
+    const ki = {};
+
+    // 1. érvényes hirdetés kikerül
+    let k = keret(['intro-also']);
+    m.hirdetesekBe(k, [{ slot: 'intro-also', kep: 'icons/icon-192.png', link: 'https://pelda.hu/',
+                         alt: 'Példa', nev: 'Példa Kft.', szeles: 600, magas: 150 }]);
+    const elo = k.querySelector('.hirdetes-elo');
+    ki.kikerult = !!elo;
+    ki.vanKep = !!(elo && elo.querySelector('img'));
+    ki.kepForras = elo ? new URL(elo.querySelector('img').src).origin : '';
+    ki.cimke = elo ? elo.querySelector('.hirdetes-cimke').textContent : '';
+    ki.rel = elo ? elo.rel : '';
+    ki.ujAblak = elo ? elo.target : '';
+    ki.kepMeret = elo ? [elo.querySelector('img').getAttribute('width'),
+                         elo.querySelector('img').getAttribute('height')].join('x') : '';
+    k.remove();
+
+    // 2. lejárt hirdetés nem kerül ki
+    k = keret(['intro-also']);
+    m.hirdetesekBe(k, [{ slot: 'intro-also', kep: 'icons/icon-192.png', link: 'https://pelda.hu/',
+                         lejar: nap(-1) }]);
+    ki.lejartKikerult = !!k.querySelector('.hirdetes-elo');
+    k.remove();
+
+    // 3. ma lejáró hirdetés MÉG kikerül
+    k = keret(['intro-also']);
+    m.hirdetesekBe(k, [{ slot: 'intro-also', kep: 'icons/icon-192.png', link: 'https://pelda.hu/',
+                         lejar: nap(0) }]);
+    ki.maLejaroKikerult = !!k.querySelector('.hirdetes-elo');
+    k.remove();
+
+    // 4. külső kiszolgálóról hivatkozott kép NEM kerül ki
+    k = keret(['intro-also']);
+    m.hirdetesekBe(k, [{ slot: 'intro-also', kep: 'https://idegen.example/banner.png',
+                         link: 'https://pelda.hu/' }]);
+    ki.idegenKikerult = !!k.querySelector('.hirdetes-elo');
+    k.remove();
+
+    // 5. a felületre nevezett hirdetés megelőzi a „barmelyik”-et
+    k = keret(['kalk-also']);
+    m.hirdetesekBe(k, [
+      { slot: 'barmelyik', kep: 'icons/icon-192.png', link: 'https://altalanos.hu/', nev: 'Általános' },
+      { slot: 'kalk-also', kep: 'icons/icon-512.png', link: 'https://nevezett.hu/', nev: 'Nevezett' },
+    ]);
+    ki.nyertes = k.querySelector('.hirdetes-elo')?.href || '';
+    k.remove();
+
+    // 6. üres lista: marad a helykitöltő
+    k = keret(['intro-also', 'meres-also']);
+    m.hirdetesekBe(k, []);
+    ki.uresenMarad = k.querySelectorAll('.hirdetes[data-slot]').length;
+    k.remove();
+
+    return ki;
+  });
+
+  all('az érvényes hirdetés kikerül', r.kikerult);
+  all('a hirdetés képpel jelenik meg', r.vanKep);
+  all('a kép a saját kiszolgálóról jön', r.kepForras === new URL(CIM_ORIGIN).origin, r.kepForras);
+  all('kötelező „Hirdetés” felirat, a hirdető nevével',
+      r.cimke === 'Hirdetés · Példa Kft.', r.cimke);
+  all('a hivatkozás fizetettként jelölt', /sponsored/.test(r.rel), r.rel);
+  all('a hivatkozás nem adja át az ablakot', /noopener/.test(r.rel), r.rel);
+  all('a hirdetés új lapon nyílik', r.ujAblak === '_blank', r.ujAblak);
+  all('a kép mérete előre rögzített (nem ugrál a tartalom)',
+      r.kepMeret === '600x150', r.kepMeret);
+  all('a lejárt hirdetés nem jelenik meg', !r.lejartKikerult);
+  all('a ma lejáró hirdetés még megjelenik', r.maLejaroKikerult);
+  all('külső kiszolgálóról hivatkozott kép nem jelenik meg', !r.idegenKikerult);
+  all('a felületre nevezett hirdetés az erősebb',
+      /nevezett\.hu/.test(r.nyertes), r.nyertes);
+  all('hirdetés nélkül marad a „Hirdessen itt” felirat', r.uresenMarad === 2,
+      String(r.uresenMarad));
+
+  await p.close();
+
+  /* A hirdetői oldal: ez az, amit egy lehetséges hirdető elolvas. */
+  const h = await ujLap(b, { szelesseg: 390 });
+  await h.goto(CIM.replace(/index\.html$/, 'hirdetes.html'));
+  const o = await h.evaluate(() => ({
+    cim: document.title,
+    /* A HTML sortörései a textContent-be is bekerülnek, ezért a
+       keresett mondatok szóközre normalizálva vizsgálandók. */
+    szoveg: document.body.textContent.replace(/\s+/g, ' '),
+    vissza: !!document.querySelector('a[href="index.html"]'),
+    impresszum: !!document.querySelector('a[href="adatvedelem.html#impresszum"]'),
+    level: !!document.querySelector('a[href^="mailto:atlagsebesseg@gmail.com"]'),
+    tul: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+  }));
+  all('a hirdetői oldal betölt', /Hirdetés/.test(o.cim), o.cim);
+  all('a hirdetői oldalon nincs vízszintes túllógás', !o.tul);
+  all('a hirdetői oldalról van visszaút', o.vissza);
+  all('a hirdetői oldal az impresszumra mutat', o.impresszum);
+  all('a hirdetői oldalon ott az e-mail cím', o.level);
+  for (const kell of ['2008. évi XLVIII', 'nincs süti', 'Hirdetés', '600 × 150',
+                      'nem lát semmit a látogatóból']) {
+    all(`a hirdetői oldal tartalmazza: ${kell}`, o.szoveg.includes(kell));
+  }
+  await h.close();
+}
+
 async function teljesSzakaszTeszt(b) {
   console.log('\n28. Egy szakasz, egy átlag, egy ítélet');
   const p = await ujLap(b);
@@ -2147,6 +2382,8 @@ try {
   await sebessegNelkulTeszt(b);
   await elemzesTeszt(b);
   await teljesSzakaszTeszt(b);
+  await hirdetesTeszt(b);
+  await tudastarTeszt(b);
 } finally {
   await b.close();
 }

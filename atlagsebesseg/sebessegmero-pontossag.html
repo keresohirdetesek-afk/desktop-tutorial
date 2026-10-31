@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e10">
+<script>
+/* A téma a stíluslap előtt dől el, különben felvillanna a másik szín. */
+(function () {
+  var m = null;
+  try { m = localStorage.getItem('atlagsebesseg-tema'); } catch (e) { /* privát ablak */ }
+  var sotet = m === 'sotet' ||
+    (m !== 'vilagos' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', sotet ? 'dark' : 'light');
+  if (!sotet) {
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#eef0f5');
+  }
+})();
+</script>
+<meta name="description" content="A sebességmérő szabály szerint soha nem mutathat kevesebbet a valósnál, felfelé viszont eltérhet. Mennyivel, és mennyire pontos a GPS?">
+<title>Mennyit mutat többet a kilométeróra? És a GPS? | Átlagsebesség.hu</title>
+<link rel="canonical" href="https://atlagsebesseg.hu/sebessegmero-pontossag.html">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Átlagsebesség.hu">
+<meta property="og:locale" content="hu_HU">
+<meta property="og:url" content="https://atlagsebesseg.hu/sebessegmero-pontossag.html">
+<meta property="og:title" content="Mennyit mutat többet a kilométeróra? És a GPS? | Átlagsebesség.hu">
+<meta property="og:description" content="A sebességmérő szabály szerint soha nem mutathat kevesebbet a valósnál, felfelé viszont eltérhet. Mennyivel, és mennyire pontos a GPS?">
+<meta property="og:image" content="https://atlagsebesseg.hu/icons/megosztas.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header id="topbar">
+  <a class="jog-vissza-jel" href="index.html" aria-label="Vissza az alkalmazáshoz">
+    <svg class="logo" aria-hidden="true" viewBox="60 118 392 344">
+      <path d="M78 452 C140 392 250 330 322 266 L348 266 C392 330 430 392 428 452 Z" fill="currentColor"/>
+      <g fill="var(--surface)">
+        <path d="M331.0 272 L335.4 272 L329.0 296 L323.1 296 Z"/>
+        <path d="M318.5 310 L325.3 310 L313.9 340 L305.1 340 Z"/>
+        <path d="M297.8 356 L307.6 356 L295.0 392 L282.8 392 Z"/>
+        <path d="M269.0 410 L282.3 410 L261.0 452 L245.0 452 Z"/>
+      </g>
+      <path d="M100 258 A161 161 0 0 1 238.2 141.4" fill="none" stroke="var(--marka)" stroke-width="26" stroke-linecap="round"/>
+      <path d="M271.8 141.4 A161 161 0 0 1 410 258" fill="none" stroke="currentColor" stroke-width="26" stroke-dasharray="30 20"/>
+      <g fill="var(--marka)">
+        <path d="M71.5 308.8 A42 42 0 1 1 148.5 308.8 L110 397 Z"/>
+        <path d="M361.5 308.8 A42 42 0 1 1 438.5 308.8 L400 397 Z"/>
+      </g>
+    </svg>
+  </a>
+  <h1><span class="wm-elso">átlag</span>sebesség.hu</h1>
+  <a class="btn ghost small" href="index.html">Vissza</a>
+</header>
+
+<main id="main">
+  <div class="pad jogi">
+
+    <h2 class="jog-focim">Mennyit mutat többet a kilométeróra?</h2>
+    <p class="muted small">A műszered előírás szerint túloz. Mennyivel, és mennyire pontos helyette a GPS?</p>
+
+    <section class="card kiemelt">
+      <h3 class="card-title">A kilométeróra szabály szerint túloz</h3>
+      <p>
+        A járművek sebességmérőjére nemzetközi előírás vonatkozik (ENSZ-EGB
+        39. előírás), és ennek két lényeges pontja van:
+      </p>
+      <ul class="tick">
+        <li><strong>A műszer soha nem mutathat kevesebbet a valós
+            sebességnél.</strong> Alulmérés nem megengedett.</li>
+        <li><strong>Felfelé viszont korlátozott mértékben eltérhet:</strong>
+            legfeljebb a valós sebesség 110%-a plusz 4 km/h.</li>
+      </ul>
+      <p>
+        Ezért mutat a kilométeróra jellemzően <strong>többet</strong>, mint
+        amennyivel ténylegesen haladsz. Ez nem hiba, hanem szándékos
+        tervezési döntés: így a vezető biztosan nem lépi túl a határt
+        amiatt, hogy a műszere kevesebbet mutat.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Mit jelent ez számokban</h3>
+      <p>
+        Az előírás a <strong>felső határt</strong> szabja meg, nem azt,
+        mennyivel tér el a te autód. A gyakorlatban a legtöbb jármű ennél
+        kevesebbel mér többet. A szabály szerint lehetséges legnagyobb
+        eltérés viszont jól mutatja a nagyságrendet:
+      </p>
+      <div class="tabla-gorgo">
+      <table class="birsag-tabla">
+        <thead><tr><th>Valós sebesség</th><th>A műszer legfeljebb ennyit mutathat</th></tr></thead>
+        <tbody>
+          <tr><td>50 km/h</td><td>59 km/h</td></tr>
+          <tr><td>90 km/h</td><td>103 km/h</td></tr>
+          <tr><td>130 km/h</td><td>147 km/h</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="muted small">
+        Fordítva olvasva: ha a műszered 103-at mutat, a valós sebességed
+        90 és 103 km/h között van — a pontos értéket a műszerről nem
+        lehet megmondani.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">És a GPS?</h3>
+      <p>
+        A GPS nem a kerék fordulatából számol, hanem a tényleges
+        helyváltoztatásból — ezért <strong>nincs benne a kilométeróra
+        beépített ráhagyása</strong>, és jellemzően közelebb jár a valós
+        sebességhez. Saját hibaforrásai viszont vannak:
+      </p>
+      <ul class="tick">
+        <li><strong>Gyenge vétel</strong> alagútban, mély bevágásban,
+            magas épületek között: a helyzet pontatlan lesz, és ezzel a
+            sebesség is.</li>
+        <li><strong>Kanyargós úton</strong> a ritkábban mintavételezett
+            pontok levágják a kanyart, ezért az út rövidebbnek, az átlag
+            kisebbnek adódhat.</li>
+        <li><strong>Induláskor</strong> a vevőnek időbe telik, míg
+            beáll — az első másodpercek adata bizonytalan.</li>
+      </ul>
+      <p>
+        Az <a href="index.html">Átlagsebesség.hu</a> ezért kiírja az
+        aktuális GPS-pontosságot, és a gyenge jelet külön jelzi.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Melyik számít egy eljárásban?</h3>
+      <p>
+        Egyik sem, amit te látsz. Hatósági eljárásban
+        <strong>a hatóság hitelesített mérése</strong> az irányadó — sem a
+        kilométeróra, sem a telefon GPS-e, sem ez az alkalmazás nem
+        bizonyít semmit.
+      </p>
+      <p>
+        Amire viszont jók: megmutatják, hogy a <strong>szokásaid</strong>
+        hol helyezkednek el a határhoz képest. Ha az átlagod rendszeresen
+        a határ közelében jár, azon nem a műszer pontosságán múlik, hogy
+        egyszer bírság lesz-e belőle.
+      </p>
+    </section>
+
+
+    <section class="card">
+      <h3 class="card-title">Tovább</h3>
+      <div class="tovabb">
+        <a href="birsag.html">Gyorshajtás bírságtételei<span>Mennyi a bírság, ha elkapnak?</span></a>
+        <a href="szakaszellenorzes.html">Mi az a szakaszellenőrzés?<span>Két kapu, egy átlag — így működik.</span></a>
+        <a href="atlagsebesseg-szamitas.html">Hogyan számolódik az átlagsebesség?<span>A képlet, és miért csal a megérzés.</span></a>
+        <a href="index.html">Mérd le a saját utadon<span>Ingyenes, regisztráció nélkül, a böngésződben.</span></a>
+      </div>
+    </section>
+
+    <p class="muted small">
+      Ez az oldal tájékoztató jellegű, nem hatósági eszköz, és nem minősül
+      jogi tanácsadásnak. Hatósági eljárásban a hatóság saját mérése az
+      irányadó. Részletek az
+      <a href="adatvedelem.html">adatvédelmi tájékoztatóban</a>.
+    </p>
+
+  </div>
+</main>
+
+</body>
+</html>

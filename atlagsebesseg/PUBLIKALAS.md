@@ -11,14 +11,20 @@ utána ellenőrizni, és mi az, ami később karbantartást igényel.
 **Az alkalmazás kész.** Statikus fájlok, nincs szerveroldal, nincs build:
 amit a mappa tartalmaz, azt kell kitenni egy HTTPS-t adó tárhelyre.
 
+**Az oldal 2026 szeptembere óta él.** A kiindulási helyzet leírása
+alább a történeti döntéseket őrzi; a mai állapot ez:
+
 | Amit tudunk | Érték |
 | --- | --- |
-| A domain regisztrálva van | `atlagsebesseg.hu` → `193.201.189.221` |
-| `www.atlagsebesseg.hu` | ugyanoda mutat |
-| Névszerverek | `ns1.introdns.hu` (193.201.191.136), `ns2.introdns.hu` (138.68.90.93) |
-| A webkiszolgáló neve | `vtantalum.d3.hu` — megosztott tárhely |
+| Tárhely | Etalon Tárhely kiszolgálója (`i7.etalontarhely.hu`), cPanel-fiók: `bf3hu1861` |
+| Szerződéses tárhelyszolgáltató | INTRONET Kft. — ez van az impresszumban |
+| A domain típusa | **addon domain**, dokumentumgyökér: `public_html/atlagsebesseg` |
+| A kiszolgáló IP-címe | `46.29.139.90` (a korábban feljegyzett `193.201.189.221` már nem érvényes) |
+| Névszerverek | `ns1.introdns.hu`, `ns2.introdns.hu` |
+| HTTPS | Let's Encrypt, a cPanel AutoSSL újítja meg |
 | A repó | `keresohirdetesek-afk/desktop-tutorial`, az app az `atlagsebesseg/` almappában |
-| Tesztek | 314 ellenőrzés, mind zöld |
+| Kiadás | a `.github/workflows/kiadas-atlagsebesseg.yml` tölt fel FTPS-en, ha a titkok be vannak állítva |
+| Tesztek | 370 ellenőrzés, mind zöld |
 
 Ebből három dolog következik:
 
@@ -88,17 +94,20 @@ A feltöltendő állomány a repó `atlagsebesseg/` mappája, **teszt és
 dokumentáció nélkül** — pontosan ez a 34 fájl:
 
 ```
-.htaccess           index.html          adatvedelem.html
+.htaccess           index.html          adatvedelem.html    hirdetes.html
 manifest.webmanifest  sw.js             robots.txt          sitemap.xml
 css/app.css
-js/  (11 modul)     icons/ (5 fájl)     vendor/ (leaflet + fonts)
+js/  (12 modul)     icons/ (5 fájl)     vendor/ (leaflet + fonts)
+hirdetes/  (az eladott hirdetések képei, ha van ilyen)
 ```
 
 Ez a csomag külön ki van gyűjtve, és a teljes tesztkészlet lefut rajta
 önmagában is — tehát ha ezt felmásolod, semmi nem hiányzik.
 
-A `teszt/` mappát, a `README.md`-t és ezt a `PUBLIKALAS.md`-t **ne** töltsd
-fel: az élesben semmit nem csinálnak.
+A `teszt/`, a `media/` mappát, a `README.md`-t, a `HIRDETES.md`-t és ezt
+a `PUBLIKALAS.md`-t **ne** töltsd fel: az élesben semmit nem csinálnak.
+A `HIRDETES.md` ráadásul árazási megjegyzéseket tartalmaz, amiket nem
+kell a hirdetőnek látnia.
 
 ### 2.2 A feltöltés menete
 

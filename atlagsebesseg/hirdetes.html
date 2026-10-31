@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e10">
+<script>
+/* Ugyanaz a témabetöltés, mint a főoldalon: a stíluslap előtt dől el,
+   különben betöltéskor felvillanna a másik szín. */
+(function () {
+  var m = null;
+  try { m = localStorage.getItem('atlagsebesseg-tema'); } catch (e) { /* privát ablak */ }
+  var sotet = m === 'sotet' ||
+    (m !== 'vilagos' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', sotet ? 'dark' : 'light');
+  if (!sotet) {
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#eef0f5');
+  }
+})();
+</script>
+<meta name="description" content="Hirdetési lehetőség az atlagsebesseg.hu-n: egy kép, egy link, süti és követés nélkül. Autósiskoláknak, szervizeknek, ügyvédeknek, biztosítási alkuszoknak.">
+<title>Hirdetés – Átlagsebesség.hu</title>
+<link rel="canonical" href="https://atlagsebesseg.hu/hirdetes.html">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Átlagsebesség.hu">
+<meta property="og:locale" content="hu_HU">
+<meta property="og:url" content="https://atlagsebesseg.hu/hirdetes.html">
+<meta property="og:title" content="Hirdetés az Átlagsebesség.hu-n">
+<meta property="og:description" content="Egy kép, egy link, süti és követés nélkül. Nincs licit, nincs hirdetési hálózat — a felület a tiéd.">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header id="topbar">
+  <a class="jog-vissza-jel" href="index.html" aria-label="Vissza az alkalmazáshoz">
+    <svg class="logo" aria-hidden="true" viewBox="60 118 392 344">
+      <path d="M78 452 C140 392 250 330 322 266 L348 266 C392 330 430 392 428 452 Z" fill="currentColor"/>
+      <g fill="var(--surface)">
+        <path d="M331.0 272 L335.4 272 L329.0 296 L323.1 296 Z"/>
+        <path d="M318.5 310 L325.3 310 L313.9 340 L305.1 340 Z"/>
+        <path d="M297.8 356 L307.6 356 L295.0 392 L282.8 392 Z"/>
+        <path d="M269.0 410 L282.3 410 L261.0 452 L245.0 452 Z"/>
+      </g>
+      <path d="M100 258 A161 161 0 0 1 238.2 141.4" fill="none" stroke="var(--marka)" stroke-width="26" stroke-linecap="round"/>
+      <path d="M271.8 141.4 A161 161 0 0 1 410 258" fill="none" stroke="currentColor" stroke-width="26" stroke-dasharray="30 20"/>
+      <g fill="var(--marka)">
+        <path d="M71.5 308.8 A42 42 0 1 1 148.5 308.8 L110 397 Z"/>
+        <path d="M361.5 308.8 A42 42 0 1 1 438.5 308.8 L400 397 Z"/>
+      </g>
+    </svg>
+  </a>
+  <h1><span class="wm-elso">átlag</span>sebesség.hu</h1>
+  <a class="btn ghost small" href="index.html">Vissza</a>
+</header>
+
+<main id="main">
+  <div class="pad jogi">
+
+    <h2 class="jog-focim">Hirdetés az oldalon</h2>
+    <p class="muted small">
+      Négy hirdetési felület van az oldalon. Ez a lap leírja, mit kap a
+      hirdető, mit nem csinálunk, és hogyan lehet megállapodni.
+    </p>
+
+    <section class="card kiemelt">
+      <h3 class="card-title">A lényeg egy bekezdésben</h3>
+      <p>
+        A hirdetés itt <strong>egy kép és egy link</strong> — semmi más.
+        Nincs hirdetési hálózat, nincs valós idejű licit, nincs süti,
+        nincs követőkód, nincs előugró ablak. A kép a mi kiszolgálónkról
+        töltődik be, ezért <strong>a hirdető nem lát semmit a
+        látogatóból</strong>: sem IP-címet, sem eszközazonosítót. Cserébe
+        kattintásmérést sem adunk — amit mérni lehet, az a te oldaladon
+        érkező forgalom.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Kik olvassák</h3>
+      <p>
+        Az oldal azt mutatja meg az autósnak, mi lenne az eredménye, ha
+        Magyarországon bevezetnék az átlagsebesség-mérést. A látogató
+        tehát <strong>jogosítvánnyal rendelkező, autót használó felnőtt,
+        akit a közlekedési szabályok és a bírságok érdekelnek</strong> —
+        jellemzően épp akkor, amikor ezzel foglalkozik.
+      </p>
+      <p>
+        Ehhez a közönséghez illeszkedik többek között az autósiskola, a
+        gumi- és autószerviz, a fedélzeti kamera és GPS kereskedője, a
+        közlekedési szabálysértésekre szakosodott ügyvéd, valamint a
+        biztosítási alkusz.
+      </p>
+      <p class="muted small">
+        <strong>Látogatottsági adatok:</strong> a tárhely kiszolgálói
+        naplójából készülő összesítést kérésre e-mailben küldjük. Nem
+        becslést adunk és nem kerekítünk fölfelé: azt a számot küldjük,
+        amit a napló mutat.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">A felületek</h3>
+      <p>
+        Négy hely van, mindegyik egy-egy képernyő tartalma alatt. Egy
+        hirdető kérheti mind a négyet, vagy csak egyet.
+      </p>
+      <dl class="kv szeles">
+        <dt>Nyitóképernyő</dt><dd>a mérés indítása előtt, a lap alján</dd>
+        <dt>Élő mérés</dt><dd>vezetés közben, a műszer és a térkép alatt</dd>
+        <dt>Kalkulátor</dt><dd>a GPS nélküli számítás eredménye alatt</dd>
+        <dt>Tudnivalók</dt><dd>a bírságtáblázat és a magyarázatok alatt</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Amit a hirdetőtől kérünk</h3>
+      <dl class="kv szeles">
+        <dt>Kép</dt><dd>PNG vagy JPG, 600 × 150 képpont ajánlott (bármilyen fekvő arány megy)</dd>
+        <dt>Fájlméret</dt><dd>legfeljebb 150 KB — mobilneten is gyorsan töltsön</dd>
+        <dt>Cél</dt><dd>egy webcím, ahova a kattintás visz</dd>
+        <dt>Szöveg</dt><dd>egy mondat képleírás a kép helyett vak felhasználóknak</dd>
+        <dt>Időtartam</dt><dd>naptári hónap, legalább egy hónap</dd>
+      </dl>
+      <p class="muted small">
+        A képet mi tesszük ki a kiszolgálóra. Nem fogadunk el olyan
+        hirdetéskódot, ami külső szolgáltatótól tölt be bármit — az
+        szembemenne azzal, amit az oldal a látogatónak ígér.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Amit nem csinálunk</h3>
+      <ul class="tick">
+        <li><strong>Nincs előugró ablak, nincs teljes képernyős hirdetés,
+            nincs magától induló hang vagy videó.</strong> A felület a
+            tartalom alatt van, és nem takarja el.</li>
+        <li><strong>Nem követjük a látogatót</strong>, és nem adunk el
+            róla adatot — sem neked, sem másnak.</li>
+        <li><strong>Vezetés közben nem villog és nem mozog semmi.</strong>
+            A mérés közbeni felület olyan, hogy ne vonja el a figyelmet.</li>
+        <li><strong>Nem veszünk fel versenytársat ugyanarra a felületre
+            ugyanarra az időszakra</strong>, ha ezt kéred.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Feltételek</h3>
+      <p>
+        Minden hirdetés <strong>„Hirdetés” felirattal</strong> jelenik
+        meg, a hirdető nevével együtt — ezt a gazdasági
+        reklámtevékenységről szóló 2008. évi XLVIII. törvény írja elő, és
+        a látogató iránti tisztesség is.
+      </p>
+      <p>
+        Nem jelentetünk meg politikai hirdetést, szerencsejátékot,
+        dohány- és alkoholreklámot, valamint olyan hirdetést, amelynek a
+        tartalma jogszabályba ütközik vagy megtévesztő. A megjelenés
+        visszautasításának jogát fenntartjuk; ilyenkor az időarányos díjat
+        visszatérítjük.
+      </p>
+      <p>
+        A hirdetés tartalmáért és a célzott oldalért a hirdető felel.
+      </p>
+    </section>
+
+    <section class="card kiemelt">
+      <h3 class="card-title">Érdekel? Írj egy e-mailt</h3>
+      <p>
+        Árat és aktuális látogatottsági adatokat e-mailben küldünk. Írd
+        meg, melyik felület érdekel és milyen időszakra — egy napon belül
+        válaszolunk.
+      </p>
+      <p>
+        <a class="btn" href="mailto:atlagsebesseg@gmail.com?subject=Hirdet%C3%A9s%20az%20atlagsebesseg.hu-n&amp;body=Melyik%20fel%C3%BClet%3A%20%0AIdőszak%3A%20%0ACégnév%3A%20%0A">
+          atlagsebesseg@gmail.com
+        </a>
+      </p>
+      <p class="muted small">
+        Üzemeltető: Tóth András egyéni vállalkozó · 4110 Biharkeresztes,
+        Petőfi u. 1. · adószám: 67255829-2-29. A teljes impresszum az
+        <a href="adatvedelem.html#impresszum">adatvédelmi tájékoztatóban</a>.
+      </p>
+    </section>
+
+  </div>
+</main>
+
+</body>
+</html>

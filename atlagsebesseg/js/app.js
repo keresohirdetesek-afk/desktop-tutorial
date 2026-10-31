@@ -14,6 +14,7 @@ import { Gong } from './hang.js';
 import { keszitKep, megoszt } from './megosztas.js';
 import { temaMod, temaValt, temaBeallit, temaFigyel } from './tema.js';
 import { profilMinta, profilSorokbol, profilRajz } from './profil.js';
+import { hirdetesekBe } from './hirdetes.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -1739,6 +1740,9 @@ function indul() {
   kalkSzamol();
   birsagTablaRender();
   elonezetFrissit();
+  /* Ahol van eladott felület, oda kikerül a hirdetés; ahol nincs, ott a
+     „Hirdessen itt” felirat marad. */
+  hirdetesekBe();
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
