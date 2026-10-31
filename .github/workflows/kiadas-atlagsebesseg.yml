@@ -71,18 +71,13 @@ jobs:
         if: steps.titkok.outputs.van == 'igen'
         run: |
           set -euo pipefail
+          # Mindent kiviszünk, AMI NEM a fejlesztés tartozéka. Így egy új
+          # aloldal magától bekerül — korábban fájlonkénti felsorolás volt,
+          # és abból kimaradt, amit utólag vettünk fel.
           mkdir -p kiadas
-          cd atlagsebesseg
-          cp .htaccess index.html adatvedelem.html hirdetes.html \
-             manifest.webmanifest sw.js robots.txt sitemap.xml ../kiadas/
-          cp -r css js icons vendor ../kiadas/
-          # Az eladott hirdetések képei; a mappa leírója nem kell élesbe.
-          if [ -d hirdetes ]; then
-            mkdir -p ../kiadas/hirdetes
-            find hirdetes -maxdepth 1 -type f ! -name '*.md' \
-              -exec cp {} ../kiadas/hirdetes/ \;
-          fi
-          cd ..
+          cp -r atlagsebesseg/. kiadas/
+          rm -rf kiadas/teszt kiadas/media
+          find kiadas -name '*.md' -delete
           echo "Feltöltendő fájlok: $(find kiadas -type f | wc -l)"
           find kiadas -type f | sort
 

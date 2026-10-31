@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e10">
+<script>
+/* A téma a stíluslap előtt dől el, különben felvillanna a másik szín. */
+(function () {
+  var m = null;
+  try { m = localStorage.getItem('atlagsebesseg-tema'); } catch (e) { /* privát ablak */ }
+  var sotet = m === 'sotet' ||
+    (m !== 'vilagos' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', sotet ? 'dark' : 'light');
+  if (!sotet) {
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#eef0f5');
+  }
+})();
+</script>
+<meta name="description" content="Hogyan számolódik az átlagsebesség? A képlet egyszerű, a megérzés mégis csal. Számpéldák arra, miért nem a sebességek átlaga.">
+<title>Átlagsebesség-számítás: képlet, példák, buktatók | Átlagsebesség.hu</title>
+<link rel="canonical" href="https://atlagsebesseg.hu/atlagsebesseg-szamitas.html">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Átlagsebesség.hu">
+<meta property="og:locale" content="hu_HU">
+<meta property="og:url" content="https://atlagsebesseg.hu/atlagsebesseg-szamitas.html">
+<meta property="og:title" content="Átlagsebesség-számítás: képlet, példák, buktatók | Átlagsebesség.hu">
+<meta property="og:description" content="Hogyan számolódik az átlagsebesség? A képlet egyszerű, a megérzés mégis csal. Számpéldák arra, miért nem a sebességek átlaga.">
+<meta property="og:image" content="https://atlagsebesseg.hu/icons/megosztas.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header id="topbar">
+  <a class="jog-vissza-jel" href="index.html" aria-label="Vissza az alkalmazáshoz">
+    <svg class="logo" aria-hidden="true" viewBox="60 118 392 344">
+      <path d="M78 452 C140 392 250 330 322 266 L348 266 C392 330 430 392 428 452 Z" fill="currentColor"/>
+      <g fill="var(--surface)">
+        <path d="M331.0 272 L335.4 272 L329.0 296 L323.1 296 Z"/>
+        <path d="M318.5 310 L325.3 310 L313.9 340 L305.1 340 Z"/>
+        <path d="M297.8 356 L307.6 356 L295.0 392 L282.8 392 Z"/>
+        <path d="M269.0 410 L282.3 410 L261.0 452 L245.0 452 Z"/>
+      </g>
+      <path d="M100 258 A161 161 0 0 1 238.2 141.4" fill="none" stroke="var(--marka)" stroke-width="26" stroke-linecap="round"/>
+      <path d="M271.8 141.4 A161 161 0 0 1 410 258" fill="none" stroke="currentColor" stroke-width="26" stroke-dasharray="30 20"/>
+      <g fill="var(--marka)">
+        <path d="M71.5 308.8 A42 42 0 1 1 148.5 308.8 L110 397 Z"/>
+        <path d="M361.5 308.8 A42 42 0 1 1 438.5 308.8 L400 397 Z"/>
+      </g>
+    </svg>
+  </a>
+  <h1><span class="wm-elso">átlag</span>sebesség.hu</h1>
+  <a class="btn ghost small" href="index.html">Vissza</a>
+</header>
+
+<main id="main">
+  <div class="pad jogi">
+
+    <h2 class="jog-focim">Hogyan számolódik az átlagsebesség?</h2>
+    <p class="muted small">A képlet két sor. A megérzés mégis rendre mellélő — és ebből lesz a bírság.</p>
+
+    <section class="card kiemelt">
+      <h3 class="card-title">A képlet</h3>
+      <p>
+        Az átlagsebesség a <strong>megtett út osztva a menetidővel</strong>:
+      </p>
+      <p class="pelda">
+        <strong>átlagsebesség = út ÷ idő</strong><br>
+        12 km ÷ 8 perc = 12 km ÷ 0,1333 óra = <strong>90 km/h</strong>
+      </p>
+      <p>
+        Ennyi. Nincs benne más — és épp ez a buktató: a legtöbben nem így
+        számolnak fejben.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">A csapda: nem a sebességek átlaga</h3>
+      <p>
+        Tegyük fel, hogy egy 20 kilométeres szakasz első felén 60-nal, a
+        másodikon 120-szal mész. Mennyi az átlagod? A megérzés 90-et mond.
+        A valóság más:
+      </p>
+      <p class="pelda">
+        Első 10 km 60-nal = <strong>10 perc</strong><br>
+        Második 10 km 120-szal = <strong>5 perc</strong><br>
+        Összesen 20 km, 15 perc → <strong>80 km/h</strong>, nem 90.
+      </p>
+      <p>
+        Az ok: a lassabb szakaszon <strong>több időt töltesz</strong>,
+        ezért az nagyobb súllyal esik latba. Ez az eltérés mindig ebbe az
+        irányba működik — a valódi átlag mindig kisebb a sebességek
+        számtani átlagánál, ha nem azonos ideig mentél velük.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Ugyanez visszafelé is igaz</h3>
+      <p>
+        Ha a szakasz elején gyorsabban mentél, az a megnyert idő
+        <strong>nehezen adható vissza</strong>. Nem a sebességet kell
+        visszahozni, hanem az időt — és ahhoz a hátralévő, rövidebb úton
+        aránytalanul lassabban kellene haladnod.
+      </p>
+      <p class="pelda">
+        Egy 10 km-es, 90-es szakaszon az első 5 km-t 120-szal tetted meg
+        (2,5 perc). Szabályosan a teljes szakasz 6 perc 40 másodperc
+        volna, tehát a maradék 5 km-re 4 perc 10 másodperc marad — ehhez
+        <strong>72 km/h</strong> kellene. Ha 130-cal mentél volna az első
+        felén, már csak 69 km/h-val érnél haza szabályosan.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Beleszámít-e a megállás?</h3>
+      <p>
+        Egy szakaszmérő rendszer azt látja, mennyi idő telt el a két kapu
+        között — tehát <strong>a megállás is beleszámít</strong>, és
+        lefelé viszi az átlagot. Ez elvben menekülőút: aki megáll egy
+        pihenőben, az átlaga visszaesik.
+      </p>
+      <p>
+        A gyakorlatban a rendszerek ezt kezelni szokták, például a
+        lehajtóknál külön kapukkal. Az <a href="index.html">Átlagsebesség.hu</a>
+        a hosszabb megállást felfüggesztésként kezeli, és nem számítja
+        bele a menetidőbe — így azt mutatja meg, hogyan vezettél, nem
+        azt, hogy mennyit pihentél.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Mennyi időt nyersz a gyorsítással?</h3>
+      <p>
+        Kevesebbet, mint hinnéd — és ez a számítás a leghasznosabb
+        következménye.
+      </p>
+      <p class="pelda">
+        Egy <strong>30 kilométeres</strong> szakaszon 90 helyett 110-zel
+        haladva a menetidő 20 percről 16 perc 22 másodpercre csökken.
+        A nyereség <strong>3 perc 38 másodperc</strong> — egyetlen
+        piros lámpa többet elvesz.
+      </p>
+      <p>
+        A bírság ugyanezért a 20 km/h-ért viszont
+        <a href="birsag.html">50 000 Ft</a>. Az
+        <a href="index.html">Átlagsebesség.hu</a> ezt a két számot
+        mutatja meg egymás mellett a saját útvonaladra.
+      </p>
+    </section>
+
+
+    <section class="card">
+      <h3 class="card-title">Tovább</h3>
+      <div class="tovabb">
+        <a href="birsag.html">Gyorshajtás bírságtételei<span>Mennyi a bírság, ha elkapnak?</span></a>
+        <a href="szakaszellenorzes.html">Mi az a szakaszellenőrzés?<span>Két kapu, egy átlag — így működik.</span></a>
+        <a href="sebessegmero-pontossag.html">Mennyit mutat többet a kilométeróra?<span>A műszered szabály szerint túloz.</span></a>
+        <a href="index.html">Mérd le a saját utadon<span>Ingyenes, regisztráció nélkül, a böngésződben.</span></a>
+      </div>
+    </section>
+
+    <p class="muted small">
+      Ez az oldal tájékoztató jellegű, nem hatósági eszköz, és nem minősül
+      jogi tanácsadásnak. Hatósági eljárásban a hatóság saját mérése az
+      irányadó. Részletek az
+      <a href="adatvedelem.html">adatvédelmi tájékoztatóban</a>.
+    </p>
+
+  </div>
+</main>
+
+</body>
+</html>

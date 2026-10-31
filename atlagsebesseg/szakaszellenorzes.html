@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e10">
+<script>
+/* A téma a stíluslap előtt dől el, különben felvillanna a másik szín. */
+(function () {
+  var m = null;
+  try { m = localStorage.getItem('atlagsebesseg-tema'); } catch (e) { /* privát ablak */ }
+  var sotet = m === 'sotet' ||
+    (m !== 'vilagos' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', sotet ? 'dark' : 'light');
+  if (!sotet) {
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#eef0f5');
+  }
+})();
+</script>
+<meta name="description" content="A szakaszellenőrzés két pont között méri az átlagsebességet. Ezért nem segít a traffipax előtti fékezés. Így működik, számpéldával.">
+<title>Mi az a szakaszellenőrzés, és hogyan működik? | Átlagsebesség.hu</title>
+<link rel="canonical" href="https://atlagsebesseg.hu/szakaszellenorzes.html">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Átlagsebesség.hu">
+<meta property="og:locale" content="hu_HU">
+<meta property="og:url" content="https://atlagsebesseg.hu/szakaszellenorzes.html">
+<meta property="og:title" content="Mi az a szakaszellenőrzés, és hogyan működik? | Átlagsebesség.hu">
+<meta property="og:description" content="A szakaszellenőrzés két pont között méri az átlagsebességet. Ezért nem segít a traffipax előtti fékezés. Így működik, számpéldával.">
+<meta property="og:image" content="https://atlagsebesseg.hu/icons/megosztas.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header id="topbar">
+  <a class="jog-vissza-jel" href="index.html" aria-label="Vissza az alkalmazáshoz">
+    <svg class="logo" aria-hidden="true" viewBox="60 118 392 344">
+      <path d="M78 452 C140 392 250 330 322 266 L348 266 C392 330 430 392 428 452 Z" fill="currentColor"/>
+      <g fill="var(--surface)">
+        <path d="M331.0 272 L335.4 272 L329.0 296 L323.1 296 Z"/>
+        <path d="M318.5 310 L325.3 310 L313.9 340 L305.1 340 Z"/>
+        <path d="M297.8 356 L307.6 356 L295.0 392 L282.8 392 Z"/>
+        <path d="M269.0 410 L282.3 410 L261.0 452 L245.0 452 Z"/>
+      </g>
+      <path d="M100 258 A161 161 0 0 1 238.2 141.4" fill="none" stroke="var(--marka)" stroke-width="26" stroke-linecap="round"/>
+      <path d="M271.8 141.4 A161 161 0 0 1 410 258" fill="none" stroke="currentColor" stroke-width="26" stroke-dasharray="30 20"/>
+      <g fill="var(--marka)">
+        <path d="M71.5 308.8 A42 42 0 1 1 148.5 308.8 L110 397 Z"/>
+        <path d="M361.5 308.8 A42 42 0 1 1 438.5 308.8 L400 397 Z"/>
+      </g>
+    </svg>
+  </a>
+  <h1><span class="wm-elso">átlag</span>sebesség.hu</h1>
+  <a class="btn ghost small" href="index.html">Vissza</a>
+</header>
+
+<main id="main">
+  <div class="pad jogi">
+
+    <h2 class="jog-focim">Mi az a szakaszellenőrzés?</h2>
+    <p class="muted small">Két kapu, egy átlag — és a traffipax előtti fékezés hirtelen értelmét veszti. Így működik a módszer.</p>
+
+    <section class="card kiemelt">
+      <h3 class="card-title">A lényeg</h3>
+      <p>
+        A hagyományos sebességmérés egy <strong>pontban</strong> mér: a
+        traffipax rögzíti, milyen gyorsan haladtál el előtte. A
+        szakaszellenőrzés ezzel szemben <strong>két pont között</strong>
+        mér: az út elején és a végén is azonosítja a járművet, és a két
+        időbélyeg meg a köztük lévő távolság alapján számol
+        <strong>átlagsebességet</strong>.
+      </p>
+      <p>
+        Ebből következik az egész módszer lényege: <strong>a traffipax
+        előtti fékezés itt semmit nem ér.</strong> Nem egy pillanatot
+        mérnek, hanem azt, hogy mennyi idő alatt tetted meg a szakaszt.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Hogyan működik</h3>
+      <div class="lepesek">
+        <div><span class="lepes-szam">1</span> A szakasz elején egy kamera rögzíti a járművet és az időpontot.</div>
+        <div><span class="lepes-szam">2</span> A szakasz végén ugyanez megtörténik.</div>
+        <div><span class="lepes-szam">3</span> A rendszer a két időpont különbségéből és az ismert szakaszhosszból átlagsebességet számol.</div>
+        <div><span class="lepes-szam">4</span> Ha ez meghaladja a szakaszon megengedett sebességet, következik az eljárás.</div>
+      </div>
+      <p class="pelda">
+        <strong>Egy 12 kilométeres szakasz, 90-es korlátozással.</strong>
+        Szabályosan 8 perc alatt lehet megtenni. Ha 7 perc alatt érsz át,
+        az átlagod 103 km/h — akkor is, ha a szakasz nagy részén
+        tempomattal 90-nel mentél.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Miért nem segít a lassítás a kamera előtt</h3>
+      <p>
+        Mert a <strong>veszteség nem hozható vissza</strong>. Ha az első
+        kilométereken gyorsabban mentél, azt az időt már megnyerted — és
+        a rendszer pontosan ezt az időt látja. Ahhoz, hogy az átlagod
+        visszamenjen a határ alá, a szakasz hátralévő részén annyival
+        lassabban kellene menned, amennyivel korábban gyorsabb voltál.
+      </p>
+      <p>
+        Minél közelebb vagy a szakasz végéhez, annál kevesebb út marad a
+        korrekcióra — tehát annál drasztikusabb lassítás kellene. Egy
+        ponton túl már akkor sem jön vissza, ha megállsz.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Mit lát a rendszer, és mit nem</h3>
+      <p>
+        Ez a része gyakran félreértett. A szakaszellenőrzés
+        <strong>csak a teljes szakasz átlagát látja</strong>. Nem tudja,
+        hogy a szakaszon belül hol mentél gyorsabban, és hol lassabban —
+        csak azt, hogy mennyi idő alatt értél át.
+      </p>
+      <p>
+        Ennek gyakorlati következménye van: ha a szakaszon belül a
+        korlátozás változik (például egy falun át 50 a határ), a rendszer
+        ezt a részt <strong>önmagában nem tudja értékelni</strong>. A
+        hatóság a szakasz egészére tud következtetést levonni.
+      </p>
+      <p class="muted small">
+        Az <a href="index.html">Átlagsebesség.hu</a> emiatt a teljes
+        szakaszra számol ítéletet, és külön jelzi, ha egy rész önmagában
+        szabálytalan volt — de bírságot nem rendel hozzá, mert egy
+        szakaszmérés azt nem látná.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Magyarországon ma nincs ilyen rendszer</h3>
+      <p>
+        <strong>Fontos tisztázni:</strong> Magyarországon jelenleg nem
+        működik átlagsebesség-mérésen alapuló ellenőrzés. A fogalmat a
+        jogszabály ismeri — a 18/2008. (IV. 30.) GKM rendelet nevezi meg
+        az „átlagsebesség-ellenőrző rendszert” —, de ez nem jelenti azt,
+        hogy ilyen rendszer üzemelne.
+      </p>
+      <p>
+        Európa több országában viszont évek óta bevett módszer, jellemzően
+        alagutaknál, építési területeken és baleseti gócpontokon. Az
+        <a href="index.html">Átlagsebesség.hu</a> arra készült, hogy
+        <strong>előre</strong> meg tudd nézni, mit jelentene ez a te
+        szokásos útvonaladon.
+      </p>
+    </section>
+
+
+    <section class="card">
+      <h3 class="card-title">Tovább</h3>
+      <div class="tovabb">
+        <a href="birsag.html">Gyorshajtás bírságtételei<span>Mennyi a bírság, ha elkapnak?</span></a>
+        <a href="atlagsebesseg-szamitas.html">Hogyan számolódik az átlagsebesség?<span>A képlet, és miért csal a megérzés.</span></a>
+        <a href="sebessegmero-pontossag.html">Mennyit mutat többet a kilométeróra?<span>A műszered szabály szerint túloz.</span></a>
+        <a href="index.html">Mérd le a saját utadon<span>Ingyenes, regisztráció nélkül, a böngésződben.</span></a>
+      </div>
+    </section>
+
+    <p class="muted small">
+      Ez az oldal tájékoztató jellegű, nem hatósági eszköz, és nem minősül
+      jogi tanácsadásnak. Hatósági eljárásban a hatóság saját mérése az
+      irányadó. Részletek az
+      <a href="adatvedelem.html">adatvédelmi tájékoztatóban</a>.
+    </p>
+
+  </div>
+</main>
+
+</body>
+</html>

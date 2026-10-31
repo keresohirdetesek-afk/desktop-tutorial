@@ -2022,6 +2022,101 @@ async function elemzesTeszt(b) {
    idegen tartalom kerülhet a lapra. Az ígéret az, hogy a hirdető nem lát
    semmit a látogatóból — ezt a kódnak kell kikényszerítenie, nem a
    figyelemnek. */
+/* ------------------------------------------------------------------ 30 */
+
+/* A tudástár-aloldalak. A legfontosabb ellenőrzés az utolsó: a
+   bírságtáblázat a cikkben KÉZZEL írt HTML, a kalkulátor viszont a
+   `birsag.js`-ből számol. Ha a kettő elcsúszik, az oldal saját magának
+   mond ellent — ezt csak gép veszi észre. */
+async function tudastarTeszt(b) {
+  console.log('\n30. Tudástár-aloldalak');
+
+  const LAPOK = ['birsag.html', 'szakaszellenorzes.html',
+                 'atlagsebesseg-szamitas.html', 'sebessegmero-pontossag.html'];
+
+  for (const lap of LAPOK) {
+    const p = await ujLap(b, { szelesseg: 390 });
+    await p.goto(CIM.replace(/index\.html$/, lap));
+    const r = await p.evaluate(() => ({
+      cim: document.title,
+      h2: document.querySelector('.jog-focim')?.textContent.trim() || '',
+      kanonikus: document.querySelector('link[rel="canonical"]')?.href || '',
+      ogKep: document.querySelector('meta[property="og:image"]')?.content || '',
+      leiras: document.querySelector('meta[name="description"]')?.content || '',
+      vissza: !!document.querySelector('a[href="index.html"]'),
+      belsok: [...document.querySelectorAll('a[href$=".html"]')]
+        .map((a) => a.getAttribute('href')),
+      tul: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      hossz: document.querySelector('#main').textContent.trim().length,
+    }));
+    all(`${lap}: betölt és van címe`, r.cim.length > 10, r.cim);
+    all(`${lap}: van főcím a lapon`, r.h2.length > 5, r.h2);
+    all(`${lap}: a kanonikus cím a végleges domainen van`,
+        r.kanonikus === `https://atlagsebesseg.hu/${lap}`, r.kanonikus);
+    all(`${lap}: van megosztási kép`, /megosztas\.png$/.test(r.ogKep), r.ogKep);
+    all(`${lap}: van leírás a keresőnek`, r.leiras.length > 60, String(r.leiras.length));
+    all(`${lap}: nincs vízszintes túllógás`, !r.tul);
+    all(`${lap}: visszavezet az alkalmazásba`, r.vissza);
+    /* Vékony tartalomra a Google sem rangsorol. Ez nem szépségdíj:
+       ha egy lap 1500 karakter alatt marad, nincs értelme kitenni. */
+    all(`${lap}: van rajta elég tartalom`, r.hossz > 1500, String(r.hossz));
+    const tarsak = LAPOK.filter((x) => x !== lap);
+    all(`${lap}: hivatkozik a többi aloldalra`,
+        tarsak.every((t) => r.belsok.includes(t)), r.belsok.join(','));
+    await p.close();
+  }
+
+  /* A Tudnivalók fülről el kell érni mind a négyet, különben a
+     látogató sosem talál rájuk. */
+  const f = await ujLap(b);
+  await f.goto(CIM);
+  await f.click('#tabs .tab[data-scr="scr-info"]');
+  await f.waitForTimeout(150);
+  const linkek = await f.evaluate(() =>
+    [...document.querySelectorAll('#scr-info a')].map((a) => a.getAttribute('href')));
+  for (const lap of LAPOK) {
+    all(`a Tudnivalók fülről elérhető: ${lap}`, linkek.includes(lap));
+  }
+
+  /* A cikkbeli táblázat és a kalkulátor ugyanazt mondja-e. */
+  const egyezes = await f.evaluate(async (lapCim) => {
+    const m = await import('./js/birsag.js');
+    const varhato = [];
+    for (const k of m.KATEGORIAK) {
+      let also = k.kuszob + 1;
+      for (const s of k.savok) {
+        const felso = s.max === Infinity ? null : s.max;
+        varhato.push({ also, felso, osszeg: s.osszeg });
+        if (felso !== null) also = felso + 1;
+      }
+    }
+    const sz = await (await fetch(lapCim)).text();
+    const doc = new DOMParser().parseFromString(sz, 'text/html');
+    const kapott = [...doc.querySelectorAll('.birsag-tabla tbody tr')].map((tr) => {
+      const [a, b] = [...tr.children].map((td) => td.textContent.trim());
+      const sz2 = a.match(/(\d+)(?:–(\d+))?/);
+      return {
+        also: Number(sz2[1]),
+        felso: sz2[2] ? Number(sz2[2]) : null,
+        osszeg: Number(b.replace(/[^\d]/g, '')),
+      };
+    });
+    return { varhato, kapott };
+  }, 'birsag.html');
+
+  all('a bírságtáblázat ugyanannyi sorból áll, mint a kalkulátoré',
+      egyezes.kapott.length === egyezes.varhato.length,
+      `${egyezes.kapott.length} / ${egyezes.varhato.length}`);
+  const elter = egyezes.varhato.filter((v, i) => {
+    const k = egyezes.kapott[i];
+    return !k || k.also !== v.also || k.felso !== v.felso || k.osszeg !== v.osszeg;
+  });
+  all('a bírságtáblázat minden sora egyezik a kalkulátoréval',
+      elter.length === 0,
+      elter.map((v) => `${v.also}-${v.felso}:${v.osszeg}`).join(', '));
+  await f.close();
+}
+
 async function hirdetesTeszt(b) {
   console.log('\n29. Hirdetési rendszer');
 
@@ -2288,6 +2383,7 @@ try {
   await elemzesTeszt(b);
   await teljesSzakaszTeszt(b);
   await hirdetesTeszt(b);
+  await tudastarTeszt(b);
 } finally {
   await b.close();
 }
