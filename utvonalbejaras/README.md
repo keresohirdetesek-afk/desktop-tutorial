@@ -18,7 +18,7 @@ használatra.
 |---|---|
 | **Nyomvonal rögzítése** GPS-szel, élő távolság / idő / pontszám / pontosság | Aktív bejárás → *Nyomvonal rögzítése* |
 | **Nyomvonal utólagos szerkesztése**: szakasz elvetése indoklással vagy törlése | *Nyomvonal szerkesztése* |
-| **Hiányzó szakasz berajzolása** a térképre, ahol nincs GPS-nyom | *Nyomvonal szerkesztése* → *Hiányzó szakasz berajzolása* |
+| **Útvonal rajzolása a térképre** (tervezéskor, vagy ahol nincs GPS-nyom), az útra illesztve | *Nyomvonal szerkesztése* → *✏️ Útvonal rajzolása* |
 | **Fotó** készítése menet közben, automatikus GPS-koordinátával | *Fotó* gomb (a telefon kameráját nyitja) |
 | **Meglévő képek behozatala** (EXIF-ből GPS és idő), helyszín kijelölése a térképen | *Képek a gépről* gomb |
 | **Rajzolás a képernyőn** a fotóra (szabadkéz, keret, jelölő nyíl) | Fotó → *Jelölés / méretek* |
@@ -128,7 +128,7 @@ galériája), a teljes anyag utólag, otthon is összerakható:
    *„📍 nincs helyszín”* jelzést kap.
 3. **🗺️ Nyomvonal szerkesztése** — GPS-pont nélkül is megnyílik: az ország
    látszik, onnan rá lehet nagyítani a helyszínre (alaptérképpel, utcákkal),
-   és a **✏️ Hiányzó szakasz berajzolása** gombbal megrajzolható a bejárt
+   és a **✏️ Útvonal rajzolása** móddal megrajzolható a bejárt
    útvonal. Ez lesz a jegyzőkönyvben az útvonal.
 4. **Helyszín a fotókhoz**: az elemre koppintva *📍 Hely megadása* →
    *Kijelölés a térképen* → ráközelítve koppintson a pontos helyre.
@@ -136,24 +136,51 @@ galériája), a teljes anyag utólag, otthon is összerakható:
    méretek a fotókon, iránytű, állapotok és táblák, **jegyzőkönyv**,
    **térképfájl**, **Közút-űrlapok**.
 
-#### Útpontok felvétele és szerkesztése a térképen
+#### A szerkesztő: négy mód, egy sorban
 
-A nyomvonal-szerkesztőben minden megvan, amit a terepen is tennél:
+A szerkesztőben a térképre koppintás négyfélét jelenthet. Hogy ne kelljen
+találgatni, **egy módválasztó dönti el, mit csinál most a koppintás** — és az
+aktív mód a térkép sarkában is ki van írva. Alatta csak az ahhoz a módhoz
+tartozó gombok látszanak, semmi más.
+
+| Mód | Mit csinál a koppintás | Mikor kell |
+|---|---|---|
+| **👆 Nézegetés** | nagyítás, mozgatás; a jelölésekre koppintva megnyílik az adatlap | ez az alapállás, itt nem lehet elrontani semmit |
+| **✏️ Útvonal rajzolása** | leteszi a következő pontot, a vonal **magától az utat követi** | tervezéskor, és ahol nincs GPS-nyom |
+| **📍 Pont felvétele** | új pont (jegyzet, állapot, jelzéskép) a koppintás helyén | otthoni szerkesztés, utólagos kiegészítés |
+| **✂️ Szakasz kijelölése** | kijelöli a bejárt nyomvonal egy darabját (A pont, majd B pont) | elvetett szakasz, visszafordulás, törlés |
+
+Ugyanarra a módra újra koppintva visszaáll a nézegetés. A *🔍 Ugrás helyre*,
+a térkép be/ki és a nagyítás a fejlécben van, tehát **bármelyik módban
+elérhető** — a megkezdett rajz közben is.
+
+**Asztali gépen** a térkép a teljes bal oldalt elfoglalja, a vezérlők oldalt
+állnak (nem a térkép alatt), és billentyűvel is megy:
+
+| Billentyű | Mit tesz |
+|---|---|
+| `Esc` | kilép a módból (nézegetés), üres nézegetésben bezárja a szerkesztőt |
+| `Enter` | rajzolás közben: szakasz kész |
+| `Ctrl` / `Cmd` + `Z` | rajzolás közben: egy pont vissza |
+| egérgörgő | nagyítás a kurzor helyére |
+
+Rajzoláskor az egérmutató után **halvány előnézeti vonal** húzódik az utolsó
+ponttól, így kattintás előtt látszik, hová kerülne a szakasz. Az egérmutató
+alakja is jelzi a módot (célkereszt rajzoláskor és pontfelvételkor).
 
 | Mit szeretne | Hogyan |
 |---|---|
 | **Odaugrani egy helyre** | *🔍 Ugrás helyre* — koordináta (`47.4979, 19.0402`), EOV (`650000, 240000`), útszám szelvénnyel (`81 27+387`) vagy **település neve** (az utóbbi kettőhöz a betöltött úthálózati adat kell) |
-| **Új pontot létrehozni** | *➕ Pont felvétele a térképre* → koppintás a helyére → megnevezés, típus (jegyzet/útpont vagy állapot, tábla), megjegyzés |
-| **Meglévő pontot megnyitni** | koppintson rá a térképen a pöttyre — megnyílik az adatlapja |
+| **Új pontot létrehozni** | *📍 Pont felvétele* mód → koppintás a helyére → megnevezés, típus (jegyzet/útpont, állapot/tábla vagy jelzéskép), megjegyzés. A mód **bekapcsolva marad**, így egymás után több pont is felvehető |
+| **Meglévő pontot megnyitni** | koppintson rá a térképen a pöttyre — megnyílik az adatlapja (bármelyik módban) |
 | **Fotót, hangot, jegyzetet hozzáadni** | az elem adatlapján: *📷 Fotó csatolása*, *🎙️ Hangjegyzet*, *📝 Megjegyzés*, *✏️ Jelölés / méretek* |
 | **Pontot áthelyezni** | adatlap → *📍 Hely javítása* → *Kijelölés a térképen* |
-| **Útvonalat rajzolni** | *✏️ Hiányzó szakasz berajzolása* — koppintás pontról pontra, a vonal magától követi az utat |
+| **Útvonalat rajzolni** | *✏️ Útvonal rajzolása* mód — koppintás pontról pontra, a vonal magától követi az utat |
 
 > A térkép nem ugrik el munka közben: az éppen rajzolt vonal nem mozdítja a
 > nézetet, új pont felvételekor a nagyított kivágat a helyén marad, és
-> egyetlen pont körül is értelmes nagyítás marad. Rajzolás közben is kézben
-> van a *🔍 Ugrás helyre* gomb, tehát a következő szakaszhoz el lehet ugrani
-> anélkül, hogy a félbehagyott vonalat el kellene dobni.
+> egyetlen pont körül is értelmes nagyítás marad. Módot váltani sem veszélyes:
+> a megkezdett rajz megmarad, és a ✏️ móddal folytatható.
 
 #### Az útvonal magától az útra illeszkedik
 
@@ -519,15 +546,16 @@ tenni — a *Nyomvonal szerkesztése* gombbal.
 - **Törlés**: ha az adatra nincs szükség, a kijelölt pontok véglegesen
   törölhetők.
 
-**Hiányzó szakasz berajzolása.** Ha a helyes kerülőn a kísérőautó egyáltalán
-nem ment végig, nincs róla GPS-nyom — ilyenkor a *Hiányzó szakasz berajzolása*
-gombbal közvetlenül a térképre rajzolható. Koppintson sorban a szakasz
+**Útvonal rajzolása a térképre.** Ha a helyes kerülőn a kísérőautó egyáltalán
+nem ment végig, nincs róla GPS-nyom — ilyenkor a *✏️ Útvonal rajzolása*
+móddal közvetlenül a térképre rajzolható (tervezéskor ugyanígy). Koppintson sorban a szakasz
 pontjaira; a meglévő nyomvonal (vagy egy másik berajzolt szakasz) közelében a
 csúcs automatikusan **odailleszkedik**, így hézag nélkül csatlakozik. A
 **🛣️ Úthoz illesztés** bekapcsolva a koppintásokat az útra teszi, és a
 köztük lévő útvonalat az úthálózat szerint rajzolja ki (lásd *Az útvonal
-magától az útra illeszkedik*). Az
-*Utolsó pont* visszavon, a *Szakasz kész* menti névvel és megjegyzéssel. A kész
+magától az útra illeszkedik*). A *↶ Vissza* (asztali gépen `Ctrl+Z`) egy
+pontot visszavon, a *✓ Szakasz kész* (vagy `Enter`) menti névvel és
+megjegyzéssel. A kész
 szakasz zölden jelenik meg, a listából kijelölhető, átnevezhető és törölhető.
 
 Ami ilyenkor a helyére kerül:

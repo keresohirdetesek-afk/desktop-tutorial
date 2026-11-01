@@ -31,10 +31,12 @@ export class MapView {
    *   berajzolása), ott kikapcsolva — két gyors koppintás egymás mellé ott
    *   szándékos, nem nagyítani akarunk vele.
    */
-  constructor(canvas, { draw, onTap, onPan, onChange, doubleTap = true } = {}) {
+  constructor(canvas, { draw, onTap, onPan, onChange, onHover, doubleTap = true } = {}) {
     this.canvas = canvas;
     this.drawFn = draw || (() => {});
     this.onTap = onTap;
+    // egérmozgás gomb nélkül: rajzoláskor ebből lesz az előnézeti vonal
+    this.onHover = onHover;
     this.onPan = onPan;
     this.onChange = onChange;
     this.doubleTap = doubleTap;
@@ -53,6 +55,7 @@ export class MapView {
     c.addEventListener('pointerup', (e) => this.onUp(e));
     c.addEventListener('pointercancel', (e) => this.onUp(e));
     c.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+    c.addEventListener('pointerleave', () => { if (this.onHover) this.onHover(null); });
     c.addEventListener('contextmenu', (e) => e.preventDefault());
     c.addEventListener('dblclick', (e) => {
       if (!this.doubleTap) return;
@@ -127,6 +130,11 @@ export class MapView {
   }
 
   onMove(e) {
+    if (!this.pointers.size && this.onHover) {
+      // csak egérnél: ujjal a „lebegés” nem értelmezhető
+      if (e.pointerType === 'mouse') this.onHover(this.local(e));
+      return;
+    }
     if (!this.pointers.has(e.pointerId)) return;
     this.pointers.set(e.pointerId, this.local(e));
 

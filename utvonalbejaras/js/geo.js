@@ -615,6 +615,32 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     drawPoly(draft.pts, { color: drawColor, width: lineW, dash: [2, lineW * 1.6], vertices: true });
   }
 
+  // Előnézet rajzolás közben: az egér helyétől az utolsó csúcsig húzott
+  // halvány vonal — így kattintás előtt látszik, hová kerülne a szakasz.
+  if (opts.ghost && opts.ghost.from && opts.ghost.to) {
+    const a = project(opts.ghost.from.lat, opts.ghost.from.lon);
+    const b = opts.ghost.to;
+    ctx.save();
+    ctx.setLineDash([5, 5]);
+    ctx.globalAlpha = 0.75;
+    ctx.strokeStyle = drawColor;
+    ctx.lineWidth = Math.max(2, lineW * 0.7);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = drawColor;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // elem-markerek
   const hitboxes = [];
   markerPts.forEach((m) => {

@@ -390,72 +390,85 @@
 <div id="trackedit" class="overlay" hidden>
   <header class="overlay-bar">
     <button id="trackedit-close" class="icon-btn" aria-label="Bezárás">✕</button>
-    <h2>Nyomvonal szerkesztése</h2>
+    <h2>Szerkesztés</h2>
     <div class="zoom-group">
-      <button id="trackedit-map" class="btn ghost tiny">🗺️ Térkép</button>
+      <button id="trackedit-goto" class="btn ghost tiny" title="Ugrás helyre">🔍<span class="lbl"> Ugrás helyre</span></button>
+      <button id="trackedit-map" class="btn ghost tiny" title="Alaptérkép">🗺️<span class="lbl"> Térkép</span></button>
       <button id="trackedit-zoom-out" class="icon-btn" aria-label="Kicsinyítés">−</button>
       <button id="trackedit-zoom-in" class="icon-btn" aria-label="Nagyítás">+</button>
-      <button id="trackedit-fit" class="btn ghost tiny">Illesztés</button>
+      <button id="trackedit-fit" class="btn ghost tiny" title="Teljes útvonal">⤢<span class="lbl"> Illesztés</span></button>
     </div>
   </header>
 
-  <div id="trackedit-stage"><canvas id="trackedit-canvas"></canvas></div>
-
-  <div class="editor-panel">
-    <div class="legend">
-      <span class="legend-item"><i class="swatch-line ok"></i>Érvényes: <strong id="te-ok">0 m</strong></span>
-      <span class="legend-item"><i class="swatch-line rejected"></i>Elvetett: <strong id="te-rejected">0 m</strong></span>
-      <span class="legend-item" id="te-drawn-item" hidden><i class="swatch-line drawn"></i>Berajzolt: <strong id="te-drawn">0 m</strong></span>
+  <div id="trackedit-body">
+    <div id="trackedit-stage">
+      <canvas id="trackedit-canvas"></canvas>
+      <div id="trackedit-badge" class="map-badge" hidden></div>
     </div>
 
-    <p id="trackedit-hint" class="hint">
-      Koppintson a nyomvonalra a szakasz elejénél, majd a végénél. Két ujjal nagyíthat,
-      húzással mozgathatja a térképet.
-    </p>
-
-    <div class="editor-row" id="trackedit-pointbar">
-      <button id="trackedit-addpoint" class="btn primary small">➕ Pont felvétele a térképre</button>
-      <button id="trackedit-goto" class="btn ghost small">🔍 Ugrás helyre</button>
-    </div>
-
-    <button id="trackedit-turnaround" class="btn ghost small block" disabled>
-      ↩️ Innen fordultunk vissza
-    </button>
-
-    <div id="trackedit-selinfo" hidden>
-      <p id="trackedit-selstats" class="hint"></p>
-      <label class="slider-row"><span>A pont</span><input id="trackedit-from" type="range" min="0" max="0" value="0"></label>
-      <label class="slider-row"><span>B pont</span><input id="trackedit-to" type="range" min="0" max="0" value="0"></label>
-    </div>
-
-    <div class="editor-row" id="trackedit-normalbar">
-      <button id="trackedit-reject" class="btn ghost small" disabled>⚠️ Elvetett szakasz</button>
-      <button id="trackedit-accept" class="btn ghost small" disabled>✓ Érvényes</button>
-      <button id="trackedit-delete" class="btn danger small" disabled>🗑 Törlés</button>
-      <button id="trackedit-clear-sel" class="btn ghost tiny" disabled>Kijelölés vége</button>
-    </div>
-
-    <div class="editor-row" id="trackedit-drawbar" hidden>
-      <button id="trackedit-roadsnap" class="btn ghost small" hidden>🛣️ Úthoz illesztés</button>
-      <button id="trackedit-draw-done" class="btn primary small">✓ Szakasz kész</button>
-      <button id="trackedit-draw-undo" class="btn ghost small">↶ Utolsó pont</button>
-      <button id="trackedit-draw-cancel" class="btn ghost small">Mégse</button>
-    </div>
-
-    <button id="trackedit-draw" class="btn ghost small block">✏️ Hiányzó szakasz berajzolása</button>
-
-    <div id="trackedit-drawn-wrap" hidden>
-      <h3 class="section-title">Berajzolt szakaszok</h3>
-      <div id="trackedit-drawn-list" class="sections"></div>
-      <div class="editor-row" id="trackedit-drawn-actions" hidden>
-        <button id="trackedit-drawn-rename" class="btn ghost tiny">Átnevezés</button>
-        <button id="trackedit-drawn-delete" class="btn danger tiny">Szakasz törlése</button>
+    <div class="editor-panel">
+      <!-- Mit csinál most a koppintás: egy helyen, mindig látszik -->
+      <div class="modebar" id="trackedit-modes" role="tablist">
+        <button class="mode" type="button" data-mode="view" role="tab">
+          <span class="mode-icon">👆</span><span class="mode-label">Nézegetés</span>
+        </button>
+        <button class="mode" type="button" data-mode="draw" role="tab">
+          <span class="mode-icon">✏️</span><span class="mode-label">Útvonal rajzolása</span>
+        </button>
+        <button class="mode" type="button" data-mode="add" role="tab">
+          <span class="mode-icon">📍</span><span class="mode-label">Pont felvétele</span>
+        </button>
+        <button class="mode" type="button" data-mode="select" role="tab">
+          <span class="mode-icon">✂️</span><span class="mode-label">Szakasz kijelölése</span>
+        </button>
       </div>
-    </div>
 
-    <div id="trackedit-sections-wrap" hidden>
-      <h3 class="section-title">Elvetett szakaszok</h3>
-      <div id="trackedit-sections" class="sections"></div>
+      <p id="trackedit-hint" class="hint"></p>
+      <p id="trackedit-keys" class="hint keys" hidden></p>
+
+      <!-- rajzolás -->
+      <div class="editor-row" id="trackedit-drawbar" hidden>
+        <button id="trackedit-draw-done" class="btn primary small">✓ Szakasz kész</button>
+        <button id="trackedit-draw-undo" class="btn ghost small">↶ Vissza</button>
+        <button id="trackedit-draw-cancel" class="btn ghost small">Eldobás</button>
+        <button id="trackedit-roadsnap" class="btn ghost small" hidden>🛣️ Úthoz illesztés</button>
+      </div>
+
+      <!-- szakasz kijelölése -->
+      <div id="trackedit-selinfo" hidden>
+        <p id="trackedit-selstats" class="hint"></p>
+        <label class="slider-row"><span>A pont</span><input id="trackedit-from" type="range" min="0" max="0" value="0"></label>
+        <label class="slider-row"><span>B pont</span><input id="trackedit-to" type="range" min="0" max="0" value="0"></label>
+      </div>
+      <div class="editor-row" id="trackedit-normalbar" hidden>
+        <button id="trackedit-reject" class="btn ghost small" disabled>⚠️ Elvetett</button>
+        <button id="trackedit-accept" class="btn ghost small" disabled>✓ Érvényes</button>
+        <button id="trackedit-delete" class="btn danger small" disabled>🗑 Törlés</button>
+        <button id="trackedit-clear-sel" class="btn ghost tiny" disabled>Kijelölés vége</button>
+      </div>
+      <button id="trackedit-turnaround" class="btn ghost small block" hidden disabled>
+        ↩️ Innen fordultunk vissza
+      </button>
+
+      <div class="legend">
+        <span class="legend-item"><i class="swatch-line ok"></i>Érvényes: <strong id="te-ok">0 m</strong></span>
+        <span class="legend-item"><i class="swatch-line rejected"></i>Elvetett: <strong id="te-rejected">0 m</strong></span>
+        <span class="legend-item" id="te-drawn-item" hidden><i class="swatch-line drawn"></i>Rajzolt: <strong id="te-drawn">0 m</strong></span>
+      </div>
+
+      <div id="trackedit-drawn-wrap" hidden>
+        <h3 class="section-title">Berajzolt szakaszok</h3>
+        <div id="trackedit-drawn-list" class="sections"></div>
+        <div class="editor-row" id="trackedit-drawn-actions" hidden>
+          <button id="trackedit-drawn-rename" class="btn ghost tiny">Átnevezés</button>
+          <button id="trackedit-drawn-delete" class="btn danger tiny">Szakasz törlése</button>
+        </div>
+      </div>
+
+      <div id="trackedit-sections-wrap" hidden>
+        <h3 class="section-title">Elvetett szakaszok</h3>
+        <div id="trackedit-sections" class="sections"></div>
+      </div>
     </div>
   </div>
 </div>
