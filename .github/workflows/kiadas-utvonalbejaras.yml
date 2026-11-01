@@ -74,8 +74,16 @@ jobs:
           fi
           # a Jekyll-feldolgozás kihagyása (a _ kezdetű nevek miatt kell)
           touch _site/.nojekyll
-          # a saját domain neve — e nélkül a Pages a github.io-ra állna vissza
-          echo "www.utvonalbejaras.hu" > _site/CNAME
+          # A saját domain neve. A Settings → Pages → Custom domain mentésekor
+          # a GitHub a repó gyökerébe írja a CNAME fájlt — azt vesszük át, hogy
+          # a beállítás és a közzétett csomag ne mondhasson mást. (Ha nincs,
+          # marad az alapértelmezett.)
+          if [ -f CNAME ]; then
+            cp CNAME _site/CNAME
+          else
+            echo "www.utvonalbejaras.hu" > _site/CNAME
+          fi
+          echo "Domain: $(cat _site/CNAME)"
           echo "Közzétett fájlok: $(find _site -type f | wc -l)"
 
       # A sw.js gyorsítótárnevének minden kiadásnál emelkednie kell,
