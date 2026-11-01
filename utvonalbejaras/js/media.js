@@ -35,7 +35,8 @@ A felirat a kép mentésekor, egyszer égetődik bele. Ez szándékos: így a
 letöltött, a jegyzőkönyvbe ágyazott és a Word-be illesztett kép is ugyanazt
 mutatja, külön lépés nélkül.                                             */
 
-export const WATERMARK_SITE = 'www.utvonalbejaras.hu';
+// www nélkül: mindkét alak ugyanide visz, ez viszont rövidebb a képen
+export const WATERMARK_SITE = 'utvonalbejaras.hu';
 
 const stampTime = (t) => {
   const d = new Date(t || Date.now());

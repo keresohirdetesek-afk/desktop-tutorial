@@ -215,7 +215,7 @@ mikor készült**. Ezért a fotó mentésekor egy halvány sáv kerül a kép al
 - **útszám és km szelvény**, valamint a **település**, ha van betöltött
   úthálózati adat vagy kézzel megadott érték,
 - a **felvétel időpontja**,
-- a jobb szélen halványan **www.utvonalbejaras.hu**.
+- a jobb szélen halványan **utvonalbejaras.hu**.
 
 A felirat a mentés előtt, egyszer égetődik a képbe. Ez szándékos: így a
 letöltött kép, a jegyzőkönyvbe ágyazott kép és a Word-dokumentumba illesztett
