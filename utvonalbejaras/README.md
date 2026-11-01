@@ -623,6 +623,38 @@ Tegye ki a mappát bármilyen HTTPS-es helyre — például GitHub Pages
 A böngésző menüjéből **„Hozzáadás a kezdőképernyőhöz”** — ezután
 külön alkalmazásként, teljes képernyőn, offline is indul.
 
+### Saját domainnel (www.utvonalbejaras.hu)
+
+A `.github/workflows/kiadas-utvonalbejaras.yml` munkafolyamat minden `main`
+ágra érkező változtatás után újra közzéteszi az oldalt, úgy, hogy **az app a
+domain gyökerébe** kerül (az átlagsebesség-oldal a korábbi
+`/atlagsebesseg/` útvonalon marad). Külön feltöltés nincs: `git push` →
+pár perc → éles.
+
+Egyszeri beállítás a repóban:
+
+1. **Settings → Pages → Source: „GitHub Actions”** (ez kapcsolja át a
+   kiadást a munkafolyamatra; enélkül az első futás hibára fut)
+2. **Settings → Pages → Custom domain:** `www.utvonalbejaras.hu`
+3. **Enforce HTTPS** bekapcsolva (a tanúsítvány magától elkészül)
+
+A domain szolgáltatójánál:
+
+| Név | Típus | Érték |
+|---|---|---|
+| `www` | CNAME | `<felhasználó>.github.io.` |
+| `@` | A | `185.199.108.153` |
+| `@` | A | `185.199.109.153` |
+| `@` | A | `185.199.110.153` |
+| `@` | A | `185.199.111.153` |
+
+> **Figyelem: a tárolt adat a címhez tartozik.** A böngésző minden
+> webcímhez külön tárolót ad, ezért a régi (`github.io`-s) címen rögzített
+> bejárások **nem jelennek meg** az új domainen. Mielőtt átáll, a régi
+> címen készítsen *Teljes mentés (JSON)* fájlt, és az új címen töltse
+> vissza. Ugyanez igaz a kezdőképernyőre kitett alkalmazásra: az új címet
+> egyszer újra ki kell tenni.
+
 ### Egyfájlos változat (gyors megnézéshez)
 
 ```bash
