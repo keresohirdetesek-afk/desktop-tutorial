@@ -2,7 +2,7 @@
 // A bejárások adatai IndexedDB-ben vannak, azokat a service worker nem érinti.
 
 const PREFIX = 'utvonalbejaras-';
-const CACHE = PREFIX + 'v9';
+const CACHE = PREFIX + 'v10';
 const TILE_CACHE = PREFIX + 'tiles';  // a térképcsempéket az alkalmazás kezeli
 const ASSETS = [
   './',
