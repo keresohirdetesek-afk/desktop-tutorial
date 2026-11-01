@@ -25,6 +25,7 @@ használatra.
 | **Méretek beírása**: méretvonal két pont közé + beírt érték (m / cm / t) | Szerkesztő → *Méret* eszköz |
 | **Halvány útirány-nyíl** — külön eszköz, saját beállításokkal | Szerkesztő → *Útirány* eszköz |
 | **Égtáj (iránytű) minden fotón** — merre nézett a kamera | automatikus, Szerkesztő → *Iránytű* |
+| **Felirat (vízjel) a fotókon**: koordináta, útszám-szelvény, település, időpont és halványan a cím | automatikus; kikapcsolható a kezdőképernyő alján |
 | **Hangjegyzet** felvétele a helyszínen, önállóan vagy fotóhoz csatolva | *Hangjegyzet* gomb, vagy fotó → *Hangjegyzet* |
 | **Videós megjegyzés** a telefon kamerájával, bélyegképpel | *Videó* gomb |
 | **Állapot- és táblarögzítés** kategóriával, állapottal, minősítéssel | *Állapot / tábla* gomb |
@@ -204,6 +205,30 @@ ha szándékosan nem úton (pl. telephelyen, gyárudvaron) kell vonalat húzni.
 
 A berajzolt pontok a nyomvonalhoz és a már berajzolt szakaszokhoz is
 hozzátapadnak, ezért a szakaszok hézag nélkül állnak össze.
+
+### Felirat (vízjel) a fotókon
+
+A közút felé beadott képnél az a leggyakrabban hiányzó adat, hogy **hol és
+mikor készült**. Ezért a fotó mentésekor egy halvány sáv kerül a kép aljára:
+
+- **koordináta** (és a GPS hibahatára, ha mérésből jön),
+- **útszám és km szelvény**, valamint a **település**, ha van betöltött
+  úthálózati adat vagy kézzel megadott érték,
+- a **felvétel időpontja**,
+- a jobb szélen halványan **www.utvonalbejaras.hu**.
+
+A felirat a mentés előtt, egyszer égetődik a képbe. Ez szándékos: így a
+letöltött kép, a jegyzőkönyvbe ágyazott kép és a Word-dokumentumba illesztett
+kép is ugyanazt mutatja, külön lépés nélkül. A fotóra rajzolt jelölések
+(nyíl, méretvonal, iránytű) ezután kerülnek rá, tehát a felirat alattuk is
+megmarad.
+
+**Kikapcsolható**: a kezdőképernyő alján a *Felirat a fotókra* jelölőnégyzet.
+A beállítás a következő fotóktól érvényes — a már mentett képeket nem
+változtatja meg (a felirat nem levehető róluk).
+
+> A videókra nem kerül felirat: azokat a böngésző nem tudja a telefonon
+> újrakódolni anélkül, hogy a minőség és a méret érezhetően romlana.
 
 ### A kísérőautó jelzésképei
 

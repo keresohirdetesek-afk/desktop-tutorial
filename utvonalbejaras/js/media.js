@@ -24,6 +24,102 @@ function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.85) {
   return new Promise((res) => canvas.toBlob((b) => res(b), type, quality));
 }
 
+/* ------------------------------------------------------------- vízjel
+
+A közút felé beadott fotón látszódnia kell, hol és mikor készült — anélkül,
+hogy a kép mellé külön táblázatot kellene olvasni. Ezért a koordináta, az
+útszám-szelvény és az időpont rákerül magára a képre, egy alsó sávba, és
+halványan az alkalmazás címe is.
+
+A felirat a kép mentésekor, egyszer égetődik bele. Ez szándékos: így a
+letöltött, a jegyzőkönyvbe ágyazott és a Word-be illesztett kép is ugyanazt
+mutatja, külön lépés nélkül.                                             */
+
+export const WATERMARK_SITE = 'www.utvonalbejaras.hu';
+
+const stampTime = (t) => {
+  const d = new Date(t || Date.now());
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}. ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+/**
+ * Felirat a kép aljára.
+ * @param {Blob} blob
+ * @param {object} info { lat, lon, acc, road: {utszam, szelveny}, created, extra, site }
+ */
+export async function stampPhoto(blob, info = {}) {
+  let img;
+  try { img = await loadImage(blob); } catch (_) { return blob; }
+  const w = img.width, h = img.height;
+  if (!w || !h) return blob;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  if (img.close) img.close();
+
+  // bal oldali sor: hely és idő — ami a jegyzőkönyvben is szerepel
+  const bits = [];
+  if (info.lat != null && info.lon != null) {
+    bits.push(`${Number(info.lat).toFixed(6)}, ${Number(info.lon).toFixed(6)}`);
+    // a hibahatár csak akkor mond valamit, ha tényleges mérésből jön
+    if (info.acc != null && info.acc >= 1) bits.push(`±${Math.round(info.acc)} m`);
+  }
+  const road = info.road || {};
+  const roadText = [road.utszam, road.szelveny].filter(Boolean).join(' ');
+  if (roadText) bits.push(roadText);
+  if (road.telepules) bits.push(road.telepules);
+  bits.push(stampTime(info.created));
+  if (info.extra) bits.push(info.extra);
+  const line = bits.join('  ·  ');
+  const site = info.site === false ? '' : (info.site || WATERMARK_SITE);
+
+  // a méretek a kép szélességéhez igazodnak, hogy kicsi és nagy képen is
+  // ugyanúgy nézzen ki
+  const base = Math.max(11, Math.round(w / 52));
+  const pad = Math.round(base * 0.7);
+  const barH = Math.round(base * 2.5);
+
+  const grad = ctx.createLinearGradient(0, h - barH * 1.35, 0, h);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.62)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, h - barH * 1.35, w, barH * 1.35);
+
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `600 ${base}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.96)';
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = Math.round(base * 0.5);
+  ctx.textAlign = 'left';
+  ctx.fillText(line, pad, h - pad);
+
+  if (site) {
+    // halványan, a jobb alsó sarokban — ne vigye el a figyelmet a képről
+    ctx.font = `500 ${Math.round(base * 0.85)}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.textAlign = 'right';
+    const siteW = ctx.measureText(site).width;
+    const lineW = (() => {
+      ctx.save();
+      ctx.font = `600 ${base}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+      const m = ctx.measureText(line).width;
+      ctx.restore();
+      return m;
+    })();
+    // ha nem fér el egy sorban, a cím a felirat fölé kerül
+    const y = (lineW + siteW + pad * 3 > w) ? h - pad - base * 1.45 : h - pad;
+    ctx.fillText(site, w - pad, y);
+  }
+  ctx.shadowBlur = 0;
+
+  const out = await canvasToBlob(canvas, 'image/jpeg', 0.88);
+  return out || blob;
+}
+
 /** Nagy kamerafotó zsugorítása, hogy a tárhely és a rajzolás gyors maradjon. */
 export async function shrinkImage(blob, maxSide = 2000, quality = 0.86) {
   const img = await loadImage(blob);

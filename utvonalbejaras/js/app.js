@@ -12,7 +12,9 @@ import {
   SIGNS, signSvg, signName, signsLabel, itemSigns, signById, preloadSigns,
 } from './jelzes.js';
 import { startCompass, compassHeading, compassState } from './compass.js';
-import { AudioRecorder, shrinkImage, makeThumb, readExif, videoPoster } from './media.js';
+import {
+  AudioRecorder, shrinkImage, makeThumb, readExif, videoPoster, stampPhoto,
+} from './media.js';
 import { PhotoEditor } from './editor.js';
 import { TrackEditor } from './trackedit.js';
 import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './tiles.js';
@@ -590,6 +592,29 @@ async function roadStamp(lat, lon, acc = null) {
 /** Az útszám + szelvény egy sorban („81 · 27 km + 387 m”). */
 const roadLabel = (r) => (r ? [r.utszam, r.szelveny].filter(Boolean).join(' · ') : '');
 
+/* ------------------------------------------------------------- vízjel
+
+A fotóra ráégetjük, hol és mikor készült, és halványan az alkalmazás címét.
+Kikapcsolható — de alapból be van kapcsolva, mert a közút felé beadott
+képnél ez a leggyakrabban hiányzó adat.                                 */
+
+const watermarkOn = () => {
+  try { return localStorage.getItem('watermark') !== '0'; } catch (_) { return true; }
+};
+
+/** Felirat a fotóra, a már ismert hely- és időadatokkal. */
+async function stampIfWanted(blob, item) {
+  if (!watermarkOn() || !blob) return blob;
+  try {
+    return await stampPhoto(blob, {
+      lat: item.lat, lon: item.lon, acc: item.acc,
+      road: item.road, created: item.created,
+    });
+  } catch (_) {
+    return blob;   // a felirat sosem akadályozhatja meg a mentést
+  }
+}
+
 async function positionNow() {
   const now = Date.now();
   // minden rögzített helyszínre ráírjuk az útszámot és a szelvényt is
@@ -658,7 +683,12 @@ async function onPhotoSelected(e) {
       if (pos.lat == null) noPos++;
       if (heading == null) noHeading++;
 
-      const { blob, width, height } = await shrinkImage(file);
+      const shrunk = await shrinkImage(file);
+      const width = shrunk.width, height = shrunk.height;
+      const created = (exif && exif.takenAt) || Date.now();
+      // a felirat a mentés előtt kerül rá, hogy minden későbbi másolaton
+      // (letöltés, jegyzőkönyv, Word) ott legyen
+      const blob = await stampIfWanted(shrunk.blob, { ...pos, created, road: pos.road });
       const thumb = await makeThumb(blob);
       const item = {
         id: db.uid(),
@@ -666,7 +696,7 @@ async function onPhotoSelected(e) {
         type: 'photo',
     phase: capturePhase,
         // importált képnél a felvétel ideje a mérvadó, nem a behozatalé
-        created: (exif && exif.takenAt) || Date.now(),
+        created,
         importedAt: exif && exif.takenAt ? Date.now() : undefined,
         ...pos,
         heading,
@@ -1077,8 +1107,8 @@ async function onAttachPhoto(e) {
 
   try {
     const { blob, width, height } = await shrinkImage(file);
-    item.photo = blob;
-    item.thumb = await makeThumb(blob);
+    item.photo = await stampIfWanted(blob, item);
+    item.thumb = await makeThumb(item.photo);
     item.width = width;
     item.height = height;
     if (item.heading == null) {
@@ -2209,6 +2239,17 @@ function bind() {
   $('#attach-photo-input').addEventListener('change', onAttachPhoto);
   $('#cap-condition').addEventListener('click', addCondition);
   $('#cap-sign').addEventListener('click', addSign);
+
+  const wm = $('#opt-watermark');
+  if (wm) {
+    wm.checked = watermarkOn();
+    wm.addEventListener('change', () => {
+      try { localStorage.setItem('watermark', wm.checked ? '1' : '0'); } catch (_) {}
+      toast(wm.checked
+        ? 'A következő fotókra rákerül a felirat (koordináta, idő, cím).'
+        : 'A következő fotók felirat nélkül mentődnek. A már mentett képek nem változnak.');
+    });
+  }
   $('#cap-audio').addEventListener('click', () => recordAudio(null));
   $('#cap-note').addEventListener('click', addNote);
 
