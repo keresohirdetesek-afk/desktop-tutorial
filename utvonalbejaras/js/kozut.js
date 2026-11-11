@@ -48,7 +48,7 @@ const timeHu = (t) => {
  * A Magyar Közút útszámkeresője. A GPS-ből az útszám és a km szelvény nem
  * derül ki, de ezen az oldalon a koordináta alapján kikereshető.
  */
-const UTSZAM_KERESO = 'https://utszamkereso.kozut.hu/';
+export const UTSZAM_KERESO = 'https://utszamkereso.kozut.hu/';
 
 /**
  * Az útszámkereső jobb oldali paneljéből kimásolt szöveg feldolgozása.
@@ -66,13 +66,21 @@ export function parseKeresoSzoveg(text) {
     const plus = /\b(\d{1,3})\s*\+\s*(\d{1,3})\b/.exec(t);      // „27+387”
     if (plus) out.szelveny = `${Number(plus[1])} km + ${Number(plus[2])} m`;
   }
-  const hely = /Telep[üu]l[ée]s\s*:?\s*([^·|,;]+)/i.exec(t);
-  if (hely) out.telepules = hely[1].trim();
+  // A település a sor végéig tart — de ha a panel egy sorba került, a
+  // következő felirat („GPS:”, „EOV:”) előtt el kell vágni, különben az is
+  // belekerülne a névbe.
+  const hely = /Telep[üu]l[ée]s\s*:?\s*([^\n\r·|;]+)/i.exec(String(text || ''));
+  if (hely) {
+    out.telepules = hely[1]
+      .split(/\s+[A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű.-]*\s*:/)[0]
+      .replace(/[,;.\s]+$/, '')
+      .trim();
+  }
   return out;
 }
 
 /** Szöveg a vágólapra — hogy a keresőbe csak be kelljen illeszteni. */
-async function toClipboard(text) {
+export async function toClipboard(text) {
   try {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);

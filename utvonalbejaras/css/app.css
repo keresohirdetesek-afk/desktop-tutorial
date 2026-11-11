@@ -502,6 +502,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .thumb.sign { display: flex; align-items: center; justify-content: center; background: #fff; }
 .thumb.sign svg { width: 44px; height: 44px; }
 
+/* Útszám és szelvény az elem adatlapján — a közút felé ez a kulcsadat */
+.road-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.road-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.road-title { font-size: 12.5px; color: var(--muted); }
+.road-val { font-weight: 650; font-variant-numeric: tabular-nums; }
+.road-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.road-hint { margin: 8px 0 0; font-size: 11.5px; color: var(--muted); }
+
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
 .modal-actions .btn { min-width: 96px; }
 

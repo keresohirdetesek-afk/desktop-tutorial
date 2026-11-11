@@ -22,12 +22,12 @@ import { MapView } from './terkepnezet.js';
 import {
   pointOnRoad, findPlace, lookupRoad, routeBetween, szelvenyMeters, formatSzelveny,
 } from './uthalozat.js';
-import { eovToWgs84 } from './eov.js';
+import { eovToWgs84, formatEov } from './eov.js';
 import { onlineRouting, setOnlineRouting, snapOnline, routeOnline } from './utvonalterv.js';
 import { lookupOsm } from './utadat.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
-import { KozutDocs } from './kozut.js';
+import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO } from './kozut.js';
 import { EscortMode } from './kiseres.js';
 import {
   licence, licencingConfigured, saveLicence, clearLicence, canCreateSession, reportLicence,
@@ -1562,7 +1562,9 @@ async function openViewer(id) {
   if (item.road) {
     rows.push(['Útszám, szelvény', roadLabel(item.road)
       + (item.road.telepules ? ` · ${item.road.telepules}` : '')
-      + (item.road.forras === 'kezi'
+      + (item.road.forras === 'kereso'
+        ? ' (az útszámkeresőből)'
+        : item.road.forras === 'kezi'
         ? ' (kézzel megadva)'
         : item.road.forras === 'osm'
           ? ` (térképadatból${item.road.becsult ? ', a szelvény becsült' : ', szelvény nélkül'}`
@@ -1601,6 +1603,35 @@ async function openViewer(id) {
   }
   body.appendChild(info);
 
+  // Útszám és km szelvény: saját doboz, mert ezen a közút felé beadott
+  // anyagban minden múlik, és három különböző úton lehet megszerezni.
+  const roadBox = el('div', { class: 'road-box' }, [
+    el('div', { class: 'road-head' }, [
+      el('span', { class: 'road-title', text: '🛣️ Útszám, km szelvény' }),
+      el('span', { class: 'road-val', text: item.road ? roadLabel(item.road) : 'még nincs megadva' }),
+    ]),
+    el('div', { class: 'road-acts' }, [
+      el('button', {
+        class: 'btn ghost tiny', type: 'button', text: '✏️ Beírás kézzel',
+        onclick: () => editRoad(item),
+      }),
+      item.lat != null ? el('button', {
+        class: 'btn ghost tiny', type: 'button', text: '🔎 Útszámkereső',
+        onclick: () => openKeresoFor(item),
+      }) : null,
+      item.lat != null ? el('button', {
+        class: 'btn ghost tiny', type: 'button', text: '📋 Beillesztés a keresőből',
+        onclick: () => pasteKeresoInto(item),
+      }) : null,
+    ].filter(Boolean)),
+    item.lat != null
+      ? el('p', { class: 'road-hint', text: 'A keresőhöz a koordináta a vágólapra kerül (EOV: '
+          + formatEov(item.lat, item.lon) + '). A találatot a panelből kimásolva a '
+          + '„Beillesztés” gomb veszi át.' })
+      : null,
+  ].filter(Boolean));
+  body.appendChild(roadBox);
+
   if (item.type === 'photo') {
     actions.appendChild(el('button', { class: 'btn primary small', text: '✏️ Jelölés / méretek', onclick: async () => {
       closeViewer();
@@ -1638,11 +1669,7 @@ async function openViewer(id) {
       onclick: () => download(item.video, `${slug(state.session?.name)}-${item.id.slice(0, 6)}.mp4`),
     }));
   }
-  actions.appendChild(el('button', {
-    class: 'btn ghost small',
-    text: item.road ? '🛣️ Útszám, szelvény' : '🛣️ Útszám, szelvény megadása',
-    onclick: () => editRoad(item),
-  }));
+
   actions.appendChild(el('button', { class: 'btn ghost small', text: '📝 Megjegyzés', onclick: () => editItemNote(item) }));
   actions.appendChild(el('button', {
     class: item.lat == null ? 'btn primary small' : 'btn ghost small',
@@ -1711,6 +1738,64 @@ async function editRoad(item) {
   renderItems();
   closeViewer();
   toast(item.road ? `Mentve: ${roadLabel(item.road)}.` : 'Útszám, szelvény törölve.');
+}
+
+/** EOV a vágólapra, és az útszámkereső megnyitása ugyanabban a fülben. */
+async function openKeresoFor(item) {
+  const eov = formatEov(item.lat, item.lon);
+  const copied = await toClipboard(eov);
+  window.open(UTSZAM_KERESO, 'utszamkereso');
+  toast(copied
+    ? 'EOV koordináta a vágólapon. A Koordinátakeresőbe: Beilleszt → Keres. '
+      + 'Utána jöjjön vissza, és nyomja meg a „Beillesztés a keresőből” gombot.'
+    : `Koordinátakereső, EOV: ${eov}`);
+}
+
+/** A keresőből kimásolt panel feldolgozása az elem adatlapjára. */
+async function pasteKeresoInto(item) {
+  let text = '';
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      text = await navigator.clipboard.readText();
+    }
+  } catch (_) { /* a böngésző nem adta oda — kérjük be kézzel */ }
+
+  let data = parseKeresoSzoveg(text);
+  if (!data.utszam && !data.szelveny) {
+    const res = await modal({
+      title: 'Beillesztés a keresőből',
+      text: 'Jelölje ki az útszámkereső jobb oldali paneljét, másolja ki, és illessze be ide. '
+        + 'Az útszámot és a szelvényt az app kiszedi belőle.',
+      fields: [{ name: 'szoveg', label: 'Beillesztett szöveg', type: 'textarea', rows: 4, value: text }],
+      okText: 'Feldolgozás',
+    });
+    if (!res) return;
+    data = parseKeresoSzoveg(res.szoveg);
+  }
+  if (!data.utszam && !data.szelveny) {
+    toast('Ebből nem jött ki útszám vagy szelvény.', 'error');
+    return;
+  }
+
+  const meters = data.szelveny ? szelvenyMeters(data.szelveny) : null;
+  item.road = {
+    utszam: data.utszam || (item.road && item.road.utszam) || '',
+    szelveny: data.szelveny || '',
+    meters,
+    telepules: data.telepules || (item.road && item.road.telepules) || '',
+    tavolsag: null,
+    forras: 'kereso',
+  };
+  if (item.kozut) {
+    item.kozut.utszam = item.road.utszam;
+    item.kozut.km = item.road.szelveny;
+    if (item.road.telepules) item.kozut.telepules = item.road.telepules;
+  }
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  closeViewer();
+  toast(`Átvéve a keresőből: ${roadLabel(item.road)}.`);
 }
 
 async function editItemNote(item) {
