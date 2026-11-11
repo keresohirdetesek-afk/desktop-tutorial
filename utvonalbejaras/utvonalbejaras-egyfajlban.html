@@ -11949,15 +11949,54 @@ async function editRoad(item) {
   toast(item.road ? `Mentve: ${roadLabel(item.road)}.` : 'Útszám, szelvény törölve.');
 }
 
-/** EOV a vágólapra, és az útszámkereső megnyitása ugyanabban a fülben. */
+/**
+ * EOV a vágólapra, és az útszámkereső megnyitása ugyanabban a fülben.
+ *
+ * Visszatéréskor magunktól megnézzük a vágólapot: ha a keresőből kimásolt
+ * találat van rajta, csak rá kell bólintani. Így nem kell külön gombot
+ * keresni — és ha a böngésző nem engedi a vágólap olvasását, marad a
+ * „Beillesztés a keresőből” gomb.
+ */
+let keresoVarakozik = null;
+
 async function openKeresoFor(item) {
   const eov = formatEov(item.lat, item.lon);
   const copied = await toClipboard(eov);
+  keresoVarakozik = item.id;
   window.open(UTSZAM_KERESO, 'utszamkereso');
   toast(copied
     ? 'EOV koordináta a vágólapon. A Koordinátakeresőbe: Beilleszt → Keres. '
-      + 'Utána jöjjön vissza, és nyomja meg a „Beillesztés a keresőből” gombot.'
+      + 'A találatot másolja ki, és ide visszatérve felajánlom az átvételt.'
     : `Koordinátakereső, EOV: ${eov}`);
+}
+
+/** Visszatértünk a keresőből — van-e a vágólapon használható találat? */
+async function keresoVisszateres() {
+  const id = keresoVarakozik;
+  if (!id || document.hidden) return;
+  const item = state.items.find((i) => i.id === id);
+  if (!item) { keresoVarakozik = null; return; }
+
+  let text = '';
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      text = await navigator.clipboard.readText();
+    }
+  } catch (_) { return; }        // nincs engedély: marad a gombos út
+
+  const data = parseKeresoSzoveg(text);
+  if (!data.utszam && !data.szelveny) return;
+  keresoVarakozik = null;
+
+  const cim = [data.utszam, data.szelveny, data.telepules].filter(Boolean).join(' · ');
+  const ok = await modal({
+    title: 'Átvegyem a keresőből?',
+    text: `A vágólapon ez van: ${cim}\n\nRáírjam a bejegyzésre?`,
+    okText: 'Átvétel',
+    cancelText: 'Most nem',
+  });
+  if (!ok) return;
+  await alkalmazKereso(item, data);
 }
 
 /** A keresőből kimásolt panel feldolgozása az elem adatlapjára. */
@@ -11986,6 +12025,11 @@ async function pasteKeresoInto(item) {
     return;
   }
 
+  await alkalmazKereso(item, data);
+}
+
+/** A keresőből kapott adat ráírása a bejegyzésre. */
+async function alkalmazKereso(item, data) {
   const meters = data.szelveny ? szelvenyMeters(data.szelveny) : null;
   item.road = {
     utszam: data.utszam || (item.road && item.road.utszam) || '',
@@ -12622,6 +12666,10 @@ function bind() {
   $('#attach-photo-input').addEventListener('change', onAttachPhoto);
   $('#cap-condition').addEventListener('click', addCondition);
   $('#cap-sign').addEventListener('click', addSign);
+
+  // a keresőből visszatérve felajánljuk a vágólapon lévő találatot
+  window.addEventListener('focus', () => { keresoVisszateres(); });
+  document.addEventListener('visibilitychange', () => { keresoVisszateres(); });
 
   const hid = $('#opt-hid');
   if (hid) {
