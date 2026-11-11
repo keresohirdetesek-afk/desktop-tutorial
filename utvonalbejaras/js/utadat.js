@@ -395,17 +395,18 @@ export async function probaHid(url) {
         + 'A GitHub Pages ilyen — a fájlt a saját (PHP-t futtató) tárhelyre kell tenni.',
     };
   }
+  // Előbb a tartalom: a híd a saját hibáját JSON-ban küldi, és az sokkal
+  // többet mond, mint a HTTP-státusz.
+  let data = null;
+  try { data = JSON.parse(szoveg); } catch (_) { data = null; }
+  if (data && data.hiba) {
+    return { ok: false, adat: data, uzenet: String(data.hiba) };
+  }
   if (!res.ok) {
     return { ok: false, adat: null, uzenet: `A kiszolgáló ${res.status} hibát adott.` };
   }
-
-  let data = null;
-  try { data = JSON.parse(szoveg); } catch (_) { data = null; }
   if (!data) {
     return { ok: false, adat: null, uzenet: 'A válasz nem JSON. Biztosan a továbbító fájl címe ez?' };
-  }
-  if (data.hiba) {
-    return { ok: false, adat: data, uzenet: String(data.hiba) };
   }
 
   const road = parseKozut(data);

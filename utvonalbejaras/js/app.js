@@ -1840,10 +1840,12 @@ async function editHid() {
   // a hibát nem elég egy villanó üzenetben megmutatni: ez beállítási gond
   await modal({
     title: 'A híd nem működik',
-    text: proba.uzenet + '\n\nA továbbító fájl (kiszolgalo/kozut-hid.php) olyan tárhelyre '
-      + 'kell, ami futtatja a PHP-t — például arra a cPanel-es tárhelyre, ahol a másik '
-      + 'oldalad is fut. A GitHub Pages erre nem alkalmas. A cím addig is mentve maradt; '
-      + 'üresen hagyva kikapcsolható.',
+    text: proba.uzenet
+      + '\n\nRészletek: nyissa meg a híd címét a böngészőben a végére írt &diag=1 '
+      + 'paraméterrel — ott soronként látszik, mit próbált, és mit kapott vissza.'
+      + '\n\nA továbbító fájl (kiszolgalo/kozut-hid.php) olyan tárhelyre kell, ami '
+      + 'futtatja a PHP-t; a GitHub Pages erre nem alkalmas. A cím addig is mentve '
+      + 'maradt; üresen hagyva kikapcsolható.',
     okText: 'Értem',
     cancelText: 'Cím törlése',
   }) || setKozutHid('');

@@ -452,6 +452,18 @@ koordinátán kívül semmit nem továbbít, nem naplóz, a válaszokat 30 napig
 gyorsítótárazza, és percenként korlátozza a kérések számát — hogy a Közút
 szolgáltatását se terhelje feleslegesen.
 
+A pontos kérésformát a szolgáltatás nem teszi közzé, és változhat is, ezért
+a híd **több változatot végigpróbál** (EOV és WGS84 végpont, POST és GET),
+és a bevált változatot megjegyzi. Ha valami mégsem megy, a cím végére írt
+`&diag=1` kiírja soronként, mit próbált és mit kapott vissza:
+
+```
+https://sajat-domain.hu/kozut-hid.php?lat=47.376131&lon=18.190796&diag=1
+```
+
+Ebből derül ki az is, ha a tárhely nem enged kimenő kapcsolatot (ilyenkor a
+`curl_hiba` mező nem üres), vagy ha nincs bekapcsolva a `curl` bővítmény.
+
 **Online kiegészítéssel, NAP nélkül is.** Ha nincs betöltve a NAP-állomány,
 de bekapcsolta az *Online kiegészítést*, az app nyílt térképadatból (OSM)
 kikeresi a ponthoz legközelebbi út **útszámát** — ugyanazt a számot, ami a
