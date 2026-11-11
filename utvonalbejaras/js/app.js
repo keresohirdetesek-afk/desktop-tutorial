@@ -24,7 +24,7 @@ import {
 } from './uthalozat.js';
 import { eovToWgs84, formatEov } from './eov.js';
 import { onlineRouting, setOnlineRouting, snapOnline, routeOnline } from './utvonalterv.js';
-import { lookupOsm } from './utadat.js';
+import { lookupOsm, lookupKozut, kozutHid, setKozutHid } from './utadat.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO } from './kozut.js';
@@ -589,9 +589,14 @@ async function roadStamp(lat, lon, acc = null) {
   try { net = await roadNetwork(); } catch (_) { net = null; }
 
   if (!net) {
-    // Nincs NAP-adat. Ha a felhasználó bekapcsolta az online kiegészítést,
-    // nyílt térképadatból megpróbáljuk az útszámot (és a kilométerkövekből
-    // a szelvényt) — becsült értékként, külön megjelölve.
+    // Nincs NAP-adat. Elsőként a Közút saját szolgáltatása jön (ha be van
+    // állítva a híd) — az a hiteles forrás; csak utána a nyílt térképadat.
+    const kozut = await lookupKozut(lat, lon);
+    if (kozut) return { ...kozut, acc: acc == null ? null : Math.round(acc) };
+
+    // Ha a felhasználó bekapcsolta az online kiegészítést, nyílt
+    // térképadatból megpróbáljuk az útszámot (és a kilométerkövekből a
+    // szelvényt) — becsült értékként, külön megjelölve.
     if (!onlineRouting()) return null;
     const osm = await lookupOsm(lat, lon);
     if (!osm || !osm.utszam) return null;
@@ -1562,8 +1567,10 @@ async function openViewer(id) {
   if (item.road) {
     rows.push(['Útszám, szelvény', roadLabel(item.road)
       + (item.road.telepules ? ` · ${item.road.telepules}` : '')
-      + (item.road.forras === 'kereso'
-        ? ' (az útszámkeresőből)'
+      + (item.road.forras === 'kozut'
+        ? ' (a Közút útszámkeresőjéből)'
+        : item.road.forras === 'kereso'
+        ? ' (az útszámkeresőből, kézi átvétellel)'
         : item.road.forras === 'kezi'
         ? ' (kézzel megadva)'
         : item.road.forras === 'osm'
@@ -1796,6 +1803,40 @@ async function pasteKeresoInto(item) {
   renderItems();
   closeViewer();
   toast(`Átvéve a keresőből: ${roadLabel(item.road)}.`);
+}
+
+/**
+ * Az útszámkereső-híd címe. A Közút végpontját a böngésző nem hívhatja
+ * közvetlenül egy másik címen futó oldalról, ezért a saját tárhelyre kell
+ * egy pici továbbító fájl (kiszolgalo/utszam.php a repóban).
+ */
+async function editHid() {
+  const res = await modal({
+    title: 'Útszámkereső-híd',
+    text: 'Ha a saját tárhelyére felmásolta a továbbító fájlt (kiszolgalo/utszam.php), '
+      + 'írja be ide a címét — ettől kezdve minden rögzített pont magától megkapja a '
+      + 'Közút szerinti útszámot és km szelvényt. Üresen hagyva nincs lekérdezés.',
+    fields: [
+      {
+        name: 'url', label: 'A továbbító fájl címe', value: kozutHid(),
+        placeholder: 'https://sajat-domain.hu/utszam.php',
+        hint: 'A koordináta EOV-ban megy át, más adat nem.',
+      },
+    ],
+    okText: 'Mentés',
+  });
+  if (!res) return;
+  const url = res.url.trim();
+  setKozutHid(url);
+  if (!url) { toast('A híd kikapcsolva.'); return; }
+
+  // azonnal kipróbáljuk egy ismert ponton, hogy ne később derüljön ki a baj
+  toast('Próba…');
+  const proba = await lookupKozut(47.376131, 18.190796);
+  toast(proba && proba.utszam
+    ? `Működik. Próbapont: ${proba.utszam}${proba.szelveny ? ' · ' + proba.szelveny : ''}.`
+    : 'A cím mentve, de a próba nem hozott eredményt. Ellenőrizze a fájl címét és azt, '
+      + 'hogy a tárhely engedi-e a kimenő kéréseket.', proba ? 'info' : 'error');
 }
 
 async function editItemNote(item) {
@@ -2367,6 +2408,15 @@ function bind() {
   $('#attach-photo-input').addEventListener('change', onAttachPhoto);
   $('#cap-condition').addEventListener('click', addCondition);
   $('#cap-sign').addEventListener('click', addSign);
+
+  const hid = $('#opt-hid');
+  if (hid) {
+    const syncHid = () => {
+      hid.textContent = kozutHid() ? '🔗 Útszámkereső-híd: bekapcsolva' : '🔗 Útszámkereső-híd beállítása';
+    };
+    syncHid();
+    hid.addEventListener('click', async () => { await editHid(); syncHid(); });
+  }
 
   const onl = $('#opt-online');
   if (onl) {

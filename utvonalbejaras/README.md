@@ -425,6 +425,28 @@ pontra, és kiírja, hány helyszínt pótolt. A hely utólagos javításakor
 > az adatlap ezt is kiírja — ilyenkor a szomszédos út is lehet a
 > „legközelebbi”, érdemes ránézni.
 
+**A Közút útszámkeresőjéből, automatikusan (útszámkereső-híd).** Az
+[útszámkereső](https://utszamkereso.kozut.hu/) oldala mögött van egy
+JSON-végpont, ami koordinátára megadja a **hiteles** útszámot és szelvényt.
+A böngésző viszont nem engedi, hogy egy másik címen futó oldal közvetlenül
+hívja (a válasz nem engedélyezi az idegen eredetet), ezért kell egy pici
+továbbító fájl a saját tárhelyre:
+
+1. Másold fel a repóból a `utvonalbejaras/kiszolgalo/utszam.php` fájlt a
+   tárhelyedre, pl. `public_html/utszam.php`.
+2. Az appban: kezdőképernyő → **🔗 Útszámkereső-híd beállítása** → írd be a
+   fájl címét (`https://sajat-domain.hu/utszam.php`). Mentés után az app
+   rögtön ki is próbálja egy ismert ponton, és kiírja, mit kapott.
+
+Ettől kezdve **minden rögzített pont magától megkapja a Közút szerinti
+útszámot és km szelvényt** — ugyanazt, amit az útszámkereső is mutat. A
+forrásjelölés *„a Közút útszámkeresőjéből”*, és ez nem becsült érték.
+
+A továbbító fájl csak ezt az egyetlen, nyilvános végpontot éri el, a
+koordinátán kívül semmit nem továbbít, nem naplóz, a válaszokat 30 napig
+gyorsítótárazza, és percenként korlátozza a kérések számát — hogy a Közút
+szolgáltatását se terhelje feleslegesen.
+
 **Online kiegészítéssel, NAP nélkül is.** Ha nincs betöltve a NAP-állomány,
 de bekapcsolta az *Online kiegészítést*, az app nyílt térképadatból (OSM)
 kikeresi a ponthoz legközelebbi út **útszámát** — ugyanazt a számot, ami a
@@ -912,6 +934,8 @@ utvonalbejaras/
     ├── docx.js             Word-fájlok (.docx) kibontása, kitöltése, mentése
     ├── eov.js              GPS ↔ EOV átszámítás (EPSG:23700)
     ├── uthalozat.js        NAP úthálózati adat: betöltés, útszám- és szelvénykeresés
+    ├── utadat.js           útszám és szelvény: a Közút hídjából, vagy nyílt térképadatból
+    ├── utvonalterv.js      online útkövetés (a rajzolt vonal az utat követi)
     ├── kozut.js            a Közút űrlapjainak kitöltése a bejárás adataiból
     ├── media.js            képzsugorítás, bélyegkép, hangfelvétel
     └── ui.js               modális ablakok, értesítés, letöltés

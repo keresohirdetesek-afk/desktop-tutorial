@@ -21,6 +21,7 @@
 // eltároljuk, hogy egy bejárás ne küldjön ugyanarra a helyre többször.
 
 import { formatSzelveny } from './uthalozat.js';
+import { wgs84ToEov } from './eov.js';
 
 const OVERPASS_ALAP = 'https://osmOverpass-api.de/api/interpreter';
 const OSM_TIMEOUT_MS = 9000;
@@ -181,3 +182,138 @@ export function szamKm(v) {
 }
 
 export const OVERPASS_HOST = 'osmOverpass-api.de';
+
+
+/* ------------------------------------------- a Közút útszámkeresője
+
+Az útszámkereső oldala mögött van egy JSON-végpont, ami EOV-koordinátára
+megadja a hiteles útszámot és szelvényt. A böngésző viszont nem engedi, hogy
+egy másik címen futó oldal közvetlenül hívja (a válasz nem engedélyezi az
+idegen eredetet). Ezért kell a saját tárhelyre egy pici továbbító fájl —
+`kiszolgalo/utszam.php` a repóban —, és annak a címét ide beírva az app
+magától kikeresi a helyszín útszámát és szelvényét.
+
+Ha nincs beállítva, minden marad a régiben: nyílt térképadat, kézi beírás
+vagy a keresőből való átmásolás.                                         */
+
+export function kozutHid() {
+  try { return localStorage.getItem('utszamHid') || ''; } catch (_) { return ''; }
+}
+
+export function setKozutHid(url) {
+  try {
+    if (url) localStorage.setItem('utszamHid', url);
+    else localStorage.removeItem('utszamHid');
+  } catch (_) {}
+}
+
+/**
+ * Egy érték kikeresése a válaszból, akármilyen mélyen és akárhogy hívják.
+ * A `kizar` azért kell, mert a méter-mezőt keresve a kilométer-mező neve is
+ * illeszkedne („szelvenyKm” is m-re végződik).
+ */
+function mezo(obj, minta, ellenorz, kizar) {
+  const sor = [obj];
+  while (sor.length) {
+    const cur = sor.shift();
+    if (!cur || typeof cur !== 'object') continue;
+    for (const [k, v] of Object.entries(cur)) {
+      if (v && typeof v === 'object') { sor.push(v); continue; }
+      if (v == null || v === '') continue;
+      if (kizar && kizar.test(k)) continue;
+      if (minta.test(k) && (!ellenorz || ellenorz(v))) return v;
+    }
+  }
+  return null;
+}
+
+/**
+ * A válasz feldolgozása. Szándékosan nem egyetlen mezőnévre épül: a
+ * szolgáltatás átnevezhet valamit, és akkor sem akarjuk, hogy elszálljon.
+ */
+export function parseKozut(data) {
+  if (!data || typeof data !== 'object') return null;
+
+  const utszam = mezo(data, /^(utszam|utszám|utsz|roadnumber|road_number|roadno|ref)$/i,
+    (v) => String(v).trim().length > 0 && String(v).trim().length < 12);
+
+  // A szelvény sokféle alakban jöhet: külön km és m mezőben, egyetlen
+  // méterértékben, vagy szövegesen („27+387”). Mindegyiket megpróbáljuk,
+  // ebben a sorrendben.
+  let meters = null;
+
+  // 1. szöveges alak
+  const szoveg = mezo(data, /szelv|chainage/i, (v) => typeof v === 'string' && /\d/.test(v));
+  if (szoveg != null) {
+    const km = szamKm(szoveg);
+    if (km != null) meters = km * 1000;
+  }
+
+  // 2. külön km és m mező (szelvenyKm / kmSzelveny / km + m)
+  if (meters == null) {
+    const km = mezo(data, /(szelv.*km|km.*szelv|^km$|^kmtol$)/i, (v) => typeof v === 'number' && isFinite(v));
+    if (km != null) {
+      const m = mezo(data, /(szelv.*m$|m.*szelv|^m$|^meter$|^meterek$)/i,
+        (v) => typeof v === 'number' && isFinite(v) && v >= 0 && v < 1000,
+        /km/i);
+      meters = km * 1000 + (m || 0);
+    }
+  }
+
+  // 3. egyetlen szám: 10 000 fölött méter, alatta kilométer
+  if (meters == null) {
+    const szam = mezo(data, /szelv|chainage/i, (v) => typeof v === 'number' && isFinite(v));
+    if (szam != null) meters = szam > 10000 ? szam : szam * 1000;
+  }
+
+  const telepules = mezo(data, /telep|helyseg|varos|settlement/i,
+    (v) => typeof v === 'string' && v.trim().length > 1);
+  // a szakasz kezelője (mérnökség) — a Közút-űrlapokon is kérdezik
+  const kezelo = mezo(data, /kezelo|mernokseg|fenntarto|operator/i,
+    (v) => typeof v === 'string' && v.trim().length > 1);
+
+  if (!utszam && meters == null) return null;
+  return {
+    utszam: utszam ? String(utszam).trim() : '',
+    szelveny: meters == null ? '' : formatSzelveny(meters),
+    meters,
+    telepules: telepules ? String(telepules).trim() : '',
+    kezelo: kezelo ? String(kezelo).trim() : '',
+    tavolsag: null,
+    forras: 'kozut',
+    becsult: false,
+  };
+}
+
+/** Hiteles útszám és szelvény a Közút szolgáltatásából, a hídon keresztül. */
+export async function lookupKozut(lat, lon) {
+  const hid = kozutHid();
+  if (!hid || lat == null || lon == null) return null;
+
+  const kulcs = 'kozut|' + osmCellKey(lat, lon);
+  if (osmCache.has(kulcs)) return osmCache.get(kulcs);
+
+  // A hídnak mindkettőt elküldjük: a WGS84-et használja, az EOV-t csak akkor,
+  // ha a régebbi változat van fent a tárhelyen.
+  const eov = wgs84ToEov(lat, lon);
+  const url = hid + (hid.includes('?') ? '&' : '?')
+    + `lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}`
+    + (eov && isFinite(eov.y) ? `&y=${eov.y.toFixed(2)}&x=${eov.x.toFixed(2)}` : '');
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), OSM_TIMEOUT_MS);
+  let data = null;
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, mode: 'cors' });
+    if (res.ok) data = await res.json();
+  } catch (_) {
+    data = null;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!data) return null;
+
+  const out = parseKozut(data);
+  if (out) osmCache.set(kulcs, out);
+  return out;
+}
