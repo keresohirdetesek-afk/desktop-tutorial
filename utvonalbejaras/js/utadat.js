@@ -285,10 +285,19 @@ export function parseKozut(data) {
   };
 }
 
+/**
+ * Ha a híd nem működik, ne lassítsa a munkát: két sikertelen kérés után
+ * ebben a futásban nem próbálkozunk tovább (a rögzítés különben minden
+ * egyes pontnál megvárná az időkorlátot).
+ */
+let hidHibak = 0;
+export const hidKiesett = () => hidHibak >= 2;
+export const hidUjraprobal = () => { hidHibak = 0; };
+
 /** Hiteles útszám és szelvény a Közút szolgáltatásából, a hídon keresztül. */
 export async function lookupKozut(lat, lon) {
   const hid = kozutHid();
-  if (!hid || lat == null || lon == null) return null;
+  if (!hid || lat == null || lon == null || hidKiesett()) return null;
 
   const kulcs = 'kozut|' + osmCellKey(lat, lon);
   if (osmCache.has(kulcs)) return osmCache.get(kulcs);
@@ -311,10 +320,15 @@ export async function lookupKozut(lat, lon) {
   } finally {
     clearTimeout(timer);
   }
-  if (!data) return null;
+  if (!data || data.hiba) {
+    hidHibak += 1;
+    return null;
+  }
 
   const out = parseKozut(data);
-  if (out) osmCache.set(kulcs, out);
+  if (!out) { hidHibak += 1; return null; }
+  hidHibak = 0;
+  osmCache.set(kulcs, out);
   return out;
 }
 

@@ -24,7 +24,9 @@ import {
 } from './uthalozat.js';
 import { eovToWgs84, formatEov } from './eov.js';
 import { onlineRouting, setOnlineRouting, snapOnline, routeOnline } from './utvonalterv.js';
-import { lookupOsm, lookupKozut, kozutHid, setKozutHid, probaHid } from './utadat.js';
+import {
+  lookupOsm, lookupKozut, kozutHid, setKozutHid, probaHid, hidUjraprobal,
+} from './utadat.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO } from './kozut.js';
@@ -1872,6 +1874,7 @@ async function editHid() {
   if (!res) return;
   const url = res.url.trim();
   setKozutHid(url);
+  hidUjraprobal();          // új cím: adjunk neki új esélyt
   if (!url) { toast('A híd kikapcsolva.'); return; }
 
   // azonnal kipróbáljuk egy ismert ponton, hogy ne később derüljön ki a baj
