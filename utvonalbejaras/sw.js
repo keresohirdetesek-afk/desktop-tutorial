@@ -2,7 +2,7 @@
 // A bejárások adatai IndexedDB-ben vannak, azokat a service worker nem érinti.
 
 const PREFIX = 'utvonalbejaras-';
-const CACHE = PREFIX + 'v10';
+const CACHE = PREFIX + 'v11';
 const TILE_CACHE = PREFIX + 'tiles';  // a térképcsempéket az alkalmazás kezeli
 const ASSETS = [
   './',
@@ -28,6 +28,7 @@ const ASSETS = [
   'js/eov.js',
   'js/uthalozat.js',
   'js/jelzes.js',
+  'js/utvonalterv.js',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/icon-192.png',

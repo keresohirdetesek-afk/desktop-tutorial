@@ -197,11 +197,22 @@ Rajzoláskor nem kell minden kanyart végigkattintani. Elég a szakasz elejére
   **egyenes vonallal** köti össze, és ezt ki is írja — nem rajzol ki
   valótlan kerülőt.
 
-Ehhez a **betöltött úthálózati (NAP) adat** kell (lásd *Útszám és szelvény
-automatikusan*). Ha nincs betöltve, a gomb jelzi, és a rajzolás a korábbi
-módon, koppintásról koppintásra, egyenes szakaszokkal megy — ugyanúgy
-használható, csak több koppintás kell hozzá. A gomb bármikor kikapcsolható,
-ha szándékosan nem úton (pl. telephelyen, gyárudvaron) kell vonalat húzni.
+Az illesztés **két forrásból** dolgozhat:
+
+| Forrás | Mit tud | Mi kell hozzá |
+|---|---|---|
+| **NAP úthálózat** (ajánlott) | úthoz illesztés **offline**, és az **útszám + km szelvény** is | a NAP-állomány egyszeri betöltése |
+| **Online útvonaltervező** | úthoz illesztés, útszám és szelvény nélkül | internet; a *🛣️ Úthoz illesztés bekapcsolása* gombbal kapcsolható be |
+
+Ha egyik sincs, a gomb felkínálja az online útkövetést — elmondja, mi jár
+vele (a megkattintott pontok koordinátái elhagyják a készüléket, a bejárás
+és a fotók nem), és csak elfogadás után kapcsol be. Amíg egyik sincs, a
+rajzolás a korábbi módon, koppintásról koppintásra, egyenes szakaszokkal
+megy. A gomb bármikor kikapcsolható, ha szándékosan nem úton (pl.
+telephelyen, gyárudvaron) kell vonalat húzni.
+
+> Saját (céges) OSRM-kiszolgáló is használható: a böngésző tárolójában az
+> `onlineUtUrl` kulcsba írt cím felülírja a nyilvános szolgáltatót.
 
 A berajzolt pontok a nyomvonalhoz és a már berajzolt szakaszokhoz is
 hozzátapadnak, ezért a szakaszok hézag nélkül állnak össze.
@@ -850,6 +861,13 @@ a licencsáv → Licenckulcs**. Internet nem kell hozzá, és a készüléken ma
   gombja nyit — ezek koordinátákat adnak át a Google-nek. A *Pontos nyomvonal
   térképen* saját fájlt készít: a bejárás adata nem hagyja el a készüléket, és
   a kész fájl sem kér semmit a hálózattól (az alaptérkép bele van csomagolva).
+- Az **online útkövetés** (ha bekapcsolja) a megkattintott pontok
+  koordinátáit elküldi a nyilvános útvonaltervezőnek
+  (`router.project-osrm.org`). Más nem megy ki: se a bejárás, se a fotók, se
+  a jegyzetek. Alapból ki van kapcsolva, és bármikor kikapcsolható.
+- A **tárolt adat a címhez tartozik**: amit a `github.io`-s címen rögzített,
+  az a saját domainen nem jelenik meg. Átálláskor a régi címen készítsen
+  *Teljes mentés (JSON)* fájlt, és az újon töltse vissza.
 - A böngészőadatok törlése a bejárásokat is törli — fontos anyagot mentsen ki
   JSON-ba vagy GPX-be.
 

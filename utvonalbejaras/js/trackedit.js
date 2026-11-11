@@ -140,19 +140,7 @@ export class TrackEditor {
     };
     document.addEventListener('keydown', this._onKey);
 
-    $('#trackedit-roadsnap', this.root).addEventListener('click', () => {
-      // úthálózati adat nélkül nincs mihez illeszteni — mondjuk meg, hol kell
-      if (!(this.road && this.road.ready && this.road.ready())) {
-        toast('Ehhez úthálózati adat kell: Közút dokumentumok → Úthálózati adat '
-          + 'betöltése (NAP). Enélkül a rajzolt vonal egyenes szakaszokból áll.');
-        return;
-      }
-      this.roadSnap = !this.roadSnap;
-      this.renderPanel();
-      toast(this.roadSnap
-        ? 'Úthoz illesztés bekapcsolva — a pontok az útra kerülnek, a vonal az utat követi.'
-        : 'Úthoz illesztés kikapcsolva — a pontok oda kerülnek, ahová koppint.');
-    });
+    $('#trackedit-roadsnap', this.root).addEventListener('click', () => this.toggleRoadSnap());
     $('#trackedit-goto', this.root).addEventListener('click', () => this.gotoPlace());
     $('#trackedit-draw-undo', this.root).addEventListener('click', () => this.undoVertex());
     $('#trackedit-draw-done', this.root).addEventListener('click', () => this.finishDraw());
@@ -294,6 +282,45 @@ export class TrackEditor {
     }
     this.draw();
     this.renderPanel();
+  }
+
+  /**
+   * Úthoz illesztés be/ki. Ha egyik forrás sincs meg, nem némán nem
+   * csinálunk semmit: felajánljuk az online útkövetést, és elmondjuk, mi
+   * jár vele.
+   */
+  async toggleRoadSnap() {
+    const ready = !!(this.road && this.road.ready && this.road.ready());
+    if (!ready) {
+      const online = this.road && this.road.online;
+      if (!online) {
+        toast('Ehhez úthálózati adat kell: Közút dokumentumok → Úthálózati adat betöltése (NAP).');
+        return;
+      }
+      const ok = await modal({
+        title: 'Bekapcsoljuk az online útkövetést?',
+        text: 'Nincs betöltve úthálózati (NAP) adat, ezért a rajzolt vonal most egyenes '
+          + 'szakaszokból áll. Bekapcsolható helyette egy online útvonaltervező: ilyenkor '
+          + 'elég a szakasz elejére és végére kattintani, a vonal követi az utat.\n\n'
+          + 'Amit tudni kell: ehhez internet kell, és a megkattintott pontok koordinátái '
+          + 'elhagyják a készüléket (a bejárás, a fotók és minden más NEM). Útszámot és km '
+          + 'szelvényt ez nem ad — azt továbbra is a NAP-adat tudja. Bármikor kikapcsolható.',
+        okText: 'Bekapcsolom',
+        cancelText: 'Most nem',
+      });
+      if (!ok) return;
+      online.set(true);
+      this.roadSnap = true;
+      this.renderPanel();
+      toast('Online útkövetés bekapcsolva. Kattintson a szakasz elejére, majd a végére.');
+      return;
+    }
+
+    this.roadSnap = !this.roadSnap;
+    this.renderPanel();
+    toast(this.roadSnap
+      ? 'Úthoz illesztés bekapcsolva — a pontok az útra kerülnek, a vonal az utat követi.'
+      : 'Úthoz illesztés kikapcsolva — a pontok oda kerülnek, ahová koppint.');
   }
 
   undoVertex() {
@@ -461,7 +488,10 @@ export class TrackEditor {
         for (const m of mid) this.draft.pts.push({ lat: m.lat, lon: m.lon, snap: 'road', routed: true });
         routed = mid.length;
       } else if (mid === null) {
-        toast('Az úthálózaton nem találtam ide utat — egyenes vonallal kötöm össze.');
+        const onlineForras = this.road.source && this.road.source() === 'online';
+        toast(onlineForras
+          ? 'Az útvonaltervező nem válaszolt (vagy nincs net) — egyenes vonallal kötöm össze.'
+          : 'Az úthálózaton nem találtam ide utat — egyenes vonallal kötöm össze.');
       }
     }
 
@@ -725,12 +755,18 @@ export class TrackEditor {
       : 'Esc: kilépés a módból · görgő: nagyítás';
 
     const snapReady = !!(this.road && this.road.ready && this.road.ready());
+    const forras = snapReady && this.road.source ? this.road.source() : null;
     const snapBtn = $('#trackedit-roadsnap', this.root);
     snapBtn.hidden = mode !== 'draw';
     snapBtn.textContent = !snapReady
-      ? '🛣️ Nincs úthálózati adat'
-      : this.roadSnap ? '🛣️ Úthoz illesztve' : '🛣️ Úthoz illesztés ki';
-    snapBtn.title = snapReady ? '' : 'Töltse be a NAP úthálózati adatot a Közút dokumentumoknál';
+      ? '🛣️ Úthoz illesztés bekapcsolása'
+      : !this.roadSnap ? '🛣️ Úthoz illesztés ki'
+        : forras === 'online' ? '🛣️ Úthoz illesztve (online)' : '🛣️ Úthoz illesztve (NAP)';
+    snapBtn.title = snapReady
+      ? (forras === 'online'
+        ? 'Online útvonaltervezővel. Útszámot és szelvényt a NAP-adat ad.'
+        : 'A betöltött NAP úthálózati adatból, offline.')
+      : 'Kattintson ide: vagy a NAP-adatot tölti be, vagy online útkövetést kapcsol be';
     snapBtn.classList.toggle('active', snapReady && this.roadSnap);
 
     this.renderDrawnList();
@@ -744,7 +780,7 @@ export class TrackEditor {
         ? `${n} pont · ${hossz} — ${tap} a következő pontra.`
         : snapReady && this.roadSnap
           ? `${Tap} a szakasz elejére, majd a végére — a vonal magától az utat követi.`
-          : `${Tap} sorban a szakasz pontjaira. (Úthálózati adat nélkül egyenes szakaszok lesznek.)`;
+          : `${Tap} sorban a szakasz pontjaira. Ha az utat kövesse magától: „🛣️ Úthoz illesztés bekapcsolása”.`;
       badge.hidden = false;
       badge.innerHTML = `✏️ Útvonal rajzolása<span class="sub">${
         n ? ` · ${n} pont · ${hossz}` : (snapReady && this.roadSnap ? ' · úthoz illesztve' : '')

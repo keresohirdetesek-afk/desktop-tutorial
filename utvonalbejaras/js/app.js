@@ -23,6 +23,7 @@ import {
   pointOnRoad, findPlace, lookupRoad, routeBetween, szelvenyMeters, formatSzelveny,
 } from './uthalozat.js';
 import { eovToWgs84 } from './eov.js';
+import { onlineRouting, setOnlineRouting, snapOnline, routeOnline } from './utvonalterv.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs } from './kozut.js';
@@ -478,15 +479,26 @@ async function openTrackEditor() {
     resolvePlace: (text) => resolvePlace(text),
     // úthálózati adat (NAP): a rajzolt pontok az útra kerülnek, és a vonal
     // az utat követi két pont között
+    // Úthoz illesztés. Elsősorban a betöltött NAP úthálózatból, mert az
+    // offline megy és útszámot-szelvényt is tud. Ha az nincs, és a
+    // felhasználó bekapcsolta, egy online útvonaltervező ugrik be.
     road: {
-      ready: () => !!roadNet,
+      ready: () => !!roadNet || onlineRouting(),
+      // honnan jön éppen az illesztés — a szerkesztő ezt írja ki
+      source: () => (roadNet ? 'nap' : onlineRouting() ? 'online' : null),
+      online: {
+        enabled: () => onlineRouting(),
+        set: (on) => setOnlineRouting(on),
+      },
       snap: async (pt) => {
         const net = await roadNetwork();
-        return net ? lookupRoad(net, pt.lat, pt.lon, 80) : null;
+        if (net) return lookupRoad(net, pt.lat, pt.lon, 80);
+        return snapOnline(pt);
       },
       route: async (a, b) => {
         const net = await roadNetwork();
-        return net ? routeBetween(net, a, b) : null;
+        if (net) return routeBetween(net, a, b);
+        return routeOnline(a, b);
       },
     },
     onApply: async ({ updated, deleted, drawn }) => {
