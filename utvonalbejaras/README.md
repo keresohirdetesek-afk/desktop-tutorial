@@ -201,8 +201,8 @@ Az illesztés **két forrásból** dolgozhat:
 
 | Forrás | Mit tud | Mi kell hozzá |
 |---|---|---|
-| **NAP úthálózat** (ajánlott) | úthoz illesztés **offline**, és az **útszám + km szelvény** is | a NAP-állomány egyszeri betöltése |
-| **Online útvonaltervező** | úthoz illesztés, útszám és szelvény nélkül | internet; a *🛣️ Úthoz illesztés bekapcsolása* gombbal kapcsolható be |
+| **NAP úthálózat** (ajánlott) | úthoz illesztés **offline**, és a **hiteles útszám + km szelvény** | a NAP-állomány egyszeri betöltése |
+| **Online kiegészítés** | úthoz illesztés, **útszám** nyílt térképadatból, és **becsült szelvény** a kilométerkövekből | internet; a *🛣️ Úthoz illesztés bekapcsolása* gombbal, vagy a kezdőképernyő *Online kiegészítés* kapcsolójával |
 
 Ha egyik sincs, a gomb felkínálja az online útkövetést — elmondja, mi jár
 vele (a megkattintott pontok koordinátái elhagyják a készüléket, a bejárás
@@ -424,6 +424,23 @@ pontra, és kiírja, hány helyszínt pótolt. A hely utólagos javításakor
 > ennek az ellenőrzésére való. Ha a GPS-fix pontatlan volt (±100 m fölött),
 > az adatlap ezt is kiírja — ilyenkor a szomszédos út is lehet a
 > „legközelebbi”, érdemes ránézni.
+
+**Online kiegészítéssel, NAP nélkül is.** Ha nincs betöltve a NAP-állomány,
+de bekapcsolta az *Online kiegészítést*, az app nyílt térképadatból (OSM)
+kikeresi a ponthoz legközelebbi út **útszámát** — ugyanazt a számot, ami a
+térképen és a táblán is szerepel. A **szelvényt** a közelben feltérképezett
+**kilométerkövekből** becsli, a két legközelebbi kő közé arányosan beosztva.
+
+Ez **becsült érték**, ezért mindenhol meg van jelölve: a lista és a
+jegyzőkönyv `≈` jellel írja (`81 · ≈27 km + 387 m`), az adatlap pedig
+kiírja, hogy térképadatból származik. Ahol nincs kilométerkő feltérképezve,
+ott az app **nem talál ki semmit** — az útszám megvan, a szelvény üresen
+marad, és kézzel pótolható.
+
+> A közút felé beadott anyagban a hiteles forrás a NAP-állomány. A becsült
+> szelvényt érdemes ellenőrizni az [útszámkeresővel](https://utszamkereso.kozut.hu/),
+> és a helyes értéket az adatlapon beírni — a kézzel megadott értéket az app
+> soha nem írja felül.
 
 **Úthálózati adat nélkül is megadható kézzel.** Az elem adatlapján a
 **🛣️ Útszám, szelvény** gombbal beírható az útszám, a szelvény és a
@@ -861,10 +878,11 @@ a licencsáv → Licenckulcs**. Internet nem kell hozzá, és a készüléken ma
   gombja nyit — ezek koordinátákat adnak át a Google-nek. A *Pontos nyomvonal
   térképen* saját fájlt készít: a bejárás adata nem hagyja el a készüléket, és
   a kész fájl sem kér semmit a hálózattól (az alaptérkép bele van csomagolva).
-- Az **online útkövetés** (ha bekapcsolja) a megkattintott pontok
-  koordinátáit elküldi a nyilvános útvonaltervezőnek
-  (`router.project-osrm.org`). Más nem megy ki: se a bejárás, se a fotók, se
-  a jegyzetek. Alapból ki van kapcsolva, és bármikor kikapcsolható.
+- Az **online kiegészítés** (ha bekapcsolja) a pontok koordinátáit elküldi a
+  nyilvános útvonaltervezőnek (`router.project-osrm.org`) és a nyílt
+  térképadat lekérdezőjének (`overpass-api.de`). Más nem megy ki: se a
+  bejárás, se a fotók, se a jegyzetek. Alapból ki van kapcsolva, és bármikor
+  kikapcsolható a kezdőképernyőn.
 - A **tárolt adat a címhez tartozik**: amit a `github.io`-s címen rögzített,
   az a saját domainen nem jelenik meg. Átálláskor a régi címen készítsen
   *Teljes mentés (JSON)* fájlt, és az újon töltse vissza.

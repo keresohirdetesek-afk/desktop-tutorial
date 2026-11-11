@@ -29,6 +29,7 @@ const ASSETS = [
   'js/uthalozat.js',
   'js/jelzes.js',
   'js/utvonalterv.js',
+  'js/utadat.js',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/icon-192.png',

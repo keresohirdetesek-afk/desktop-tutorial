@@ -298,13 +298,15 @@ export class TrackEditor {
         return;
       }
       const ok = await modal({
-        title: 'Bekapcsoljuk az online útkövetést?',
+        title: 'Bekapcsoljuk az online kiegészítést?',
         text: 'Nincs betöltve úthálózati (NAP) adat, ezért a rajzolt vonal most egyenes '
-          + 'szakaszokból áll. Bekapcsolható helyette egy online útvonaltervező: ilyenkor '
-          + 'elég a szakasz elejére és végére kattintani, a vonal követi az utat.\n\n'
-          + 'Amit tudni kell: ehhez internet kell, és a megkattintott pontok koordinátái '
-          + 'elhagyják a készüléket (a bejárás, a fotók és minden más NEM). Útszámot és km '
-          + 'szelvényt ez nem ad — azt továbbra is a NAP-adat tudja. Bármikor kikapcsolható.',
+          + 'szakaszokból áll, és az útszám sem derül ki. Bekapcsolható helyette az online '
+          + 'kiegészítés, ami kettőt tud: a rajzolt vonal követi az utat, és a rögzített '
+          + 'pontokra ráírja az útszámot (a kilométerkövekből a szelvényt is, becsült '
+          + 'értékként, ≈ jellel).\n\n'
+          + 'Amit tudni kell: internet kell hozzá, és a pontok koordinátái elhagyják a '
+          + 'készüléket (a bejárás, a fotók, a jegyzetek NEM). A hiteles útszám-szelvény '
+          + 'továbbra is a NAP-adat. Bármikor kikapcsolható.',
         okText: 'Bekapcsolom',
         cancelText: 'Most nem',
       });
@@ -312,7 +314,7 @@ export class TrackEditor {
       online.set(true);
       this.roadSnap = true;
       this.renderPanel();
-      toast('Online útkövetés bekapcsolva. Kattintson a szakasz elejére, majd a végére.');
+      toast('Online kiegészítés bekapcsolva. Kattintson a szakasz elejére, majd a végére.');
       return;
     }
 

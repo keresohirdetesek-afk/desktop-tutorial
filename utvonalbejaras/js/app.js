@@ -24,6 +24,7 @@ import {
 } from './uthalozat.js';
 import { eovToWgs84 } from './eov.js';
 import { onlineRouting, setOnlineRouting, snapOnline, routeOnline } from './utvonalterv.js';
+import { lookupOsm } from './utadat.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs } from './kozut.js';
@@ -585,8 +586,27 @@ const POSITION_MAX_AGE = 10000;
 async function roadStamp(lat, lon, acc = null) {
   if (lat == null || lon == null) return null;
   let net = null;
-  try { net = await roadNetwork(); } catch (_) { return null; }
-  if (!net) return null;
+  try { net = await roadNetwork(); } catch (_) { net = null; }
+
+  if (!net) {
+    // Nincs NAP-adat. Ha a felhasználó bekapcsolta az online kiegészítést,
+    // nyílt térképadatból megpróbáljuk az útszámot (és a kilométerkövekből
+    // a szelvényt) — becsült értékként, külön megjelölve.
+    if (!onlineRouting()) return null;
+    const osm = await lookupOsm(lat, lon);
+    if (!osm || !osm.utszam) return null;
+    return {
+      utszam: osm.utszam,
+      szelveny: osm.szelveny || '',
+      meters: osm.meters,
+      telepules: osm.telepules || '',
+      tavolsag: osm.tavolsag,
+      acc: acc == null ? null : Math.round(acc),
+      forras: 'osm',
+      becsult: !!osm.becsult,
+    };
+  }
+
   const hit = lookupRoad(net, lat, lon, 150);
   if (!hit) return null;
   return {
@@ -601,8 +621,16 @@ async function roadStamp(lat, lon, acc = null) {
   };
 }
 
-/** Az útszám + szelvény egy sorban („81 · 27 km + 387 m”). */
-const roadLabel = (r) => (r ? [r.utszam, r.szelveny].filter(Boolean).join(' · ') : '');
+/**
+ * Az útszám + szelvény egy sorban („81 · 27 km + 387 m”). A nyílt
+ * térképadatból becsült szelvény elé ≈ kerül, hogy ne lehessen
+ * összetéveszteni a hiteles, NAP-ból származó értékkel.
+ */
+const roadLabel = (r) => {
+  if (!r) return '';
+  const szelv = r.szelveny ? (r.becsult ? '≈' : '') + r.szelveny : '';
+  return [r.utszam, szelv].filter(Boolean).join(' · ');
+};
 
 /* ------------------------------------------------------------- vízjel
 
@@ -1536,7 +1564,10 @@ async function openViewer(id) {
       + (item.road.telepules ? ` · ${item.road.telepules}` : '')
       + (item.road.forras === 'kezi'
         ? ' (kézzel megadva)'
-        : item.road.tavolsag != null ? ` (az úttól ${item.road.tavolsag} m)` : '')
+        : item.road.forras === 'osm'
+          ? ` (térképadatból${item.road.becsult ? ', a szelvény becsült' : ', szelvény nélkül'}`
+            + `${item.road.tavolsag != null ? `, az úttól ${item.road.tavolsag} m` : ''})`
+          : item.road.tavolsag != null ? ` (az úttól ${item.road.tavolsag} m)` : '')
       + (item.road.forras !== 'kezi' && item.road.acc != null && item.road.acc > 100
         ? ` — a GPS ±${item.road.acc} m volt, érdemes ellenőrizni`
         : '')]);
@@ -2251,6 +2282,18 @@ function bind() {
   $('#attach-photo-input').addEventListener('change', onAttachPhoto);
   $('#cap-condition').addEventListener('click', addCondition);
   $('#cap-sign').addEventListener('click', addSign);
+
+  const onl = $('#opt-online');
+  if (onl) {
+    onl.checked = onlineRouting();
+    onl.addEventListener('change', () => {
+      setOnlineRouting(onl.checked);
+      toast(onl.checked
+        ? 'Online kiegészítés bekapcsolva: a rajzolt vonal az utat követi, és a pontok '
+          + 'megkapják az útszámot. A koordináták ilyenkor elhagyják a készüléket.'
+        : 'Online kiegészítés kikapcsolva. Minden a készüléken marad.');
+    });
+  }
 
   const wm = $('#opt-watermark');
   if (wm) {
