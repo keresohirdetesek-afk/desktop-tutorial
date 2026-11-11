@@ -24,7 +24,7 @@ import {
 } from './uthalozat.js';
 import { eovToWgs84, formatEov } from './eov.js';
 import { onlineRouting, setOnlineRouting, snapOnline, routeOnline } from './utvonalterv.js';
-import { lookupOsm, lookupKozut, kozutHid, setKozutHid } from './utadat.js';
+import { lookupOsm, lookupKozut, kozutHid, setKozutHid, probaHid } from './utadat.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO } from './kozut.js';
@@ -1832,11 +1832,21 @@ async function editHid() {
 
   // azonnal kipróbáljuk egy ismert ponton, hogy ne később derüljön ki a baj
   toast('Próba…');
-  const proba = await lookupKozut(47.376131, 18.190796);
-  toast(proba && proba.utszam
-    ? `Működik. Próbapont: ${proba.utszam}${proba.szelveny ? ' · ' + proba.szelveny : ''}.`
-    : 'A cím mentve, de a próba nem hozott eredményt. Ellenőrizze a fájl címét és azt, '
-      + 'hogy a tárhely engedi-e a kimenő kéréseket.', proba ? 'info' : 'error');
+  const proba = await probaHid(url);
+  if (proba.ok) {
+    toast(proba.uzenet);
+    return;
+  }
+  // a hibát nem elég egy villanó üzenetben megmutatni: ez beállítási gond
+  await modal({
+    title: 'A híd nem működik',
+    text: proba.uzenet + '\n\nA továbbító fájl (kiszolgalo/utszam.php) olyan tárhelyre '
+      + 'kell, ami futtatja a PHP-t — például arra a cPanel-es tárhelyre, ahol a másik '
+      + 'oldalad is fut. A GitHub Pages erre nem alkalmas. A cím addig is mentve maradt; '
+      + 'üresen hagyva kikapcsolható.',
+    okText: 'Értem',
+    cancelText: 'Cím törlése',
+  }) || setKozutHid('');
 }
 
 async function editItemNote(item) {

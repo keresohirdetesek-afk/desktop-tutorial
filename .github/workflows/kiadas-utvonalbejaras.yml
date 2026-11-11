@@ -64,6 +64,9 @@ jobs:
           cp -r utvonalbejaras/. _site/
           # ami csak a fejlesztéshez kell, az maradjon a repóban
           rm -rf _site/eszkozok
+          # a kiszolgalo/ mappa PHP-t tartalmaz, amit a Pages nem futtat —
+          # az a saját tárhelyre való, nem ide
+          rm -rf _site/kiszolgalo
           rm -f _site/build-single.mjs _site/README.md
           # a másik alkalmazás a korábbi útvonalán
           if [ -d atlagsebesseg ]; then

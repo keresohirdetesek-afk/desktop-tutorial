@@ -317,3 +317,75 @@ export async function lookupKozut(lat, lon) {
   if (out) osmCache.set(kulcs, out);
   return out;
 }
+
+
+/**
+ * A híd kipróbálása, beszédes hibaüzenettel.
+ *
+ * A leggyakoribb tévedés, hogy a fájl olyan helyre kerül, ahol nem fut le:
+ * a GitHub Pages például nem futtat PHP-t, csak kiadja a fájl szövegét.
+ * Ezt felismerjük, és meg is mondjuk, mit kell tenni.
+ *
+ * @returns {{ok: boolean, uzenet: string, adat: object|null}}
+ */
+export async function probaHid(url) {
+  if (!url) return { ok: false, uzenet: 'Nincs megadva cím.', adat: null };
+  if (!/^https?:\/\//i.test(url)) {
+    return { ok: false, uzenet: 'A cím http:// vagy https:// kezdetű legyen.', adat: null };
+  }
+
+  const proba = url + (url.includes('?') ? '&' : '?') + 'lat=47.376131&lon=18.190796&y=585310.16&x=226147.28';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), OSM_TIMEOUT_MS);
+  let res = null;
+  let szoveg = '';
+  try {
+    res = await fetch(proba, { signal: ctrl.signal, mode: 'cors' });
+    szoveg = await res.text();
+  } catch (_) {
+    return {
+      ok: false,
+      adat: null,
+      uzenet: 'A cím nem érhető el. Vagy elgépelés, vagy a tárhely nem engedi, hogy '
+        + 'más oldal lekérdezze (CORS).',
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (/^\s*<\?php/i.test(szoveg) || /\$_GET\[/.test(szoveg)) {
+    return {
+      ok: false,
+      adat: null,
+      uzenet: 'Ez a hely nem futtatja a PHP-t, csak a fájl szövegét adja vissza. '
+        + 'A GitHub Pages ilyen — a fájlt a saját (PHP-t futtató) tárhelyre kell tenni.',
+    };
+  }
+  if (!res.ok) {
+    return { ok: false, adat: null, uzenet: `A kiszolgáló ${res.status} hibát adott.` };
+  }
+
+  let data = null;
+  try { data = JSON.parse(szoveg); } catch (_) { data = null; }
+  if (!data) {
+    return { ok: false, adat: null, uzenet: 'A válasz nem JSON. Biztosan a továbbító fájl címe ez?' };
+  }
+  if (data.hiba) {
+    return { ok: false, adat: data, uzenet: String(data.hiba) };
+  }
+
+  const road = parseKozut(data);
+  if (!road || !road.utszam) {
+    return {
+      ok: false,
+      adat: data,
+      uzenet: 'A híd válaszolt, de a próbapontra nem jött útszám. Lehet, hogy a tárhely '
+        + 'nem engedi a kimenő kéréseket a Közút felé.',
+    };
+  }
+  return {
+    ok: true,
+    adat: data,
+    uzenet: `Működik. Próbapont: ${road.utszam}${road.szelveny ? ' · ' + road.szelveny : ''}.`,
+  };
+}
