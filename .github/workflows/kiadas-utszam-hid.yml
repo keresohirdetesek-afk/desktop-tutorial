@@ -14,9 +14,16 @@
 #
 #   FTP_SERVER, FTP_USERNAME, FTP_PASSWORD
 #
-# Ha a tárhelyen máshová kell a fájl, a SERVER_DIR értékét írd át lent.
-# A feltöltés után a híd címe: https://<a-tárhely-domainje>/utszam.php
-# — ezt kell beírni az appban: kezdőképernyő → Útszámkereső-híd.
+# HOVA KERÜL
+#
+# Oda, ahol az atlagsebesseg.hu fájljai is vannak — mert arról a mappáról
+# biztosan tudjuk, hogy a webről elérhető. A híd címe így:
+#
+#   https://atlagsebesseg.hu/utszam.php
+#
+# Ezt kell beírni az appban: kezdőképernyő → Útszámkereső-híd. Ha máshová
+# szeretnéd (pl. a fiók fődomainjének gyökerébe), írd át a SERVER_DIR-t
+# „/public_html/”-re — akkor a cím a fődomain szerinti lesz.
 
 name: Kiadás a tárhelyre (útszámkereső-híd)
 
@@ -36,7 +43,7 @@ concurrency:
 env:
   # Az FTP-gyökérhez képest. cPanelnél a bejelentkezés /home/<fiók>-ba
   # érkezik, az oldal pedig a public_html alatt van.
-  SERVER_DIR: /public_html/
+  SERVER_DIR: /public_html/atlagsebesseg/
 
 jobs:
   kiadas:
