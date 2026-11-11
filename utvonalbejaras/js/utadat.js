@@ -343,11 +343,34 @@ export async function probaHid(url) {
     res = await fetch(proba, { signal: ctrl.signal, mode: 'cors' });
     szoveg = await res.text();
   } catch (_) {
+    clearTimeout(timer);
+    // Nem mindegy, hogy a kiszolgáló meg sem szólalt, vagy válaszolt, csak a
+    // válasz nem engedi az idegen eredetet. Egy „no-cors” próbával ez
+    // elkülöníthető: az akkor is sikerül, ha a választ nem olvashatjuk.
+    const biztonsagos = location.protocol === 'https:' && /^http:\/\//i.test(url);
+    if (biztonsagos) {
+      return {
+        ok: false,
+        adat: null,
+        uzenet: 'A cím http://-sel kezdődik, az app viszont https://-en fut, ezért a '
+          + 'böngésző letiltja a kérést. Írja át a címet https://-re.',
+      };
+    }
+    let valaszolt = false;
+    try {
+      await fetch(proba, { mode: 'no-cors', cache: 'no-store' });
+      valaszolt = true;
+    } catch (_) { valaszolt = false; }
+
     return {
       ok: false,
       adat: null,
-      uzenet: 'A cím nem érhető el. Vagy elgépelés, vagy a tárhely nem engedi, hogy '
-        + 'más oldal lekérdezze (CORS).',
+      uzenet: valaszolt
+        ? 'A kiszolgáló válaszol, de a választ nem engedi átvenni (hiányzó CORS-fejléc). '
+          + 'Ez rendszerint azt jelenti, hogy a PHP hibára futott, és a hibaoldal jött '
+          + 'vissza — nézze meg a címet a böngészőben közvetlenül, ott látszik a hibaüzenet.'
+        : 'A cím nem érhető el. Ellenőrizze, jó-e a cím (nyissa meg a böngészőben), és '
+          + 'hogy tényleg oda került-e a fájl.',
     };
   } finally {
     clearTimeout(timer);
