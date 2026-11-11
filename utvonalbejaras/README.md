@@ -432,15 +432,15 @@ A böngésző viszont nem engedi, hogy egy másik címen futó oldal közvetlen�
 hívja (a válasz nem engedélyezi az idegen eredetet), ezért kell egy pici
 továbbító fájl a saját tárhelyre:
 
-1. Másold fel a repóból a `utvonalbejaras/kiszolgalo/utszam.php` fájlt a
-   tárhelyedre, pl. `public_html/utszam.php`. **Olyan helyre kell, ami
+1. Másold fel a repóból a `utvonalbejaras/kiszolgalo/kozut-hid.php` fájlt a
+   tárhelyedre, pl. `public_html/kozut-hid.php`. **Olyan helyre kell, ami
    futtatja a PHP-t** — a GitHub Pages nem ilyen: ott a fájl csak szövegként
    jelenne meg, és a híd nem működne. A cPanel-es tárhely jó.
    (A `.github/workflows/kiadas-utszam-hid.yml` munkafolyamat fel is tölti
    magától, ha az FTP-titkok be vannak állítva — ugyanazok, mint az
    átlagsebesség kiadásánál.)
 2. Az appban: kezdőképernyő → **🔗 Útszámkereső-híd beállítása** → írd be a
-   fájl címét (`https://sajat-domain.hu/utszam.php`). Mentés után az app
+   fájl címét (`https://sajat-domain.hu/kozut-hid.php`). Mentés után az app
    rögtön ki is próbálja egy ismert ponton, és kiírja, mit kapott.
 
 Ettől kezdve **minden rögzített pont magától megkapja a Közút szerinti

@@ -6695,7 +6695,7 @@ Az útszámkereső oldala mögött van egy JSON-végpont, ami EOV-koordinátára
 megadja a hiteles útszámot és szelvényt. A böngésző viszont nem engedi, hogy
 egy másik címen futó oldal közvetlenül hívja (a válasz nem engedélyezi az
 idegen eredetet). Ezért kell a saját tárhelyre egy pici továbbító fájl —
-`kiszolgalo/utszam.php` a repóban —, és annak a címét ide beírva az app
+`kiszolgalo/kozut-hid.php` a repóban —, és annak a címét ide beírva az app
 magától kikeresi a helyszín útszámát és szelvényét.
 
 Ha nincs beállítva, minden marad a régiben: nyílt térképadat, kézi beírás
@@ -6881,6 +6881,17 @@ async function probaHid(url) {
     clearTimeout(timer);
   }
 
+  // Gyakori tévedés: nem a PHP kerül fel, hanem valamelyik másik fájl
+  // szövege (pl. a kiadási munkafolyamat YAML-je). Ezt megnevezzük.
+  if (/^\s*#/.test(szoveg) && /(jobs:|runs-on:|uses:\s*actions)/.test(szoveg)) {
+    return {
+      ok: false,
+      adat: null,
+      uzenet: 'A címen nem a továbbító fájl van, hanem egy GitHub-munkafolyamat szövege. '
+        + 'A feltöltött fájl tartalma rossz: a helyes fájl a repóban '
+        + 'utvonalbejaras/kiszolgalo/kozut-hid.php, és „<?php” sorral kezdődik.',
+    };
+  }
   if (/^\s*<\?php/i.test(szoveg) || /\$_GET\[/.test(szoveg)) {
     return {
       ok: false,
@@ -11998,18 +12009,18 @@ async function pasteKeresoInto(item) {
 /**
  * Az útszámkereső-híd címe. A Közút végpontját a böngésző nem hívhatja
  * közvetlenül egy másik címen futó oldalról, ezért a saját tárhelyre kell
- * egy pici továbbító fájl (kiszolgalo/utszam.php a repóban).
+ * egy pici továbbító fájl (kiszolgalo/kozut-hid.php a repóban).
  */
 async function editHid() {
   const res = await modal({
     title: 'Útszámkereső-híd',
-    text: 'Ha a saját tárhelyére felmásolta a továbbító fájlt (kiszolgalo/utszam.php), '
+    text: 'Ha a saját tárhelyére felmásolta a továbbító fájlt (kiszolgalo/kozut-hid.php), '
       + 'írja be ide a címét — ettől kezdve minden rögzített pont magától megkapja a '
       + 'Közút szerinti útszámot és km szelvényt. Üresen hagyva nincs lekérdezés.',
     fields: [
       {
         name: 'url', label: 'A továbbító fájl címe', value: kozutHid(),
-        placeholder: 'https://sajat-domain.hu/utszam.php',
+        placeholder: 'https://sajat-domain.hu/kozut-hid.php',
         hint: 'A koordináta EOV-ban megy át, más adat nem.',
       },
     ],
@@ -12030,7 +12041,7 @@ async function editHid() {
   // a hibát nem elég egy villanó üzenetben megmutatni: ez beállítási gond
   await modal({
     title: 'A híd nem működik',
-    text: proba.uzenet + '\n\nA továbbító fájl (kiszolgalo/utszam.php) olyan tárhelyre '
+    text: proba.uzenet + '\n\nA továbbító fájl (kiszolgalo/kozut-hid.php) olyan tárhelyre '
       + 'kell, ami futtatja a PHP-t — például arra a cPanel-es tárhelyre, ahol a másik '
       + 'oldalad is fut. A GitHub Pages erre nem alkalmas. A cím addig is mentve maradt; '
       + 'üresen hagyva kikapcsolható.',

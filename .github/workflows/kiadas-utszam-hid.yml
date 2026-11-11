@@ -2,7 +2,7 @@
 #
 # MIÉRT KELL EZ
 #
-# A híd egyetlen PHP-fájl (utvonalbejaras/kiszolgalo/utszam.php). PHP-t a
+# A híd egyetlen PHP-fájl (utvonalbejaras/kiszolgalo/kozut-hid.php). PHP-t a
 # GitHub Pages NEM futtat, ezért ennek a fájlnak a cPanel-es tárhelyre kell
 # kerülnie — ugyanoda, ahol az atlagsebesseg.hu is fut. Ez a munkafolyamat
 # ezt a lépést veszi át: ha a fájl változik, magától felmegy FTP-n.
@@ -19,7 +19,7 @@
 # Oda, ahol az atlagsebesseg.hu fájljai is vannak — mert arról a mappáról
 # biztosan tudjuk, hogy a webről elérhető. A híd címe így:
 #
-#   https://atlagsebesseg.hu/utszam.php
+#   https://atlagsebesseg.hu/kozut-hid.php
 #
 # Ezt kell beírni az appban: kezdőképernyő → Útszámkereső-híd. Ha máshová
 # szeretnéd (pl. a fiók fődomainjének gyökerébe), írd át a SERVER_DIR-t
@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p kiadas
-          cp utvonalbejaras/kiszolgalo/utszam.php kiadas/utszam.php
+          cp utvonalbejaras/kiszolgalo/kozut-hid.php kiadas/kozut-hid.php
           echo "Feltöltendő: $(find kiadas -type f | wc -l) fájl"
 
       - name: Feltöltés FTP-n

@@ -1808,18 +1808,18 @@ async function pasteKeresoInto(item) {
 /**
  * Az útszámkereső-híd címe. A Közút végpontját a böngésző nem hívhatja
  * közvetlenül egy másik címen futó oldalról, ezért a saját tárhelyre kell
- * egy pici továbbító fájl (kiszolgalo/utszam.php a repóban).
+ * egy pici továbbító fájl (kiszolgalo/kozut-hid.php a repóban).
  */
 async function editHid() {
   const res = await modal({
     title: 'Útszámkereső-híd',
-    text: 'Ha a saját tárhelyére felmásolta a továbbító fájlt (kiszolgalo/utszam.php), '
+    text: 'Ha a saját tárhelyére felmásolta a továbbító fájlt (kiszolgalo/kozut-hid.php), '
       + 'írja be ide a címét — ettől kezdve minden rögzített pont magától megkapja a '
       + 'Közút szerinti útszámot és km szelvényt. Üresen hagyva nincs lekérdezés.',
     fields: [
       {
         name: 'url', label: 'A továbbító fájl címe', value: kozutHid(),
-        placeholder: 'https://sajat-domain.hu/utszam.php',
+        placeholder: 'https://sajat-domain.hu/kozut-hid.php',
         hint: 'A koordináta EOV-ban megy át, más adat nem.',
       },
     ],
@@ -1840,7 +1840,7 @@ async function editHid() {
   // a hibát nem elég egy villanó üzenetben megmutatni: ez beállítási gond
   await modal({
     title: 'A híd nem működik',
-    text: proba.uzenet + '\n\nA továbbító fájl (kiszolgalo/utszam.php) olyan tárhelyre '
+    text: proba.uzenet + '\n\nA továbbító fájl (kiszolgalo/kozut-hid.php) olyan tárhelyre '
       + 'kell, ami futtatja a PHP-t — például arra a cPanel-es tárhelyre, ahol a másik '
       + 'oldalad is fut. A GitHub Pages erre nem alkalmas. A cím addig is mentve maradt; '
       + 'üresen hagyva kikapcsolható.',

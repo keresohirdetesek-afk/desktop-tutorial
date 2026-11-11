@@ -190,7 +190,7 @@ Az útszámkereső oldala mögött van egy JSON-végpont, ami EOV-koordinátára
 megadja a hiteles útszámot és szelvényt. A böngésző viszont nem engedi, hogy
 egy másik címen futó oldal közvetlenül hívja (a válasz nem engedélyezi az
 idegen eredetet). Ezért kell a saját tárhelyre egy pici továbbító fájl —
-`kiszolgalo/utszam.php` a repóban —, és annak a címét ide beírva az app
+`kiszolgalo/kozut-hid.php` a repóban —, és annak a címét ide beírva az app
 magától kikeresi a helyszín útszámát és szelvényét.
 
 Ha nincs beállítva, minden marad a régiben: nyílt térképadat, kézi beírás
@@ -376,6 +376,17 @@ export async function probaHid(url) {
     clearTimeout(timer);
   }
 
+  // Gyakori tévedés: nem a PHP kerül fel, hanem valamelyik másik fájl
+  // szövege (pl. a kiadási munkafolyamat YAML-je). Ezt megnevezzük.
+  if (/^\s*#/.test(szoveg) && /(jobs:|runs-on:|uses:\s*actions)/.test(szoveg)) {
+    return {
+      ok: false,
+      adat: null,
+      uzenet: 'A címen nem a továbbító fájl van, hanem egy GitHub-munkafolyamat szövege. '
+        + 'A feltöltött fájl tartalma rossz: a helyes fájl a repóban '
+        + 'utvonalbejaras/kiszolgalo/kozut-hid.php, és „<?php” sorral kezdődik.',
+    };
+  }
   if (/^\s*<\?php/i.test(szoveg) || /\$_GET\[/.test(szoveg)) {
     return {
       ok: false,
