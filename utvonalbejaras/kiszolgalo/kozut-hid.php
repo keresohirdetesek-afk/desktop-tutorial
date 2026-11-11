@@ -47,18 +47,29 @@ const KOZUT_URL_WGS = 'https://utszamkereso.kozut.hu/api/geolocator/wgs84/point'
  */
 function valtozatok(bool $wgs, float $lat, float $lon, float $y, float $x): array
 {
+    // [metódus, cím, törzs, böngészős fejlécekkel?]
     $eov = [
-        ['POST', KOZUT_URL_EOV, ['y' => $y, 'x' => $x]],
-        ['POST', KOZUT_URL_EOV, ['eovY' => $y, 'eovX' => $x]],
-        ['GET',  KOZUT_URL_EOV . '?y=' . $y . '&x=' . $x, null],
+        ['POST', KOZUT_URL_EOV, ['y' => $y, 'x' => $x], false],
+        // az API a magyar szokással ellentétesen is nevezheti a tengelyeket
+        ['POST', KOZUT_URL_EOV, ['x' => $y, 'y' => $x], false],
+        ['POST', KOZUT_URL_EOV, ['eovY' => $y, 'eovX' => $x], false],
+        ['POST', KOZUT_URL_EOV, ['point' => ['y' => $y, 'x' => $x]], false],
+        ['GET',  KOZUT_URL_EOV . '?y=' . $y . '&x=' . $x, null, false],
     ];
     $wgsVariansok = [
-        ['POST', KOZUT_URL_WGS, ['lat' => $lat, 'lon' => $lon]],
-        ['POST', KOZUT_URL_WGS, ['lat' => $lat, 'lng' => $lon]],
-        ['GET',  KOZUT_URL_WGS . '?lat=' . $lat . '&lon=' . $lon, null],
+        ['POST', KOZUT_URL_WGS, ['lat' => $lat, 'lon' => $lon], false],
+        ['POST', KOZUT_URL_WGS, ['lat' => $lat, 'lng' => $lon], false],
+        ['GET',  KOZUT_URL_WGS . '?lat=' . $lat . '&lon=' . $lon, null, false],
     ];
-    // ha van értelmes WGS-koordináta, azzal kezdünk, de az EOV is sorra kerül
-    return $wgs ? array_merge($wgsVariansok, $eov) : array_merge($eov, $wgsVariansok);
+    // ha enélkül egyik sem megy, a szolgáltatás a saját oldaláról érkező
+    // kérésre számít — a két legvalószínűbb alakot megismételjük úgy is
+    $fejleccel = [
+        ['POST', KOZUT_URL_EOV, ['y' => $y, 'x' => $x], true],
+        ['POST', KOZUT_URL_WGS, ['lat' => $lat, 'lon' => $lon], true],
+    ];
+
+    $sorrend = $wgs ? array_merge($wgsVariansok, $eov) : array_merge($eov, $wgsVariansok);
+    return array_merge($sorrend, $fejleccel);
 }
 
 /** Ennyi másodpercig tartjuk meg a választ (a szelvény nem változik naponta). */
@@ -138,7 +149,7 @@ if (!$diag && is_file($kulcs) && (time() - (int) filemtime($kulcs)) < CACHE_MP) 
 // --------------------------------------------------------- továbbítás
 
 /** Egy kérés elküldése; a választ és a körülményeit is visszaadja. */
-function keres(string $modszer, string $url, ?array $torzs): array
+function keres(string $modszer, string $url, ?array $torzs, bool $bongeszoFejlec = false): array
 {
     $ch = curl_init($url);
     $opts = [
@@ -148,13 +159,18 @@ function keres(string $modszer, string $url, ?array $torzs): array
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS => 3,
         CURLOPT_USERAGENT => 'utvonalbejaras-hid/1.0',
-        CURLOPT_HTTPHEADER => ['Accept: application/json'],
     ];
+    $fejlecek = ['Accept: application/json'];
     if ($modszer === 'POST') {
         $opts[CURLOPT_POST] = true;
         $opts[CURLOPT_POSTFIELDS] = json_encode($torzs, JSON_UNESCAPED_UNICODE);
-        $opts[CURLOPT_HTTPHEADER] = ['Accept: application/json', 'Content-Type: application/json'];
+        $fejlecek[] = 'Content-Type: application/json';
     }
+    if ($bongeszoFejlec) {
+        $fejlecek[] = 'Referer: https://utszamkereso.kozut.hu/';
+        $fejlecek[] = 'Origin: https://utszamkereso.kozut.hu';
+    }
+    $opts[CURLOPT_HTTPHEADER] = $fejlecek;
     curl_setopt_array($ch, $opts);
     $valasz = curl_exec($ch);
     $out = [
@@ -197,14 +213,15 @@ if (!$diag && is_array($nyertes) && isset($nyertes['i']) && isset($sorrend[$nyer
 
 $probak = [];
 $siker = null;
-foreach ($sorrend as $i => [$modszer, $url, $torzs]) {
-    $r = keres($modszer, $url, $torzs);
+foreach ($sorrend as $i => [$modszer, $url, $torzs, $fejleccel]) {
+    $r = keres($modszer, $url, $torzs, $fejleccel);
     $probak[] = [
         'modszer' => $r['modszer'],
         'utvonal' => $r['url'],
         'torzs' => $r['torzs'],
         'allapot' => $r['allapot'],
         'curl_hiba' => $r['curl_hiba'],
+        'fejleccel' => $fejleccel,
         'valasz_eleje' => mb_substr($r['valasz'], 0, 160),
     ];
     if (jo($r)) {
