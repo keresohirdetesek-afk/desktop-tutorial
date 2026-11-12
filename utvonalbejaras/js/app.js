@@ -153,6 +153,15 @@ function applyDeviceClass() {
   tag('#home-plan', desktop ? 'Ezen a gépen a legkényelmesebb' : 'Megy telefonon is, gépen kényelmesebb');
   tag('#home-walk', desktop ? 'Ehhez telefon kell, a helyszínen' : 'Telefonon, a helyszínen');
   tag('#home-escort', desktop ? 'A szállítás napján, telefonon' : 'A szállítás napján');
+
+  // Egy kártya kapja a teli, narancs kiemelést, hogy a szem rögtön arra
+  // ugorjon — és az legyen, aminek ezen a készüléken van értelme: gépen a
+  // tervezés, telefonon a bejárás.
+  const kiemelt = desktop ? '#home-plan' : '#home-walk';
+  for (const sel of ['#home-plan', '#home-walk', '#home-edit', '#home-escort']) {
+    const n = $(sel);
+    if (n) n.classList.toggle('kiemelt', sel === kiemelt);
+  }
 }
 
 /** A legutóbbi munkák a kezdőlapon — egy koppintás a folytatáshoz. */
