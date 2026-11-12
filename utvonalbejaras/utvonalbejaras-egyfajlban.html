@@ -954,16 +954,30 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ----------------------------------------------------------- nézegető */
 
-.viewer-body { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.viewer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* széles kijelzőn a teljes szélességű sorok olvashatatlanok: középre, keskenyen */
+.viewer-body > *, .viewer-actions-belso { width: 100%; max-width: 760px; margin-inline: auto; }
 .full-photo { width: 100%; border-radius: var(--radius); background: #000; }
 .player { width: 100%; }
 .viewer-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
   padding: 10px 12px calc(12px + var(--safe-b));
   border-top: 1px solid var(--border);
   background: var(--surface);
-  overflow-x: auto;
+}
+@media (max-width: 599px) {
+  /* telefonon egy sorban, oldalra húzva — nem tolja föl a tartalmat */
+  .viewer-actions { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; }
 }
 .viewer-actions .btn, .viewer-actions a.btn {
   flex: none;
@@ -1186,6 +1200,65 @@ button, input, select, textarea { font: inherit; color: inherit; }
 #cap-sign .cap-icon { color: var(--accent); }
 #cap-note .cap-icon, #cap-import .cap-icon { color: var(--muted); }
 .tab-icon { color: inherit; }
+
+/* ------------------------------------------- nézegető: tisztább adatlap */
+
+.meta-card { box-shadow: 0 1px 2px rgba(0, 0, 0, .05); }
+.meta-row { align-items: baseline; }
+.meta-key { font-weight: 600; letter-spacing: .01em; }
+.meta-val { font-variant-numeric: tabular-nums; }
+
+/* Az útszám-doboz a lap kulcsadata: kapjon arculati hangsúlyt. */
+.road-box {
+  padding: 13px 14px;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+.road-head {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.road-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.road-title .btn-ikon { color: var(--accent-text); }
+.road-val { font-size: 16px; }
+.road-acts { gap: 7px; margin-top: 10px; }
+.road-hint {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.road-hint p:first-child { margin-top: 0; }
+.road-lepesek { margin: 6px 0 0; padding-left: 20px; }
+.road-lepesek li { margin: 2px 0; }
+
+/* Ikon a gombokon: a felirattal egy sorban, a jelentéshez illő színnel. */
+.btn-ikon { display: inline-flex; line-height: 0; flex: none; }
+.btn-ikon svg { display: block; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.btn.tiny { gap: 5px; }
+.btn.tiny .btn-ikon svg { width: 15px; height: 15px; }
+.szin-danger { color: var(--danger); }
+.szin-ok { color: var(--ok); }
+.szin-info { color: var(--info); }
+.szin-accent { color: var(--accent-text); }
+.icon-btn svg { display: block; }
 
 </style>
 
@@ -1729,7 +1802,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   <header class="overlay-bar">
     <button id="viewer-close" class="icon-btn" aria-label="Bezárás">✕</button>
     <h2 id="viewer-title">Elem</h2>
-    <button id="viewer-delete" class="icon-btn danger" aria-label="Törlés">🗑</button>
+    <button id="viewer-delete" class="icon-btn danger" aria-label="Törlés"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16"/><path d="M9 6.5V4h6v2.5"/><path d="M6 6.5 7 20a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5l1-13.5"/></svg></button>
   </header>
   <div id="viewer-body" class="viewer-body"></div>
   <div class="viewer-actions" id="viewer-actions"></div>
@@ -1930,6 +2003,67 @@ function formatTime(t) {
   const pad = (n) => String(n).padStart(2, '0');
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
+
+/* ===== js/ikonok.js ===== */
+// Vonalas ikonkészlet az utvonalbejaras.hu arculatához.
+//
+// Miért nem emodzsi: az emodzsi minden rendszeren másképp néz ki (a Windows
+// kék kameráját az Android sárgára rajzolja), nem lehet színezni, és
+// nyomtatásban is ugyanaz a baj. Ezek vonalas SVG-k: mindenhol ugyanazok,
+// a szöveg színét veszik fel, és a jelentésükhöz tartozó színt kapják.
+
+/** A rajzok: 24×24-es rácson, csak körvonal. */
+const IKON_RAJZ = {
+  foto: '<path d="M3 8.5h3.2L8 6h8l1.8 2.5H21v10H3z"/><circle cx="12" cy="13" r="3.4"/>',
+  hang: '<rect x="9" y="2.6" width="6" height="11" rx="3"/><path d="M5 11.5a7 7 0 0 0 14 0M12 18.5V21"/>',
+  video: '<rect x="2.6" y="6.5" width="13" height="11" rx="2"/><path d="M15.6 11l5.8-3v8l-5.8-3z"/>',
+  jegyzet: '<path d="M5 3.5h9l5 5V20a.5.5 0 0 1-.5.5h-13A.5.5 0 0 1 5 20z"/>'
+    + '<path d="M14 3.5V9h5"/><path d="M8.5 13h7M8.5 16.5h4.5"/>',
+  allapot: '<path d="M12 3.5 22 20H2z"/><path d="M12 9.5v4.5M12 17h.01"/>',
+  jelzes: '<path d="M3 7.5h18v6H3z"/><path d="M3 7.5v12M21 7.5v12"/><path d="m5.5 13.5 5-6M11 13.5l5-6"/>',
+  mappa: '<path d="M3 6.5h6l2 2.5h10V19a.5.5 0 0 1-.5.5h-15A.5.5 0 0 1 3 19z"/>',
+  hely: '<path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>',
+  terkep: '<path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20z"/><path d="M9 4v13.5M15 6.5V20"/>',
+  ceruza: '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M14.5 6 18 9.5"/>',
+  kereses: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+  vagolap: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/>'
+    + '<rect x="9" y="2.2" width="6" height="3.6" rx="1.2"/><path d="M8 11.5h5M8 15h3"/>',
+  letoltes: '<path d="M12 3.5v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 19.5h16"/>',
+  ut: '<path d="M7 3.5 4.5 20.5M17 3.5l2.5 17"/><path d="M12 4v3M12 10.5v3M12 17v3"/>',
+  kuka: '<path d="M4 6.5h16"/><path d="M9 6.5V4h6v2.5"/>'
+    + '<path d="M6 6.5 7 20a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5l1-13.5"/>',
+  teherauto: '<path d="M3 7.5h10v8.5H3z"/><path d="M13 10.5h4l3 3v2.5h-7z"/>'
+    + '<circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>',
+  bezar: '<path d="M5.5 5.5 18.5 18.5M18.5 5.5 5.5 18.5"/>',
+};
+
+/** Az ikon SVG-je szövegként — az `el(..., { html })` ezt várja. */
+function ikonSvg(nev, meret = 18) {
+  const rajz = IKON_RAJZ[nev];
+  if (!rajz) return '';
+  return `<svg viewBox="0 0 24 24" width="${meret}" height="${meret}" fill="none" `
+    + 'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
+    + `stroke-linejoin="round" aria-hidden="true">${rajz}</svg>`;
+}
+
+/**
+ * Ikon elemként, gombba téve. A `szin` egy jelentéshez tartozó osztály
+ * (pl. 'danger'), ha az ikon ne a szöveg színét vegye fel.
+ */
+function ikonEl(nev, szin, meret = 18) {
+  const s = document.createElement('span');
+  s.className = 'btn-ikon' + (szin ? ' szin-' + szin : '');
+  s.innerHTML = ikonSvg(nev, meret);
+  s.setAttribute('aria-hidden', 'true');
+  return s;
+}
+
+/** Gomb felirata ikonnal: az `el(...)` gyerekeiként adható át. */
+function ikonos(nev, szoveg, szin) {
+  return [ikonEl(nev, szin), szoveg];
+}
+
+const IKON_NEVEK = Object.keys(IKON_RAJZ);
 
 /* ===== js/db.js ===== */
 const db = (() => {
@@ -12456,7 +12590,7 @@ async function openViewer(id) {
 
   const roadBox = el('div', { class: 'road-box' }, [
     el('div', { class: 'road-head' }, [
-      el('span', { class: 'road-title', text: '🛣️ Útszám, km szelvény' }),
+      el('span', { class: 'road-title' }, ikonos('ut', 'Útszám, km szelvény')),
       el('span', { class: 'road-val', text: item.road ? roadLabel(item.road) : 'még nincs megadva' }),
     ]),
     roadReszletek.length
@@ -12467,23 +12601,23 @@ async function openViewer(id) {
       : null,
     el('div', { class: 'road-acts' }, [
       el('button', {
-        class: 'btn ghost tiny', type: 'button', text: '✏️ Beírás kézzel',
+        class: 'btn ghost tiny', type: 'button',
         onclick: () => editRoad(item),
-      }),
+      }, ikonos('ceruza', 'Beírás kézzel')),
       item.lat != null ? el('button', {
-        class: 'btn ghost tiny', type: 'button', text: '🔎 Útszámkereső',
+        class: 'btn ghost tiny', type: 'button',
         onclick: () => openKeresoFor(item),
-      }) : null,
+      }, ikonos('kereses', 'Útszámkereső')) : null,
       item.lat != null ? el('button', {
-        class: 'btn ghost tiny', type: 'button', text: '📋 Beillesztés a keresőből',
+        class: 'btn ghost tiny', type: 'button',
         onclick: () => pasteKeresoInto(item),
-      }) : null,
+      }, ikonos('vagolap', 'Beillesztés a keresőből')) : null,
     ].filter(Boolean)),
     item.lat != null
       ? el('div', { class: 'road-hint' }, keresoUrl(item.road) !== UTSZAM_KERESO
           ? [
               // már tudjuk a szelvényt: a kereső rögtön annak az adatlapján nyílik
-              el('p', { text: `A 🔎 gomb rögtön ennek a szelvénynek az adatlapját nyitja meg `
+              el('p', { text: 'Az „Útszámkereső” gomb rögtön ennek a szelvénynek az adatlapját nyitja meg '
                 + `a Közút keresőjében (${roadLabel(item.road)}). A hivatalos adatokat `
                 + 'a jobb oldali panelből kijelölve és kimásolva (Ctrl+C) ide visszatérve átveszem.' }),
               el('p', { text: `A koordináta is a vágólapra kerül (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}), `
@@ -12493,7 +12627,7 @@ async function openViewer(id) {
           : [
               // útszám nélkül linkből nem indítható keresés: a kereső csak a
               // `section` paramétert olvassa, koordinátát nem
-              el('p', { text: `A 🔎 gomb a koordinátát (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}) `
+              el('p', { text: `Az „Útszámkereső” gomb a koordinátát (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}) `
                 + 'a vágólapra teszi, és megnyitja a keresőt. Ott három lépés:' }),
               el('ol', { class: 'road-lepesek' }, [
                 el('li', { text: 'bal oldalon nyissa le a „Koordinátakereső” sort' }),
@@ -12508,60 +12642,60 @@ async function openViewer(id) {
   body.appendChild(roadBox);
 
   if (item.type === 'photo') {
-    actions.appendChild(el('button', { class: 'btn primary small', text: '✏️ Jelölés / méretek', onclick: async () => {
+    actions.appendChild(el('button', { class: 'btn primary small', onclick: async () => {
       closeViewer();
       await annotate(item.id);
-    } }));
-    actions.appendChild(el('button', { class: 'btn ghost small', text: '⬇️ Kép letöltése', onclick: () => {
+    } }, ikonos('ceruza', 'Jelölés / méretek')));
+    actions.appendChild(el('button', { class: 'btn ghost small', onclick: () => {
       download(item.flat || item.photo, `${slug(state.session?.name)}-${item.id.slice(0, 6)}.jpg`);
-    } }));
+    } }, ikonos('letoltes', 'Kép letöltése')));
   }
   if (!item.audio) {
-    actions.appendChild(el('button', { class: 'btn ghost small', text: '🎙️ Hangjegyzet', onclick: async () => {
+    actions.appendChild(el('button', { class: 'btn ghost small', onclick: async () => {
       closeViewer();
       await recordAudio(item.id, true);
-    } }));
+    } }, ikonos('hang', 'Hangjegyzet')));
   }
   if (item.type === 'condition') {
     actions.appendChild(el('button', {
-      class: 'btn primary small', text: '⚠️ Állapot szerkesztése', onclick: () => editCondition(item),
-    }));
+      class: 'btn primary small', onclick: () => editCondition(item),
+    }, ikonos('allapot', 'Állapot szerkesztése')));
   }
   if (item.type === 'jelzes') {
     actions.appendChild(el('button', {
-      class: 'btn primary small', text: '🚧 Jelzéskép szerkesztése', onclick: () => editSign(item),
-    }));
+      class: 'btn primary small', onclick: () => editSign(item),
+    }, ikonos('jelzes', 'Jelzéskép szerkesztése')));
   }
   if (!item.photo && !item.flat && item.type !== 'video') {
     actions.appendChild(el('button', {
-      class: 'btn ghost small', text: '📷 Fotó csatolása',
+      class: 'btn ghost small',
       onclick: () => attachPhotoTo(item.id),
-    }));
+    }, ikonos('foto', 'Fotó csatolása')));
   }
   if (item.video) {
     actions.appendChild(el('button', {
-      class: 'btn ghost small', text: '⬇️ Videó letöltése',
+      class: 'btn ghost small',
       onclick: () => download(item.video, `${slug(state.session?.name)}-${item.id.slice(0, 6)}.mp4`),
-    }));
+    }, ikonos('letoltes', 'Videó letöltése')));
   } else {
     actions.appendChild(el('button', {
-      class: 'btn ghost small', text: '🎬 Videó csatolása',
+      class: 'btn ghost small',
       onclick: () => attachVideoTo(item.id),
-    }));
+    }, ikonos('video', 'Videó csatolása')));
   }
 
-  actions.appendChild(el('button', { class: 'btn ghost small', text: '📝 Megjegyzés', onclick: () => editItemNote(item) }));
+  actions.appendChild(el('button', { class: 'btn ghost small', onclick: () => editItemNote(item) },
+    ikonos('jegyzet', 'Megjegyzés')));
   actions.appendChild(el('button', {
     class: item.lat == null ? 'btn primary small' : 'btn ghost small',
-    text: item.lat == null ? '📍 Hely megadása' : '📍 Hely javítása',
     onclick: () => editItemPosition(item),
-  }));
+  }, ikonos('hely', item.lat == null ? 'Hely megadása' : 'Hely javítása')));
   if (item.lat != null) {
     actions.appendChild(el('a', {
       class: 'btn ghost small',
       href: `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lon}`,
-      target: '_blank', rel: 'noopener', text: '🗺️ Térképen',
-    }));
+      target: '_blank', rel: 'noopener',
+    }, ikonos('terkep', 'Térképen')));
   }
 
   $('#viewer').hidden = false;

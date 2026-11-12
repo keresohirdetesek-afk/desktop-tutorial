@@ -2,7 +2,7 @@
 // A bejárások adatai IndexedDB-ben vannak, azokat a service worker nem érinti.
 
 const PREFIX = 'utvonalbejaras-';
-const CACHE = PREFIX + 'v13';
+const CACHE = PREFIX + 'v14';
 const TILE_CACHE = PREFIX + 'tiles';  // a térképcsempéket az alkalmazás kezeli
 const ASSETS = [
   './',
@@ -12,6 +12,7 @@ const ASSETS = [
   'js/db.js',
   'js/geo.js',
   'js/ui.js',
+  'js/ikonok.js',
   'js/media.js',
   'js/editor.js',
   'js/trackedit.js',

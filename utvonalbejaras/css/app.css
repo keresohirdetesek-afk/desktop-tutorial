@@ -943,16 +943,30 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ----------------------------------------------------------- nézegető */
 
-.viewer-body { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.viewer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* széles kijelzőn a teljes szélességű sorok olvashatatlanok: középre, keskenyen */
+.viewer-body > *, .viewer-actions-belso { width: 100%; max-width: 760px; margin-inline: auto; }
 .full-photo { width: 100%; border-radius: var(--radius); background: #000; }
 .player { width: 100%; }
 .viewer-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
   padding: 10px 12px calc(12px + var(--safe-b));
   border-top: 1px solid var(--border);
   background: var(--surface);
-  overflow-x: auto;
+}
+@media (max-width: 599px) {
+  /* telefonon egy sorban, oldalra húzva — nem tolja föl a tartalmat */
+  .viewer-actions { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; }
 }
 .viewer-actions .btn, .viewer-actions a.btn {
   flex: none;
@@ -1175,3 +1189,62 @@ button, input, select, textarea { font: inherit; color: inherit; }
 #cap-sign .cap-icon { color: var(--accent); }
 #cap-note .cap-icon, #cap-import .cap-icon { color: var(--muted); }
 .tab-icon { color: inherit; }
+
+/* ------------------------------------------- nézegető: tisztább adatlap */
+
+.meta-card { box-shadow: 0 1px 2px rgba(0, 0, 0, .05); }
+.meta-row { align-items: baseline; }
+.meta-key { font-weight: 600; letter-spacing: .01em; }
+.meta-val { font-variant-numeric: tabular-nums; }
+
+/* Az útszám-doboz a lap kulcsadata: kapjon arculati hangsúlyt. */
+.road-box {
+  padding: 13px 14px;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+.road-head {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.road-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.road-title .btn-ikon { color: var(--accent-text); }
+.road-val { font-size: 16px; }
+.road-acts { gap: 7px; margin-top: 10px; }
+.road-hint {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.road-hint p:first-child { margin-top: 0; }
+.road-lepesek { margin: 6px 0 0; padding-left: 20px; }
+.road-lepesek li { margin: 2px 0; }
+
+/* Ikon a gombokon: a felirattal egy sorban, a jelentéshez illő színnel. */
+.btn-ikon { display: inline-flex; line-height: 0; flex: none; }
+.btn-ikon svg { display: block; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.btn.tiny { gap: 5px; }
+.btn.tiny .btn-ikon svg { width: 15px; height: 15px; }
+.szin-danger { color: var(--danger); }
+.szin-ok { color: var(--ok); }
+.szin-info { color: var(--info); }
+.szin-accent { color: var(--accent-text); }
+.icon-btn svg { display: block; }

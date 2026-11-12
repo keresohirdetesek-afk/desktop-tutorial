@@ -30,6 +30,7 @@ import {
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO, keresoUrl } from './kozut.js';
+import { ikonos, ikonEl } from './ikonok.js';
 import { EscortMode } from './kiseres.js';
 import {
   licence, licencingConfigured, saveLicence, clearLicence, canCreateSession, reportLicence,
@@ -1807,7 +1808,7 @@ async function openViewer(id) {
 
   const roadBox = el('div', { class: 'road-box' }, [
     el('div', { class: 'road-head' }, [
-      el('span', { class: 'road-title', text: '🛣️ Útszám, km szelvény' }),
+      el('span', { class: 'road-title' }, ikonos('ut', 'Útszám, km szelvény')),
       el('span', { class: 'road-val', text: item.road ? roadLabel(item.road) : 'még nincs megadva' }),
     ]),
     roadReszletek.length
@@ -1818,23 +1819,23 @@ async function openViewer(id) {
       : null,
     el('div', { class: 'road-acts' }, [
       el('button', {
-        class: 'btn ghost tiny', type: 'button', text: '✏️ Beírás kézzel',
+        class: 'btn ghost tiny', type: 'button',
         onclick: () => editRoad(item),
-      }),
+      }, ikonos('ceruza', 'Beírás kézzel')),
       item.lat != null ? el('button', {
-        class: 'btn ghost tiny', type: 'button', text: '🔎 Útszámkereső',
+        class: 'btn ghost tiny', type: 'button',
         onclick: () => openKeresoFor(item),
-      }) : null,
+      }, ikonos('kereses', 'Útszámkereső')) : null,
       item.lat != null ? el('button', {
-        class: 'btn ghost tiny', type: 'button', text: '📋 Beillesztés a keresőből',
+        class: 'btn ghost tiny', type: 'button',
         onclick: () => pasteKeresoInto(item),
-      }) : null,
+      }, ikonos('vagolap', 'Beillesztés a keresőből')) : null,
     ].filter(Boolean)),
     item.lat != null
       ? el('div', { class: 'road-hint' }, keresoUrl(item.road) !== UTSZAM_KERESO
           ? [
               // már tudjuk a szelvényt: a kereső rögtön annak az adatlapján nyílik
-              el('p', { text: `A 🔎 gomb rögtön ennek a szelvénynek az adatlapját nyitja meg `
+              el('p', { text: 'Az „Útszámkereső” gomb rögtön ennek a szelvénynek az adatlapját nyitja meg '
                 + `a Közút keresőjében (${roadLabel(item.road)}). A hivatalos adatokat `
                 + 'a jobb oldali panelből kijelölve és kimásolva (Ctrl+C) ide visszatérve átveszem.' }),
               el('p', { text: `A koordináta is a vágólapra kerül (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}), `
@@ -1844,7 +1845,7 @@ async function openViewer(id) {
           : [
               // útszám nélkül linkből nem indítható keresés: a kereső csak a
               // `section` paramétert olvassa, koordinátát nem
-              el('p', { text: `A 🔎 gomb a koordinátát (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}) `
+              el('p', { text: `Az „Útszámkereső” gomb a koordinátát (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}) `
                 + 'a vágólapra teszi, és megnyitja a keresőt. Ott három lépés:' }),
               el('ol', { class: 'road-lepesek' }, [
                 el('li', { text: 'bal oldalon nyissa le a „Koordinátakereső” sort' }),
@@ -1859,60 +1860,60 @@ async function openViewer(id) {
   body.appendChild(roadBox);
 
   if (item.type === 'photo') {
-    actions.appendChild(el('button', { class: 'btn primary small', text: '✏️ Jelölés / méretek', onclick: async () => {
+    actions.appendChild(el('button', { class: 'btn primary small', onclick: async () => {
       closeViewer();
       await annotate(item.id);
-    } }));
-    actions.appendChild(el('button', { class: 'btn ghost small', text: '⬇️ Kép letöltése', onclick: () => {
+    } }, ikonos('ceruza', 'Jelölés / méretek')));
+    actions.appendChild(el('button', { class: 'btn ghost small', onclick: () => {
       download(item.flat || item.photo, `${slug(state.session?.name)}-${item.id.slice(0, 6)}.jpg`);
-    } }));
+    } }, ikonos('letoltes', 'Kép letöltése')));
   }
   if (!item.audio) {
-    actions.appendChild(el('button', { class: 'btn ghost small', text: '🎙️ Hangjegyzet', onclick: async () => {
+    actions.appendChild(el('button', { class: 'btn ghost small', onclick: async () => {
       closeViewer();
       await recordAudio(item.id, true);
-    } }));
+    } }, ikonos('hang', 'Hangjegyzet')));
   }
   if (item.type === 'condition') {
     actions.appendChild(el('button', {
-      class: 'btn primary small', text: '⚠️ Állapot szerkesztése', onclick: () => editCondition(item),
-    }));
+      class: 'btn primary small', onclick: () => editCondition(item),
+    }, ikonos('allapot', 'Állapot szerkesztése')));
   }
   if (item.type === 'jelzes') {
     actions.appendChild(el('button', {
-      class: 'btn primary small', text: '🚧 Jelzéskép szerkesztése', onclick: () => editSign(item),
-    }));
+      class: 'btn primary small', onclick: () => editSign(item),
+    }, ikonos('jelzes', 'Jelzéskép szerkesztése')));
   }
   if (!item.photo && !item.flat && item.type !== 'video') {
     actions.appendChild(el('button', {
-      class: 'btn ghost small', text: '📷 Fotó csatolása',
+      class: 'btn ghost small',
       onclick: () => attachPhotoTo(item.id),
-    }));
+    }, ikonos('foto', 'Fotó csatolása')));
   }
   if (item.video) {
     actions.appendChild(el('button', {
-      class: 'btn ghost small', text: '⬇️ Videó letöltése',
+      class: 'btn ghost small',
       onclick: () => download(item.video, `${slug(state.session?.name)}-${item.id.slice(0, 6)}.mp4`),
-    }));
+    }, ikonos('letoltes', 'Videó letöltése')));
   } else {
     actions.appendChild(el('button', {
-      class: 'btn ghost small', text: '🎬 Videó csatolása',
+      class: 'btn ghost small',
       onclick: () => attachVideoTo(item.id),
-    }));
+    }, ikonos('video', 'Videó csatolása')));
   }
 
-  actions.appendChild(el('button', { class: 'btn ghost small', text: '📝 Megjegyzés', onclick: () => editItemNote(item) }));
+  actions.appendChild(el('button', { class: 'btn ghost small', onclick: () => editItemNote(item) },
+    ikonos('jegyzet', 'Megjegyzés')));
   actions.appendChild(el('button', {
     class: item.lat == null ? 'btn primary small' : 'btn ghost small',
-    text: item.lat == null ? '📍 Hely megadása' : '📍 Hely javítása',
     onclick: () => editItemPosition(item),
-  }));
+  }, ikonos('hely', item.lat == null ? 'Hely megadása' : 'Hely javítása')));
   if (item.lat != null) {
     actions.appendChild(el('a', {
       class: 'btn ghost small',
       href: `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lon}`,
-      target: '_blank', rel: 'noopener', text: '🗺️ Térképen',
-    }));
+      target: '_blank', rel: 'noopener',
+    }, ikonos('terkep', 'Térképen')));
   }
 
   $('#viewer').hidden = false;
