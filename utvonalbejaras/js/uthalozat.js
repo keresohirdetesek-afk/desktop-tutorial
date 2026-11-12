@@ -155,7 +155,12 @@ export async function buildNetwork(file, fields, progress = () => {}) {
 
   const sample = (features.find((f) => f.properties) || {}).properties || {};
   const map = Object.assign(guessFields(sample), fields || {});
-  if (!map.utszam) throw new Error('nem találtam útszám mezőt az adatban');
+  if (!map.utszam) {
+    // a mezőnevek kiírása sokat segít: ebből látszik, mit kell kézzel kijelölni
+    const oszlopok = Object.keys(sample).slice(0, 12).join(', ');
+    throw new Error('nem találtam útszám mezőt az adatban'
+      + (oszlopok ? ` — a fájl oszlopai: ${oszlopok}` : ''));
+  }
 
   // vetület: EOV vagy már WGS84
   let eov = false;
@@ -224,7 +229,18 @@ export async function buildNetwork(file, fields, progress = () => {}) {
     }
   });
 
-  if (!segRoad.length) throw new Error('nem találtam vonalas útszakaszt az adatban');
+  if (!segRoad.length) {
+    // a NAP-portál több rétege pontréteg (pl. „Közúti azonosítópontok”):
+    // ezekben nincs vonal, amire a szelvényt rá lehetne osztani
+    const pontok = features.filter((f) => f.geometry
+      && /^(Multi)?Point$/.test(f.geometry.type)).length;
+    if (pontok) {
+      throw new Error(`ez pontréteg (${pontok} pont), nem vonalas úthálózat — `
+        + 'olyan fájl kell, amiben az útszakaszok vonalként vannak meg '
+        + '(pl. „Közút neve, kategóriája és kezelője”)');
+    }
+    throw new Error('nem találtam vonalas útszakaszt az adatban');
+  }
 
   // rácsos index: 0,02 fok ~ 1,5–2 km, így pár tucat szakaszt kell nézni
   const cells = new Map();
