@@ -51,6 +51,41 @@ const timeHu = (t) => {
 export const UTSZAM_KERESO = 'https://utszamkereso.kozut.hu/';
 
 /**
+ * Az útszámkereső egyetlen URL-paramétert olvas: a `section`-t, ami egy
+ * szelvényt jelöl ki (útszám;pályakód;km;méter — pl. `M35;1;56;534`).
+ * Koordinátát linkből nem lehet keresni, azt be kell illeszteni.
+ *
+ * Ezért: ha az appban már van útszám és szelvény (az úthálózatból, a Közút
+ * szolgáltatásából vagy kézzel), akkor rögtön annak a szelvénynek az adatlapját
+ * nyitjuk meg — ellenőrzésre ez egy kattintás. Ha nincs, a sima főoldal nyílik,
+ * és a koordináta a vágólapra kerül.
+ *
+ * @param {{utszam?: string, szelveny?: string, km?: string, palyakod?: string}} adat
+ */
+export function keresoUrl(adat) {
+  const d = adat || {};
+  const utszam = String(d.utszam || '').trim();
+  const szelveny = String(d.szelveny || d.km || '').trim();
+  if (!utszam || !szelveny) return UTSZAM_KERESO;
+
+  // „56 km + 534 m”, „56+534”, „56,534” — mindegyikből km és méter kell
+  const m = /(\d+)\s*(?:km)?\s*[+,]\s*(\d+)/i.exec(szelveny)
+    || /^(\d+)\s*km$/i.exec(szelveny);
+  if (!m) return UTSZAM_KERESO;
+  const km = Number(m[1]);
+  const meter = m[2] == null ? 0 : Number(m[2]);
+  if (!Number.isFinite(km)) return UTSZAM_KERESO;
+
+  // a pályakód szöveges is lehet („1 – osztott, jobb pálya”): a szám kell
+  const pk = /\d+/.exec(String(d.palyakod || ''));
+  const palyakod = pk ? pk[0] : '1';
+
+  // a pontosvesszőket nem kódoljuk: az oldal ebben az alakban olvassa
+  return UTSZAM_KERESO + '?section='
+    + `${encodeURIComponent(utszam)};${palyakod};${km};${meter}`;
+}
+
+/**
  * Az útszámkereső jobb oldali paneljéből kimásolt szöveg feldolgozása.
  * Elég a panelt kijelölni és másolni — ebből kiszedjük, ami kell.
  *
@@ -657,15 +692,16 @@ export class KozutDocs {
             text: '🔎 Útszám és szelvény keresése',
             onclick: async (e) => {
               e.preventDefault();
-              // az útszámkereső koordinátakeresője EOV Y–X értéket vár
-              const eov = formatEov(it.lat, it.lon);
-              const copied = await toClipboard(eov);
+              // A Koordinátakereső Y/X mezői a GPS-koordinátát várják
+              // (szélesség, hosszúság) — a „Beilleszt” így olvassa a vágólapot.
+              const gps = `${it.lat.toFixed(6)}, ${it.lon.toFixed(6)}`;
+              const copied = await toClipboard(gps);
               // ugyanabban a fülben nyílik meg, nem szaporodnak a lapok
-              window.open(UTSZAM_KERESO, 'utszamkereso');
+              window.open(keresoUrl(k), 'utszamkereso');
               toast(copied
-                ? 'EOV koordináta a vágólapon. A Koordinátakeresőben: Beilleszt → Keres. '
+                ? `A koordináta a vágólapon (${gps}). A Koordinátakeresőben: Beilleszt → Keres. `
                   + 'A jobb oldali panelből írja ide az útszámot és a szelvényt.'
-                : `Koordinátakereső, EOV: ${eov}`);
+                : `Koordinátakereső: ${gps}`);
             },
           }),
           el('button', {

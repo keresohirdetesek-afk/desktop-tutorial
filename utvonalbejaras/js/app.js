@@ -29,7 +29,7 @@ import {
 } from './utadat.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
-import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO } from './kozut.js';
+import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO, keresoUrl } from './kozut.js';
 import { EscortMode } from './kiseres.js';
 import {
   licence, licencingConfigured, saveLicence, clearLicence, canCreateSession, reportLicence,
@@ -1714,17 +1714,29 @@ async function openViewer(id) {
       }) : null,
     ].filter(Boolean)),
     item.lat != null
-      ? el('div', { class: 'road-hint' }, [
-          el('p', { text: `A 🔎 gomb a koordinátát (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}) `
-            + 'a vágólapra teszi, és megnyitja a keresőt. Ott három lépés:' }),
-          el('ol', { class: 'road-lepesek' }, [
-            el('li', { text: 'bal oldalon nyissa le a „Koordinátakereső” sort' }),
-            el('li', { text: '„Beilleszt”, majd „Keres”' }),
-            el('li', { text: 'a jobb oldali panelt jelölje ki és másolja ki (Ctrl+C)' }),
-          ]),
-          el('p', { text: 'Ide visszatérve magától felajánlom az átvételt. '
-            + `(EOV: ${formatEov(item.lat, item.lon)})` }),
-        ])
+      ? el('div', { class: 'road-hint' }, keresoUrl(item.road) !== UTSZAM_KERESO
+          ? [
+              // már tudjuk a szelvényt: a kereső rögtön annak az adatlapján nyílik
+              el('p', { text: `A 🔎 gomb rögtön ennek a szelvénynek az adatlapját nyitja meg `
+                + `a Közút keresőjében (${roadLabel(item.road)}). A hivatalos adatokat `
+                + 'a jobb oldali panelből kijelölve és kimásolva (Ctrl+C) ide visszatérve átveszem.' }),
+              el('p', { text: `A koordináta is a vágólapra kerül (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}), `
+                + 'ha a Koordinátakeresővel ellenőrizni szeretné. '
+                + `(EOV: ${formatEov(item.lat, item.lon)})` }),
+            ]
+          : [
+              // útszám nélkül linkből nem indítható keresés: a kereső csak a
+              // `section` paramétert olvassa, koordinátát nem
+              el('p', { text: `A 🔎 gomb a koordinátát (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}) `
+                + 'a vágólapra teszi, és megnyitja a keresőt. Ott három lépés:' }),
+              el('ol', { class: 'road-lepesek' }, [
+                el('li', { text: 'bal oldalon nyissa le a „Koordinátakereső” sort' }),
+                el('li', { text: '„Beilleszt”, majd „Keres”' }),
+                el('li', { text: 'a jobb oldali panelt jelölje ki és másolja ki (Ctrl+C)' }),
+              ]),
+              el('p', { text: 'Ide visszatérve magától felajánlom az átvételt. '
+                + `(EOV: ${formatEov(item.lat, item.lon)})` }),
+            ])
       : null,
   ].filter(Boolean));
   body.appendChild(roadBox);
@@ -1861,7 +1873,15 @@ async function openKeresoFor(item) {
   const gps = `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`;
   const copied = await toClipboard(gps);
   keresoVarakozik = item.id;
-  window.open(UTSZAM_KERESO, 'utszamkereso');
+  // Ha már tudjuk az útszámot és a szelvényt, a kereső rögtön annak az
+  // adatlapján nyílik (`?section=`) — nem kell keresni, csak kimásolni.
+  const url = keresoUrl(item.road);
+  window.open(url, 'utszamkereso');
+  if (url !== UTSZAM_KERESO) {
+    toast(`A kereső ennek a szelvénynek az adatlapján nyílik (${roadLabel(item.road)}). `
+      + 'A jobb oldali panelt másolja ki, és ide visszatérve felajánlom az átvételt.');
+    return;
+  }
   toast(copied
     ? `A koordináta a vágólapon (${gps}). A Koordinátakeresőben: Beilleszt → Keres. `
       + 'A találatot másolja ki, és ide visszatérve felajánlom az átvételt.'
