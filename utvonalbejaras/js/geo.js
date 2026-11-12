@@ -45,6 +45,21 @@ ha nem hordoz hasznos információt.
 Egy útszakasz mindig a *végpontja* állapotát viseli: ha egy pont elvetett,
 akkor az odavezető szakasz is az.                                        */
 
+/**
+ * A térképi tűk színe típusonként — az utvonalbejaras.hu arculatából:
+ * biztonsági narancs, figyelmeztető piros, mérnöki kék, sárga és szürke.
+ * Minden szín jelent valamit, hogy a térképre nézve rögtön látszódjon,
+ * miféle helyszínről van szó.
+ */
+export const MARKER_SZIN = {
+  photo: '#e5e7eb',      // dokumentáció
+  note: '#94a3b8',       // jegyzet
+  audio: '#facc15',      // hangjegyzet
+  video: '#3b82f6',      // mozgókép, műtárgy körbejárása
+  condition: '#ef4444',  // állapot, akadály, szűkület
+  jelzes: '#f59e0b',     // kísérőautó jelzésképe
+};
+
 export const REJECTED = 'rejected';
 
 export const isRejected = (p) => !!p && p.status === REJECTED;
@@ -652,12 +667,8 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
       hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 14 });
       return;
     }
-    const color = {
-      audio: '#ffbe4d', note: '#c58cff', video: '#6fd3ff', condition: '#ff5f56',
-      jelzes: '#ffd60a',
-    }[m.type] || '#ffffff';
-    dot(ctx, p, 5, color, '#0b0f16');
-    hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 12 });
+    pin(ctx, p, MARKER_SZIN[m.type] || MARKER_SZIN.photo);
+    hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 14 });
   });
 
   // alaptérkép fölött sötét, fehér hátterű jelölés kell a világos csempékhez
@@ -885,6 +896,32 @@ export function rebaseView(view, prev, next) {
 
 export function drawnLength(list = []) {
   return list.reduce((sum, s) => sum + trackLength(s.pts || []), 0);
+}
+
+/**
+ * Térképi tű (csepp alak), ahogy az arculat is mutatja: a hegye pontosan a
+ * helyszínen áll, a feje fölötte — így kis nagyításnál sem takarja el, hol van.
+ */
+function pin(ctx, p, fill) {
+  const r = 7;          // a fej sugara
+  const h = 19;         // a hegy és a fej közepe közötti távolság
+  const cy = p.y - h;
+  // a fej köre és a hegybe futó oldalak egy alakzatban
+  const a = Math.asin(r / h);
+  ctx.beginPath();
+  ctx.arc(p.x, cy, r, Math.PI / 2 - a, Math.PI / 2 + a, true);
+  ctx.lineTo(p.x, p.y);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.lineWidth = 1.8;
+  ctx.strokeStyle = '#ffffff';
+  ctx.stroke();
+  // belső pötty: a tű színe mellett is látszik, hogy jelölés, nem folt
+  ctx.beginPath();
+  ctx.arc(p.x, cy, 2.6, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(17,24,39,.55)';
+  ctx.fill();
 }
 
 function dot(ctx, p, r, fill, stroke) {

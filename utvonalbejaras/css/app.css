@@ -1,18 +1,22 @@
 /* Útvonalbejárás — mobilra tervezett, sötét felület */
 
 :root {
-  --bg: #0b0f16;
-  --surface: #131a25;
-  --surface-2: #1a2432;
-  --border: #253143;
-  --text: #eaf0f8;
-  --muted: #8b98a9;
-  --accent: #4da3ff;
-  --accent-ink: #04121f;
-  --danger: #ff5f56;
-  --ok: #3ddc84;
-  --warn: #ffbe4d;
-  --map-bg: #0f1621;
+  /* utvonalbejaras.hu arculat — aszfalt, biztonsági narancs, piros, kék */
+  --bg: #111827;
+  --surface: #1f2937;
+  --surface-2: #273243;
+  --border: #374151;
+  --text: #f3f4f6;
+  --muted: #9ca3af;
+  --accent: #f59e0b;
+  --accent-ink: #111827;
+  /* narancs szövegként: sötét alapon világosabb árnyalat olvasható jól */
+  --accent-text: #fbbf24;
+  --danger: #ef4444;
+  --ok: #22c55e;
+  --warn: #facc15;
+  --info: #3b82f6;
+  --map-bg: #0d1420;
   --radius: 14px;
   --safe-b: env(safe-area-inset-bottom, 0px);
 }
@@ -22,28 +26,40 @@
    választás mindkét irányban erősebb az operációs rendszerénél. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #f2f5f9;
+    --bg: #f3f4f6;
     --surface: #ffffff;
-    --surface-2: #eef2f7;
-    --border: #d5dde8;
-    --text: #14202e;
-    --muted: #5d6b7d;
-    --accent: #0a6ed1;
-    --accent-ink: #ffffff;
-    --map-bg: #e6ecf4;
+    --surface-2: #e8ebf0;
+    --border: #d1d5db;
+    --text: #111827;
+    --muted: #4b5563;
+    --accent: #f59e0b;
+    --accent-ink: #111827;
+    /* világos alapon a narancs szöveg olvashatatlan: sötétebb borostyán */
+    --accent-text: #a1590a;
+    --danger: #dc2626;
+    --ok: #15803d;
+    --warn: #a1590a;
+    --info: #2563eb;
+    --map-bg: #e6eaf0;
   }
 }
 
 :root[data-theme="light"] {
-  --bg: #f2f5f9;
+  --bg: #f3f4f6;
   --surface: #ffffff;
-  --surface-2: #eef2f7;
-  --border: #d5dde8;
-  --text: #14202e;
-  --muted: #5d6b7d;
-  --accent: #0a6ed1;
-  --accent-ink: #ffffff;
-  --map-bg: #e6ecf4;
+  --surface-2: #e8ebf0;
+  --border: #d1d5db;
+  --text: #111827;
+  --muted: #4b5563;
+  --accent: #f59e0b;
+  --accent-ink: #111827;
+  /* világos alapon a narancs szöveg olvashatatlan: sötétebb borostyán */
+  --accent-text: #a1590a;
+  --danger: #dc2626;
+  --ok: #15803d;
+  --warn: #a1590a;
+  --info: #2563eb;
+  --map-bg: #e6eaf0;
 }
 
 * { box-sizing: border-box; }
@@ -132,7 +148,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .tab span { font-size: 19px; }
-.tab.active { color: var(--accent); }
+.tab.active { color: var(--accent-text); }
 .tab:disabled { opacity: .35; }
 
 /* ------------------------------------------------------------ gombok */
@@ -315,7 +331,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
 }
 .map-zoom-btn:active { transform: scale(.94); }
-.map-zoom-btn.active { border-color: var(--accent); color: var(--accent); }
+.map-zoom-btn.active { border-color: var(--accent); color: var(--accent-text); }
 
 .track-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
 .track-stats > div { background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 7px 2px; }
@@ -985,7 +1001,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
 }
-.kozut-hit { color: var(--accent); font-size: 12.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kozut-hit { color: var(--accent-text); font-size: 12.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* ===================================================== kezdőképernyő */
 /* Négy világos választás: tervezés, bejárás, szerkesztés, kíséret. */
@@ -1056,8 +1072,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .mode-card.plan { --tint: var(--accent); }
 .mode-card.walk { --tint: var(--ok); }
-.mode-card.edit { --tint: var(--warn); }
-.mode-card.escort { --tint: #a78bfa; }
+.mode-card.edit { --tint: var(--info); }
+.mode-card.escort { --tint: var(--danger); }
 
 .home-recent { margin-top: 20px; }
 .home-recent .section-title { margin: 0; }
@@ -1114,3 +1130,48 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* négy fül: keskeny telefonon is egy sorban maradjon */
 #tabbar .tab { padding-left: 2px; padding-right: 2px; font-size: 10.5px; }
 @media (max-width: 359px) { #tabbar .tab { font-size: 9.5px; } }
+
+/* ===================================================== arculat (márka) */
+
+.brand-mark { display: flex; flex: none; line-height: 0; }
+.brand-mark svg { border-radius: 7px; }
+
+.wordmark {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+}
+.wordmark b { color: var(--accent); font-weight: 900; }
+.wordmark span { color: var(--muted); font-weight: 600; }
+.szlogen {
+  margin: 2px 0 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--muted);
+}
+@media (min-width: 760px) {
+  .wordmark { font-size: 32px; }
+  .szlogen { font-size: 13.5px; }
+}
+
+/* a kezdőlap ikonjai vonalas rajzok, a kártya színében */
+.mode-card .mode-icon { color: var(--tint); }
+.mode-card .mode-icon svg { display: block; }
+.szlogen { margin-bottom: 18px; }
+
+/* Rögzítő gombok és fülek: vonalas ikonok, jelentés szerinti színnel —
+   ugyanaz a szín, mint amit a térképi tű mutat az adott típusnál. */
+.cap-icon svg, .tab-icon svg { display: block; }
+.cap-icon { color: var(--text); }
+#cap-audio .cap-icon { color: var(--warn); }
+#cap-video .cap-icon { color: var(--info); }
+#cap-condition .cap-icon { color: var(--danger); }
+#cap-sign .cap-icon { color: var(--accent); }
+#cap-note .cap-icon, #cap-import .cap-icon { color: var(--muted); }
+.tab-icon { color: inherit; }

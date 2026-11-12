@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<meta name="theme-color" content="#0b0f16">
+<meta name="theme-color" content="#111827">
 <meta name="description" content="Útvonalbejárás túlméretes szállítmányhoz: nyomvonal rögzítés, fotók méretjelöléssel, halvány útirány-nyíl és hangjegyzetek.">
 <title>Útvonalbejárás</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -17,6 +17,7 @@
 
 <header id="topbar">
   <button id="back-btn" class="icon-btn" hidden aria-label="Vissza">‹</button>
+  <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 512 512" width="26" height="26"><defs><pattern id="tb-stripes" width="64" height="64" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="64" height="64" fill="#111827"/><rect width="32" height="64" fill="#f59e0b"/></pattern></defs><path fill-rule="evenodd" fill="url(#tb-stripes)" d="M128 8h256a120 120 0 0 1 120 120v256a120 120 0 0 1-120 120H128A120 120 0 0 1 8 384V128A120 120 0 0 1 128 8z M140 40h232a100 100 0 0 1 100 100v232a100 100 0 0 1-100 100H140A100 100 0 0 1 40 372V140A100 100 0 0 1 140 40z"/><path d="M140 40h232a100 100 0 0 1 100 100v232a100 100 0 0 1-100 100H140A100 100 0 0 1 40 372V140A100 100 0 0 1 140 40z" fill="#1f2937"/><path d="M186 150v118a70 70 0 0 0 140 0V196" fill="none" stroke="#d1d5db" stroke-width="44" stroke-linecap="round"/><path d="M326 136l46 74h-92z" fill="#f59e0b"/></svg></span>
   <h1 id="topbar-title">Útvonalbejárás</h1>
   <button id="topbar-action" class="icon-btn" hidden></button>
 </header>
@@ -27,13 +28,15 @@
   <section class="screen" id="scr-home">
     <div class="pad home">
       <div class="home-hero">
+        <p class="wordmark"><b>UTVONAL</b><span>bejaras.hu</span></p>
+        <p class="szlogen">Tervezés. Biztonság. Engedélyezés.</p>
         <h2>Mit szeretne most csinálni?</h2>
         <p>Útvonalbejárás túlméretes és túlsúlyos szállítmányhoz — tervezés, bejárás, kíséret.</p>
       </div>
 
       <div class="mode-grid">
         <button id="home-plan" class="mode-card plan" type="button">
-          <span class="mode-icon" aria-hidden="true">🗺️</span>
+          <span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20z"/><path d="M9 4v13.5M15 6.5V20"/></svg></span>
           <span class="mode-body">
             <span class="mode-title">Útvonal tervezése</span>
             <span class="mode-desc">Rajzolja meg előre a térképen. Az app az útra illeszti a nyomvonalat, és pontokat is felvihet hozzá.</span>
@@ -43,7 +46,7 @@
         </button>
 
         <button id="home-walk" class="mode-card walk" type="button">
-          <span class="mode-icon" aria-hidden="true">📍</span>
+          <span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg></span>
           <span class="mode-body">
             <span class="mode-title">Bejárás indítása</span>
             <span class="mode-desc">A GPS azonnal elindul, és rögzíti a nyomvonalat. Útközben fotó, hangjegyzet, jelzéskép.</span>
@@ -53,7 +56,7 @@
         </button>
 
         <button id="home-edit" class="mode-card edit" type="button">
-          <span class="mode-icon" aria-hidden="true">✏️</span>
+          <span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><rect x="9" y="2.2" width="6" height="3.6" rx="1.2"/><path d="M8 11.5h5M8 15h3"/></svg></span>
           <span class="mode-body">
             <span class="mode-title">Meglévő anyag folytatása</span>
             <span class="mode-desc">Korábbi bejárás megnyitása és szerkesztése, vagy mentés visszatöltése a gépről.</span>
@@ -63,7 +66,7 @@
         </button>
 
         <button id="home-escort" class="mode-card escort" type="button">
-          <span class="mode-icon" aria-hidden="true">🚚</span>
+          <span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5h10v8.5H3z"/><path d="M13 10.5h4l3 3v2.5h-7z"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg></span>
           <span class="mode-body">
             <span class="mode-title">Kíséret indítása</span>
             <span class="mode-desc">A kész bejárás alapján menet közben jelzi, mi következik: szűkület, tábla, jelzéskép.</span>
@@ -139,34 +142,34 @@
         <button id="rec-toggle" class="btn rec">● Nyomvonal rögzítése</button>
         <button id="rec-mark" class="btn ghost small" disabled>Pont jelölése</button>
       </div>
-      <button id="edit-track" class="btn ghost small block">🗺️ Nyomvonal szerkesztése</button>
+      <button id="edit-track" class="btn ghost small block">Nyomvonal szerkesztése</button>
       <button id="reject-summary" class="reject-summary" hidden></button>
-      <button id="dim-screen" class="btn ghost small block" hidden>🌙 Képernyő elsötétítése (rögzítés fut tovább)</button>
-      <button id="start-escort" class="btn primary small block">▶️ Élő kísérés a szállításhoz</button>
+      <button id="dim-screen" class="btn ghost small block" hidden>Képernyő elsötétítése (rögzítés fut tovább)</button>
+      <button id="start-escort" class="btn primary small block">Élő kísérés a szállításhoz</button>
       <p id="gps-status" class="muted small"></p>
     </div>
 
     <div class="capture-bar">
       <button id="cap-photo" class="cap">
-        <span class="cap-icon">📷</span><span>Fotó</span>
+        <span class="cap-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5h3.2L8 6h8l1.8 2.5H21v10H3z"/><circle cx="12" cy="13" r="3.4"/></svg></span><span>Fotó</span>
       </button>
       <button id="cap-audio" class="cap">
-        <span class="cap-icon">🎙️</span><span>Hangjegyzet</span>
+        <span class="cap-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.6" width="6" height="11" rx="3"/><path d="M5 11.5a7 7 0 0 0 14 0M12 18.5V21"/></svg></span><span>Hangjegyzet</span>
       </button>
       <button id="cap-video" class="cap">
-        <span class="cap-icon">🎬</span><span>Videó</span>
+        <span class="cap-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.6" y="6.5" width="13" height="11" rx="2"/><path d="M15.6 11l5.8-3v8l-5.8-3z"/></svg></span><span>Videó</span>
       </button>
       <button id="cap-condition" class="cap">
-        <span class="cap-icon">⚠️</span><span>Állapot / tábla</span>
+        <span class="cap-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20H2z"/><path d="M12 9.5v4.5M12 17h.01"/></svg></span><span>Állapot / tábla</span>
       </button>
       <button id="cap-sign" class="cap">
-        <span class="cap-icon">🚧</span><span>Jelzéskép</span>
+        <span class="cap-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5h18v6H3z"/><path d="M3 7.5v12M21 7.5v12"/><path d="m5.5 13.5 5-6M11 13.5l5-6"/></svg></span><span>Jelzéskép</span>
       </button>
       <button id="cap-note" class="cap">
-        <span class="cap-icon">📝</span><span>Jegyzet</span>
+        <span class="cap-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h9l5 5V20a.5.5 0 0 1-.5.5h-13A.5.5 0 0 1 5 20z"/><path d="M14 3.5V9h5"/><path d="M8.5 13h7M8.5 16.5h4.5"/></svg></span><span>Jegyzet</span>
       </button>
       <button id="cap-import" class="cap">
-        <span class="cap-icon">📁</span><span>Képek a gépről</span>
+        <span class="cap-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5h6l2 2.5h10V19a.5.5 0 0 1-.5.5h-15A.5.5 0 0 1 3 19z"/></svg></span><span>Képek a gépről</span>
       </button>
       <input id="photo-input" type="file" accept="image/*" capture="environment" hidden multiple>
       <!-- capture nélkül: meglévő képek behozatalához (otthoni szerkesztés) -->
@@ -234,10 +237,10 @@
 </main>
 
 <nav id="tabbar">
-  <button class="tab active" data-screen="home"><span>🏠</span>Kezdés</button>
-  <button class="tab" data-screen="list"><span>🗂️</span>Bejárások</button>
-  <button class="tab" data-screen="session" disabled><span>📍</span>Aktív</button>
-  <button class="tab" data-screen="search"><span>🔍</span>Keresés</button>
+  <button class="tab active" data-screen="home"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5 12 3.5l8.5 7"/><path d="M5.5 9.8V20h13V9.8"/><path d="M10 20v-5.5h4V20"/></svg></span>Kezdés</button>
+  <button class="tab" data-screen="list"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5h6l2 2.5h10V19a.5.5 0 0 1-.5.5h-15A.5.5 0 0 1 3 19z"/></svg></span>Bejárások</button>
+  <button class="tab" data-screen="session" disabled><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg></span>Aktív</button>
+  <button class="tab" data-screen="search"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span>Keresés</button>
 </nav>
 
 <!-- ================================================ fotó-szerkesztő -->
