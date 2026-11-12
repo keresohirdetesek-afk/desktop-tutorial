@@ -306,6 +306,13 @@ A nagyítás **utcaszintig** elmegy akkor is, ha a kiindulás az egész ország
 szinteken már nagyítva látszanak, de a tájékozódáshoz és a pontos
 kattintáshoz elég élesek.
 
+**Kifelé is lehet menni**, nem csak a bejárást befoglaló képig: a görgő és a
+**−** gomb a teljes nyomvonal nézeténél jóval távolabbra is enged (kb.
+huszonötszörös területre). Erre akkor van szükség, ha a bejárás még rövid —
+például két berajzolt szakasz —, és látni kell a környéket, a szomszédos
+utakat, vagy egy távolabbi helyre kell elmozdulni. A **⤢ Illesztés** gomb
+bármikor visszaugrik a teljes útvonalra.
+
 A nyomvonal-szerkesztőben a dupla koppintás szándékosan nem nagyít: ott a
 koppintás jelöli ki a szakaszt és rakja le a berajzolt csúcsokat.
 

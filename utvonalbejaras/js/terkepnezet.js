@@ -5,8 +5,13 @@
 // egy ujjal húzás, dupla koppintás a nagyításhoz, asztali gépen görgő.
 // Ezért egy helyen van megírva, és minden vászon ezt használja.
 
-/** A nézet a renderTrack illesztett (teljes nyomvonalat befoglaló) képére ül rá. */
-export const MIN_ZOOM = 1;
+/**
+ * A nézet a renderTrack illesztett (teljes nyomvonalat befoglaló) képére ül
+ * rá. Az 1 az illesztett kép; 1 alatt kijjebb megyünk nála — erre akkor van
+ * szükség, ha a bejárás még rövid (vagy üres), és a környéket, a szomszédos
+ * utakat is látni kell, vagy egy távolabbi helyre akarunk mozogni.
+ */
+export const MIN_ZOOM = 0.04;
 // A nagyítás a térkép illesztésére ül rá: ha az ország látszik (otthoni
 // szerkesztés, még üres bejárás), utcaszintig több ezerszeres kell. A
 // térképcsempék 19-es szintnél megállnak, onnan már csak nagyítva látszanak.
@@ -70,7 +75,8 @@ export class MapView {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
-  isZoomed() { return this.view.k > 1.02; }
+  /** Eltértünk-e az illesztett nézettől (akár kifelé, akár befelé). */
+  isZoomed() { return this.view.k > 1.02 || this.view.k < 0.98; }
 
   reset() {
     this.view = { k: 1, tx: 0, ty: 0 };

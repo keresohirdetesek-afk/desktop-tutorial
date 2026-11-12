@@ -863,7 +863,9 @@ export function rebaseView(view, prev, next) {
   if (!view || !prev || !next) return false;
   // ha a felhasználó nem nagyított és nem mozgatott, hagyjuk, hogy a térkép
   // magától illeszkedjen az új tartalomra
-  const moved = view.k > 1.02 || Math.abs(view.tx) > 1 || Math.abs(view.ty) > 1;
+  // (kifelé nagyítva is „mozgatott” a nézet — a k 1 alatt is eltérés)
+  const moved = view.k > 1.02 || view.k < 0.98
+    || Math.abs(view.tx) > 1 || Math.abs(view.ty) > 1;
   if (!moved) return false;
   if (prev.scale === next.scale && prev.cx === next.cx && prev.cy === next.cy
       && prev.w === next.w && prev.h === next.h) return false;

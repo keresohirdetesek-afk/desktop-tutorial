@@ -2086,8 +2086,13 @@ async function clearTileCache() {
 // egy ujjal húzás, dupla koppintás a nagyításhoz, asztali gépen görgő.
 // Ezért egy helyen van megírva, és minden vászon ezt használja.
 
-/** A nézet a renderTrack illesztett (teljes nyomvonalat befoglaló) képére ül rá. */
-const MIN_ZOOM = 1;
+/**
+ * A nézet a renderTrack illesztett (teljes nyomvonalat befoglaló) képére ül
+ * rá. Az 1 az illesztett kép; 1 alatt kijjebb megyünk nála — erre akkor van
+ * szükség, ha a bejárás még rövid (vagy üres), és a környéket, a szomszédos
+ * utakat is látni kell, vagy egy távolabbi helyre akarunk mozogni.
+ */
+const MIN_ZOOM = 0.04;
 // A nagyítás a térkép illesztésére ül rá: ha az ország látszik (otthoni
 // szerkesztés, még üres bejárás), utcaszintig több ezerszeres kell. A
 // térképcsempék 19-es szintnél megállnak, onnan már csak nagyítva látszanak.
@@ -2151,7 +2156,8 @@ class MapView {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
-  isZoomed() { return this.view.k > 1.02; }
+  /** Eltértünk-e az illesztett nézettől (akár kifelé, akár befelé). */
+  isZoomed() { return this.view.k > 1.02 || this.view.k < 0.98; }
 
   reset() {
     this.view = { k: 1, tx: 0, ty: 0 };
@@ -3405,7 +3411,9 @@ function rebaseView(view, prev, next) {
   if (!view || !prev || !next) return false;
   // ha a felhasználó nem nagyított és nem mozgatott, hagyjuk, hogy a térkép
   // magától illeszkedjen az új tartalomra
-  const moved = view.k > 1.02 || Math.abs(view.tx) > 1 || Math.abs(view.ty) > 1;
+  // (kifelé nagyítva is „mozgatott” a nézet — a k 1 alatt is eltérés)
+  const moved = view.k > 1.02 || view.k < 0.98
+    || Math.abs(view.tx) > 1 || Math.abs(view.ty) > 1;
   if (!moved) return false;
   if (prev.scale === next.scale && prev.cx === next.cx && prev.cy === next.cy
       && prev.w === next.w && prev.h === next.h) return false;
