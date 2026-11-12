@@ -478,7 +478,8 @@ async function openTrackEditor() {
     items: state.items,
     drawn: state.session.drawn || [],
     onAddPoint: (at) => addPointAt(at),
-    onOpenItem: (id) => { trackEditor.close(); openViewer(id); },
+    // a szerkesztő nyitva marad az adatlap mögött
+    onOpenItem: (id) => openViewer(id),
     resolvePlace: (text) => resolvePlace(text),
     // úthálózati adat (NAP): a rajzolt pontok az útra kerülnek, és a vonal
     // az utat követi két pont között
@@ -828,7 +829,7 @@ async function annotate(itemId) {
   toast(res.dims.length ? `Mentve — ${res.dims.length} méret rögzítve.` : 'Jelölések mentve.');
 }
 
-async function recordAudio(attachToItemId = null) {
+async function recordAudio(attachToItemId = null, vissza = false) {
   if (!AudioRecorder.supported) {
     toast('Ez a böngésző nem támogatja a hangrögzítést.', 'error');
     return;
@@ -866,8 +867,13 @@ async function recordAudio(attachToItemId = null) {
       item.audio = out.blob;
       item.audioDuration = out.duration;
       await db.saveItem(item);
+      markUnsaved();
       renderItems();
-      toast('Hangjegyzet a fotóhoz csatolva.');
+      if (trackEditor && !$('#trackedit').hidden) trackEditor.draw();
+      // a térképről felvett pontnál az adatlap nyitva marad: nyissuk vissza,
+      // hogy rögtön jöhessen a következő melléklet
+      if (vissza) openViewer(item.id);
+      toast('Hangjegyzet csatolva a bejegyzéshez.');
       return;
     }
 
@@ -1138,6 +1144,48 @@ async function editSign(item) {
   toast('Mentve.');
 }
 
+/** Videó csatolása egy meglévő bejegyzéshez (nem külön elemként). */
+let attachVideoId = null;
+function attachVideoTo(itemId) {
+  attachVideoId = itemId;
+  $('#attach-video-input').click();
+}
+
+async function onAttachVideo(e) {
+  const file = (e.target.files || [])[0];
+  e.target.value = '';
+  const item = state.items.find((i) => i.id === attachVideoId);
+  attachVideoId = null;
+  if (!file || !item) return;
+
+  const mb = file.size / 1048576;
+  if (mb > 150) {
+    const ok = await modal({
+      title: 'Nagy videófájl',
+      text: `A felvétel ${mb.toFixed(0)} MB. Ez elfér, de a teljes mentés és a riport is nagy lesz. Rögzítsük?`,
+      okText: 'Mentés',
+    });
+    if (!ok) return;
+  }
+
+  toast('Videó feldolgozása…');
+  try {
+    const frame = await videoPoster(file).catch(() => null);
+    item.video = file;
+    item.videoDuration = frame ? frame.duration : null;
+    if (frame && frame.thumb && !item.thumb) item.thumb = frame.thumb;
+    await db.saveItem(item);
+    markUnsaved();
+    renderItems();
+    drawTrack();
+    if (trackEditor && !$('#trackedit').hidden) trackEditor.draw();
+    if (!$('#viewer').hidden) openViewer(item.id);
+    toast(`Videó csatolva (${mb.toFixed(1).replace('.', ',')} MB).`);
+  } catch (err) {
+    toast('A videó nem csatolható: ' + err.message, 'error');
+  }
+}
+
 /** Fotó csatolása egy meglévő bejegyzéshez (nem külön elemként). */
 let attachTargetId = null;
 function attachPhotoTo(itemId) {
@@ -1165,6 +1213,9 @@ async function onAttachPhoto(e) {
     await db.saveItem(item);
     markUnsaved();
     renderItems();
+    drawTrack();
+    if (trackEditor && !$('#trackedit').hidden) trackEditor.draw();
+    if (!$('#viewer').hidden) openViewer(item.id);   // lássa is, mit csatolt
     toast('Fotó csatolva a bejegyzéshez.');
   } catch (err) {
     toast('A fotó nem csatolható: ' + err.message, 'error');
@@ -1392,7 +1443,12 @@ async function addPointAt(at) {
   if (trackEditor) trackEditor.draw();
   toast(item.type === 'jelzes'
     ? `Jelzéskép felvéve: ${signsLabel(item)}.`
-    : 'Pont felvéve. Fotót, hangot a listából, az elem adatlapján adhat hozzá.');
+    : 'Pont felvéve.');
+
+  // Az új ponthoz rendszerint tartozik fotó, hang vagy jegyzet — ezért
+  // rögtön megnyitjuk az adatlapját, a térképszerkesztő fölött. Bezárva
+  // ugyanott folytatható a munka, ugyanabban a módban.
+  openViewer(item.id);
 }
 
 /**
@@ -1457,6 +1513,12 @@ async function roadNetwork() {
 async function pickOnMap(item) {
   if (!trackEditor) trackEditor = new TrackEditor($('#trackedit'));
   closeViewer();
+  // a kijelölés ugyanazt a szerkesztőt használja: ha épp nyitva van,
+  // előbb lezárjuk, különben a két megnyitás egymásra csúszna
+  if (!$('#trackedit').hidden) {
+    trackEditor.close();
+    await new Promise((r) => setTimeout(r, 60));
+  }
   return trackEditor.open({
     points: state.points,
     items: state.items.filter((i) => i.lat != null && i !== item),
@@ -1614,11 +1676,28 @@ async function openViewer(id) {
 
   // Útszám és km szelvény: saját doboz, mert ezen a közút felé beadott
   // anyagban minden múlik, és három különböző úton lehet megszerezni.
+  const r = item.road || {};
+  const roadReszletek = [
+    ['Út megnevezése', r.utNev],
+    ['Pályakód', r.palyakod],
+    ['Település', r.telepules],
+    ['Mérnökség', r.mernokseg],
+    ['Üzemeltető', r.uzemelteto],
+    ['Az útra vetítve', r.utLat != null ? formatCoord(r.utLat, r.utLon) : ''],
+    ['EOV (út)', r.eovY != null ? `y: ${r.eovY}, x: ${r.eovX}` : ''],
+  ].filter(([, v]) => v);
+
   const roadBox = el('div', { class: 'road-box' }, [
     el('div', { class: 'road-head' }, [
       el('span', { class: 'road-title', text: '🛣️ Útszám, km szelvény' }),
       el('span', { class: 'road-val', text: item.road ? roadLabel(item.road) : 'még nincs megadva' }),
     ]),
+    roadReszletek.length
+      ? el('div', { class: 'road-reszlet' }, roadReszletek.map(([k, v]) => el('div', { class: 'meta-row' }, [
+          el('span', { class: 'meta-key', text: k }),
+          el('span', { class: 'meta-val', text: v }),
+        ])))
+      : null,
     el('div', { class: 'road-acts' }, [
       el('button', {
         class: 'btn ghost tiny', type: 'button', text: '✏️ Beírás kézzel',
@@ -1653,7 +1732,7 @@ async function openViewer(id) {
   if (!item.audio) {
     actions.appendChild(el('button', { class: 'btn ghost small', text: '🎙️ Hangjegyzet', onclick: async () => {
       closeViewer();
-      await recordAudio(item.id);
+      await recordAudio(item.id, true);
     } }));
   }
   if (item.type === 'condition') {
@@ -1669,13 +1748,18 @@ async function openViewer(id) {
   if (!item.photo && !item.flat && item.type !== 'video') {
     actions.appendChild(el('button', {
       class: 'btn ghost small', text: '📷 Fotó csatolása',
-      onclick: () => { closeViewer(); attachPhotoTo(item.id); },
+      onclick: () => attachPhotoTo(item.id),
     }));
   }
   if (item.video) {
     actions.appendChild(el('button', {
       class: 'btn ghost small', text: '⬇️ Videó letöltése',
       onclick: () => download(item.video, `${slug(state.session?.name)}-${item.id.slice(0, 6)}.mp4`),
+    }));
+  } else {
+    actions.appendChild(el('button', {
+      class: 'btn ghost small', text: '🎬 Videó csatolása',
+      onclick: () => attachVideoTo(item.id),
     }));
   }
 
@@ -1699,8 +1783,11 @@ async function openViewer(id) {
 
 function closeViewer() {
   $('#viewer').hidden = true;
-  document.body.classList.remove('modal-open');
   viewerItem = null;
+  // ha a térképszerkesztő nyitva van alatta, az marad a nyitott felület
+  const szerkeszto = $('#trackedit') && !$('#trackedit').hidden;
+  if (!szerkeszto) document.body.classList.remove('modal-open');
+  if (szerkeszto && trackEditor) trackEditor.draw();
 }
 
 /**
@@ -1831,11 +1918,23 @@ async function pasteKeresoInto(item) {
 /** A keresőből kapott adat ráírása a bejegyzésre. */
 async function alkalmazKereso(item, data) {
   const meters = data.szelveny ? szelvenyMeters(data.szelveny) : null;
+  const regi = item.road || {};
   item.road = {
-    utszam: data.utszam || (item.road && item.road.utszam) || '',
+    utszam: data.utszam || regi.utszam || '',
     szelveny: data.szelveny || '',
     meters,
-    telepules: data.telepules || (item.road && item.road.telepules) || '',
+    telepules: data.telepules || regi.telepules || '',
+    // amit a kereső panelje ezen felül ad — a közút felé mind hasznos
+    palyakod: data.palyakod || '',
+    utNev: data.utNev || '',
+    mernokseg: data.mernokseg || '',
+    uzemelteto: data.uzemelteto || '',
+    // a panel koordinátája az útra vetített pont; a felvétel helyét nem
+    // írjuk át vele, de megtartjuk, mert a beadott anyagban ez a hivatkozás
+    utLat: data.lat != null ? data.lat : null,
+    utLon: data.lon != null ? data.lon : null,
+    eovY: data.eovY != null ? data.eovY : null,
+    eovX: data.eovX != null ? data.eovX : null,
     tavolsag: null,
     forras: 'kereso',
   };
@@ -1914,7 +2013,12 @@ async function editItemNote(item) {
   await db.saveItem(item);
   markUnsaved();
   renderItems();
-  closeViewer();
+  if (trackEditor && !$('#trackedit').hidden) {
+    openViewer(item.id);          // szerkesztés közben maradjon az adatlap
+    trackEditor.draw();
+  } else {
+    closeViewer();
+  }
   toast('Mentve.');
 }
 
@@ -2467,6 +2571,7 @@ function bind() {
   $('#attach-photo-input').addEventListener('change', onAttachPhoto);
   $('#cap-condition').addEventListener('click', addCondition);
   $('#cap-sign').addEventListener('click', addSign);
+  $('#attach-video-input').addEventListener('change', onAttachVideo);
 
   // a keresőből visszatérve felajánljuk a vágólapon lévő találatot
   window.addEventListener('focus', () => { keresoVisszateres(); });

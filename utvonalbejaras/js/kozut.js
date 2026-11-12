@@ -53,12 +53,43 @@ export const UTSZAM_KERESO = 'https://utszamkereso.kozut.hu/';
 /**
  * Az útszámkereső jobb oldali paneljéből kimásolt szöveg feldolgozása.
  * Elég a panelt kijelölni és másolni — ebből kiszedjük, ami kell.
+ *
+ * A panel egy része „felirat, alatta az érték” alakú (Út megnevezése,
+ * Mérnökség, Üzemeltető), más része egy sorban hozza a kettőt (Útszám:,
+ * Szelvény:). Mindkettőt kezeljük, és a több soros értéket (üzemeltető) a
+ * következő feliratig összefűzzük.
  */
+const KERESO_FELIRATOK = [
+  'Út megnevezése', 'Mérnökség', 'Üzemeltető', 'GPS', 'EOV', 'Út', 'Útszám',
+  'Szelvény', 'Pályakód', 'Település', 'fok', 'Bezár', 'Keresés',
+];
+
 export function parseKeresoSzoveg(text) {
-  const t = String(text || '').replace(/\s+/g, ' ');
+  const nyers = String(text || '');
+  const t = nyers.replace(/\s+/g, ' ');
+  const sorok = nyers.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out = {};
+
+  /** Egy felirat utáni érték: ugyanabban a sorban, vagy az alatta lévőkben. */
+  const ertek = (felirat) => {
+    const re = new RegExp('^' + felirat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:?\\s*', 'i');
+    const i = sorok.findIndex((l) => re.test(l));
+    if (i < 0) return '';
+    const egySorban = sorok[i].replace(re, '').trim();
+    if (egySorban) return egySorban;
+    const reszek = [];
+    for (let j = i + 1; j < sorok.length; j++) {
+      const sor = sorok[j];
+      if (KERESO_FELIRATOK.some((f) => new RegExp('^' + f, 'i').test(sor))) break;
+      reszek.push(sor);
+      if (reszek.length >= 3) break;
+    }
+    return reszek.join(' ').trim();
+  };
+
   const ut = /[ÚUÚ]tsz[áa]m\s*:?\s*([A-Za-z0-9][A-Za-z0-9./-]*)/i.exec(t);
   if (ut) out.utszam = ut[1];
+
   const sz = /Szelv[ée]ny\s*:?\s*(\d+)\s*km\s*\+\s*(\d+)\s*m/i.exec(t)
     || /(\d+)\s*km\s*\+\s*(\d+)\s*m/i.exec(t);
   if (sz) out.szelveny = `${Number(sz[1])} km + ${Number(sz[2])} m`;
@@ -66,10 +97,36 @@ export function parseKeresoSzoveg(text) {
     const plus = /\b(\d{1,3})\s*\+\s*(\d{1,3})\b/.exec(t);      // „27+387”
     if (plus) out.szelveny = `${Number(plus[1])} km + ${Number(plus[2])} m`;
   }
+
+  // pályakód a zárójeles magyarázatával együtt („0 (osztatlan útszakasz)”)
+  const palya = /P[áa]lyak[óo]d\s*:?\s*([^\n\r|·;]+)/i.exec(nyers);
+  if (palya) out.palyakod = palya[1].trim();
+
+  const nev = ertek('Út megnevezése');
+  if (nev) out.utNev = nev;
+  const mern = ertek('Mérnökség');
+  if (mern) out.mernokseg = mern;
+  const uzem = ertek('Üzemeltető');
+  if (uzem) out.uzemelteto = uzem;
+
+  // koordináták: a panel É.sz./K.h. alakban hozza
+  const lat = /[ÉE]\.?\s*sz\.?\s*:?\s*(-?\d+[.,]\d+)/i.exec(nyers);
+  const lon = /K\.?\s*h\.?\s*:?\s*(-?\d+[.,]\d+)/i.exec(nyers);
+  if (lat && lon) {
+    out.lat = Number(lat[1].replace(',', '.'));
+    out.lon = Number(lon[1].replace(',', '.'));
+  }
+  const ey = /\by\s*:\s*(\d{5,7}[.,]?\d*)/i.exec(nyers);
+  const ex = /\bx\s*:\s*(\d{5,7}[.,]?\d*)/i.exec(nyers);
+  if (ey && ex) {
+    out.eovY = Number(ey[1].replace(',', '.'));
+    out.eovX = Number(ex[1].replace(',', '.'));
+  }
+
   // A település a sor végéig tart — de ha a panel egy sorba került, a
   // következő felirat („GPS:”, „EOV:”) előtt el kell vágni, különben az is
   // belekerülne a névbe.
-  const hely = /Telep[üu]l[ée]s\s*:?\s*([^\n\r·|;]+)/i.exec(String(text || ''));
+  const hely = /Telep[üu]l[ée]s\s*:?\s*([^\n\r·|;]+)/i.exec(nyers);
   if (hely) {
     out.telepules = hely[1]
       .split(/\s+[A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű.-]*\s*:/)[0]
@@ -234,7 +291,9 @@ export class KozutDocs {
       if (it.road) {
         if (!it.kozut.utszam) it.kozut.utszam = it.road.utszam || '';
         if (!it.kozut.km) it.kozut.km = it.road.szelveny || '';
-        if (!it.kozut.telepules) it.kozut.telepules = it.road.telepules || '';
+        // a kereső nem települést, hanem útmegnevezést ad — az is többet
+        // mond a helyszínről, mint az üres mező
+        if (!it.kozut.telepules) it.kozut.telepules = it.road.telepules || it.road.utNev || '';
       }
     }
   }

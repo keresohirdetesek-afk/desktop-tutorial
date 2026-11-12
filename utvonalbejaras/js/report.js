@@ -263,6 +263,10 @@ export async function buildReport(session, points, items, opts = {}, progress = 
       ['Pozíció', formatCoord(it.lat, it.lon)],
       it.road ? ['Útszám, szelvény', [it.road.utszam, it.road.szelveny].filter(Boolean).join(' · ')
         + (it.road.telepules ? ' · ' + it.road.telepules : '')] : null,
+      it.road && it.road.utNev ? ['Út megnevezése', it.road.utNev] : null,
+      it.road && it.road.palyakod ? ['Pályakód', it.road.palyakod] : null,
+      it.road && it.road.mernokseg ? ['Mérnökség', it.road.mernokseg] : null,
+      it.road && it.road.uzemelteto ? ['Üzemeltető', it.road.uzemelteto] : null,
       it.heading != null ? ['Kameairány', `${cardinal(it.heading).name} (${formatHeading(it.heading)})`] : null,
       it.type === 'condition' ? ['Kategória', categoryLabel(it.category)] : null,
       it.type === 'condition' ? ['Állapot', conditionLabel(it.condition)] : null,

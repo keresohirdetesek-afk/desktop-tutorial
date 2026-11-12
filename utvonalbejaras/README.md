@@ -172,7 +172,7 @@ alakja is jelzi a módot (célkereszt rajzoláskor és pontfelvételkor).
 | Mit szeretne | Hogyan |
 |---|---|
 | **Odaugrani egy helyre** | *🔍 Ugrás helyre* — koordináta (`47.4979, 19.0402`), EOV (`650000, 240000`), útszám szelvénnyel (`81 27+387`) vagy **település neve** (az utóbbi kettőhöz a betöltött úthálózati adat kell) |
-| **Új pontot létrehozni** | *📍 Pont felvétele* mód → koppintás a helyére → megnevezés, típus (jegyzet/útpont, állapot/tábla vagy jelzéskép), megjegyzés. A mód **bekapcsolva marad**, így egymás után több pont is felvehető |
+| **Új pontot létrehozni** | *📍 Pont felvétele* mód → koppintás a helyére → megnevezés, típus (jegyzet/útpont, állapot/tábla vagy jelzéskép), megjegyzés. Utána **rögtön megnyílik az adatlapja**, ahol fotó, videó, hangjegyzet, megjegyzés és útszám-szelvény is hozzáadható — a térkép közben a háttérben marad, és bezárva ugyanott folytatódik a munka. A mód **bekapcsolva marad**, így egymás után több pont is felvehető |
 | **Meglévő pontot megnyitni** | koppintson rá a térképen a pöttyre — megnyílik az adatlapja (bármelyik módban) |
 | **Fotót, hangot, jegyzetet hozzáadni** | az elem adatlapján: *📷 Fotó csatolása*, *🎙️ Hangjegyzet*, *📝 Megjegyzés*, *✏️ Jelölés / méretek* |
 | **Pontot áthelyezni** | adatlap → *📍 Hely javítása* → *Kijelölés a térképen* |
@@ -480,6 +480,18 @@ marad, és kézzel pótolható.
 > szelvényt érdemes ellenőrizni az [útszámkeresővel](https://utszamkereso.kozut.hu/),
 > és a helyes értéket az adatlapon beírni — a kézzel megadott értéket az app
 > soha nem írja felül.
+
+**A kereső paneljéből minden adat átjön.** A *📋 Beillesztés a keresőből*
+(vagy a visszatéréskor felajánlott átvétel) nemcsak az útszámot és a
+szelvényt veszi át, hanem a panel többi sorát is:
+
+| Amit a kereső mutat | Hova kerül |
+|---|---|
+| Útszám, Szelvény | az elem útszám-szelvény adata, a jegyzőkönyv és a Közút-űrlapok helyszínoszlopai |
+| Pályakód | az elem adatlapja és a jegyzőkönyv |
+| Út megnevezése | adatlap, jegyzőkönyv; ha nincs település, a Közút-űrlap helyszínmezője is ezt kapja |
+| Mérnökség, Üzemeltető | adatlap és jegyzőkönyv — a közút felé gyakran ez a címzett |
+| GPS és EOV koordináta | eltárolva mint az **útra vetített** pont (a felvétel saját helyét nem írja felül) |
 
 **Úthálózati adat nélkül is megadható kézzel.** Az elem adatlapján a
 **🛣️ Útszám, szelvény** gombbal beírható az útszám, a szelvény és a
