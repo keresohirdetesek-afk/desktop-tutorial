@@ -23,8 +23,71 @@
 
 <main id="main">
 
+  <!-- ================================================== kezdőképernyő -->
+  <section class="screen" id="scr-home">
+    <div class="pad home">
+      <div class="home-hero">
+        <h2>Mit szeretne most csinálni?</h2>
+        <p>Útvonalbejárás túlméretes és túlsúlyos szállítmányhoz — tervezés, bejárás, kíséret.</p>
+      </div>
+
+      <div class="mode-grid">
+        <button id="home-plan" class="mode-card plan" type="button">
+          <span class="mode-icon" aria-hidden="true">🗺️</span>
+          <span class="mode-body">
+            <span class="mode-title">Útvonal tervezése</span>
+            <span class="mode-desc">Rajzolja meg előre a térképen. Az app az útra illeszti a nyomvonalat, és pontokat is felvihet hozzá.</span>
+            <span class="mode-tag">GPS nélkül · gépen a legkényelmesebb</span>
+          </span>
+          <span class="mode-go" aria-hidden="true">›</span>
+        </button>
+
+        <button id="home-walk" class="mode-card walk" type="button">
+          <span class="mode-icon" aria-hidden="true">📍</span>
+          <span class="mode-body">
+            <span class="mode-title">Bejárás indítása</span>
+            <span class="mode-desc">A GPS azonnal elindul, és rögzíti a nyomvonalat. Útközben fotó, hangjegyzet, jelzéskép.</span>
+            <span class="mode-tag">Telefonon, a helyszínen</span>
+          </span>
+          <span class="mode-go" aria-hidden="true">›</span>
+        </button>
+
+        <button id="home-edit" class="mode-card edit" type="button">
+          <span class="mode-icon" aria-hidden="true">✏️</span>
+          <span class="mode-body">
+            <span class="mode-title">Meglévő anyag folytatása</span>
+            <span class="mode-desc">Korábbi bejárás megnyitása és szerkesztése, vagy mentés visszatöltése a gépről.</span>
+            <span class="mode-tag">Utólagos munka</span>
+          </span>
+          <span class="mode-go" aria-hidden="true">›</span>
+        </button>
+
+        <button id="home-escort" class="mode-card escort" type="button">
+          <span class="mode-icon" aria-hidden="true">🚚</span>
+          <span class="mode-body">
+            <span class="mode-title">Kíséret indítása</span>
+            <span class="mode-desc">A kész bejárás alapján menet közben jelzi, mi következik: szűkület, tábla, jelzéskép.</span>
+            <span class="mode-tag">A szállítás napján</span>
+          </span>
+          <span class="mode-go" aria-hidden="true">›</span>
+        </button>
+      </div>
+
+      <div class="home-recent">
+        <div class="row-between">
+          <h3 class="section-title">Legutóbbi munkák</h3>
+          <button id="home-all" class="btn ghost small" type="button">Összes bejárás</button>
+        </div>
+        <div id="home-list" class="list"></div>
+        <p id="home-empty" class="muted small" hidden>
+          Még nincs mentett bejárás. Kezdje a tervezéssel vagy indítson bejárást.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <!-- ============================================ bejárások listája -->
-  <section class="screen" id="scr-list">
+  <section class="screen" id="scr-list" hidden>
     <div class="pad">
       <button id="new-session" class="btn primary block">+ Új bejárás indítása</button>
       <div class="search-row">
@@ -171,7 +234,8 @@
 </main>
 
 <nav id="tabbar">
-  <button class="tab active" data-screen="list"><span>🗂️</span>Bejárások</button>
+  <button class="tab active" data-screen="home"><span>🏠</span>Kezdés</button>
+  <button class="tab" data-screen="list"><span>🗂️</span>Bejárások</button>
   <button class="tab" data-screen="session" disabled><span>📍</span>Aktív</button>
   <button class="tab" data-screen="search"><span>🔍</span>Keresés</button>
 </nav>

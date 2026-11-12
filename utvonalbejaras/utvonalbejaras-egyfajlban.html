@@ -123,7 +123,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   left: 0; right: 0; bottom: 0;
   z-index: 25;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   backdrop-filter: blur(10px);
   border-top: 1px solid var(--border);
@@ -998,6 +998,134 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .kozut-hit { color: var(--accent); font-size: 12.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+/* ===================================================== kezdőképernyő */
+/* Négy világos választás: tervezés, bejárás, szerkesztés, kíséret. */
+
+.home { max-width: 1060px; margin: 0 auto; }
+
+.home-hero { margin: 2px 0 14px; }
+.home-hero h2 {
+  margin: 0 0 4px;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+.home-hero p { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+.mode-grid { display: grid; gap: 10px; }
+
+.mode-card {
+  --tint: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 14px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--tint) 11%, transparent), transparent 62%),
+    var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+.mode-card:hover {
+  border-color: color-mix(in srgb, var(--tint) 55%, var(--border));
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--tint) 16%, transparent);
+  transform: translateY(-1px);
+}
+.mode-card:active { transform: translateY(0); }
+
+.mode-card .mode-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  font-size: 23px;
+  line-height: 1;
+  background: color-mix(in srgb, var(--tint) 18%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--tint) 35%, transparent);
+}
+.mode-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.mode-title { font-size: 16px; font-weight: 680; letter-spacing: -.01em; }
+.mode-desc { font-size: 13px; line-height: 1.4; color: var(--muted); }
+.mode-tag {
+  margin-top: 3px;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--tint) 75%, var(--text));
+  background: color-mix(in srgb, var(--tint) 14%, transparent);
+}
+.mode-go { flex: none; font-size: 22px; color: var(--muted); }
+
+.mode-card.plan { --tint: var(--accent); }
+.mode-card.walk { --tint: var(--ok); }
+.mode-card.edit { --tint: var(--warn); }
+.mode-card.escort { --tint: #a78bfa; }
+
+.home-recent { margin-top: 20px; }
+.home-recent .section-title { margin: 0; }
+
+/* nagyobb kijelzőn két oszlop — a négy választás egy képernyőn */
+@media (min-width: 760px) {
+  .mode-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .mode-card { padding: 16px; }
+  .home-hero h2 { font-size: 24px; }
+}
+
+/* ============================================== gépes (PC) elrendezés */
+/* A telefonos felület marad egyhasábos; egéren és nagy kijelzőn viszont
+   kár lenne a helyért: a térkép mellé fér a rögzített elemek listája. */
+
+@media (min-width: 1000px) {
+  body.desktop .pad { max-width: 1100px; margin: 0 auto; }
+
+  body.desktop #scr-session {
+    display: grid;
+    grid-template-columns: minmax(380px, 44%) 1fr;
+    gap: 16px;
+    align-items: start;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 12px 12px 0;
+  }
+  body.desktop #scr-session .track-panel {
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: 64px;
+  }
+  body.desktop #track-canvas { height: min(54vh, 470px); }
+  body.desktop #scr-session .capture-bar { grid-column: 2; }
+  body.desktop #scr-session .pad { grid-column: 2; max-width: none; padding-top: 0; }
+
+  /* egérrel a 6 rögzítő gomb elfér egy sorban */
+  body.desktop .capture-bar { grid-template-columns: repeat(4, 1fr); }
+
+  /* a lábléc-sáv középen, nem a teljes szélességben */
+  body.desktop #tabbar { grid-template-columns: repeat(4, 150px); justify-content: center; }
+  body.desktop #tabbar .tab { font-size: 12px; }
+}
+
+/* Billentyűzetes használat: legyen látható, min áll a fókusz. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.btn.primary { box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 24%, transparent); }
+.btn.primary:disabled { box-shadow: none; }
+
+/* négy fül: keskeny telefonon is egy sorban maradjon */
+#tabbar .tab { padding-left: 2px; padding-right: 2px; font-size: 10.5px; }
+@media (max-width: 359px) { #tabbar .tab { font-size: 9.5px; } }
+
 </style>
 
 <header id="topbar">
@@ -1008,8 +1136,71 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 <main id="main">
 
+  <!-- ================================================== kezdőképernyő -->
+  <section class="screen" id="scr-home">
+    <div class="pad home">
+      <div class="home-hero">
+        <h2>Mit szeretne most csinálni?</h2>
+        <p>Útvonalbejárás túlméretes és túlsúlyos szállítmányhoz — tervezés, bejárás, kíséret.</p>
+      </div>
+
+      <div class="mode-grid">
+        <button id="home-plan" class="mode-card plan" type="button">
+          <span class="mode-icon" aria-hidden="true">🗺️</span>
+          <span class="mode-body">
+            <span class="mode-title">Útvonal tervezése</span>
+            <span class="mode-desc">Rajzolja meg előre a térképen. Az app az útra illeszti a nyomvonalat, és pontokat is felvihet hozzá.</span>
+            <span class="mode-tag">GPS nélkül · gépen a legkényelmesebb</span>
+          </span>
+          <span class="mode-go" aria-hidden="true">›</span>
+        </button>
+
+        <button id="home-walk" class="mode-card walk" type="button">
+          <span class="mode-icon" aria-hidden="true">📍</span>
+          <span class="mode-body">
+            <span class="mode-title">Bejárás indítása</span>
+            <span class="mode-desc">A GPS azonnal elindul, és rögzíti a nyomvonalat. Útközben fotó, hangjegyzet, jelzéskép.</span>
+            <span class="mode-tag">Telefonon, a helyszínen</span>
+          </span>
+          <span class="mode-go" aria-hidden="true">›</span>
+        </button>
+
+        <button id="home-edit" class="mode-card edit" type="button">
+          <span class="mode-icon" aria-hidden="true">✏️</span>
+          <span class="mode-body">
+            <span class="mode-title">Meglévő anyag folytatása</span>
+            <span class="mode-desc">Korábbi bejárás megnyitása és szerkesztése, vagy mentés visszatöltése a gépről.</span>
+            <span class="mode-tag">Utólagos munka</span>
+          </span>
+          <span class="mode-go" aria-hidden="true">›</span>
+        </button>
+
+        <button id="home-escort" class="mode-card escort" type="button">
+          <span class="mode-icon" aria-hidden="true">🚚</span>
+          <span class="mode-body">
+            <span class="mode-title">Kíséret indítása</span>
+            <span class="mode-desc">A kész bejárás alapján menet közben jelzi, mi következik: szűkület, tábla, jelzéskép.</span>
+            <span class="mode-tag">A szállítás napján</span>
+          </span>
+          <span class="mode-go" aria-hidden="true">›</span>
+        </button>
+      </div>
+
+      <div class="home-recent">
+        <div class="row-between">
+          <h3 class="section-title">Legutóbbi munkák</h3>
+          <button id="home-all" class="btn ghost small" type="button">Összes bejárás</button>
+        </div>
+        <div id="home-list" class="list"></div>
+        <p id="home-empty" class="muted small" hidden>
+          Még nincs mentett bejárás. Kezdje a tervezéssel vagy indítson bejárást.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <!-- ============================================ bejárások listája -->
-  <section class="screen" id="scr-list">
+  <section class="screen" id="scr-list" hidden>
     <div class="pad">
       <button id="new-session" class="btn primary block">+ Új bejárás indítása</button>
       <div class="search-row">
@@ -1156,7 +1347,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 </main>
 
 <nav id="tabbar">
-  <button class="tab active" data-screen="list"><span>🗂️</span>Bejárások</button>
+  <button class="tab active" data-screen="home"><span>🏠</span>Kezdés</button>
+  <button class="tab" data-screen="list"><span>🗂️</span>Bejárások</button>
   <button class="tab" data-screen="session" disabled><span>📍</span>Aktív</button>
   <button class="tab" data-screen="search"><span>🔍</span>Keresés</button>
 </nav>
@@ -10467,14 +10659,109 @@ function show(screen) {
   for (const s of $$('.screen')) s.hidden = s.id !== 'scr-' + screen;
   for (const t of $$('.tab')) t.classList.toggle('active', t.dataset.screen === screen);
 
-  const titles = { list: 'Útvonalbejárás', session: state.session ? state.session.name : 'Bejárás', search: 'Keresés' };
+  const titles = {
+    home: 'Útvonalbejárás',
+    list: 'Bejárások',
+    session: state.session ? state.session.name : 'Bejárás',
+    search: 'Keresés',
+  };
   $('#topbar-title').textContent = titles[screen] || 'Útvonalbejárás';
-  $('#back-btn').hidden = screen !== 'session';
+  // a kezdőképernyő a gyökér: onnan nincs hova visszalépni
+  $('#back-btn').hidden = screen === 'home';
   window.scrollTo(0, 0);
 
   if (screen === 'session') drawTrack();
   if (screen === 'search') runSearch();
   if (screen === 'list') renderSessionList();
+  if (screen === 'home') renderHome();
+}
+
+/* ------------------------------------------------- kezdőképernyő */
+
+/** Egéren és nagy kijelzőn más a kényelmes elrendezés, mint telefonon. */
+function isDesktop() {
+  try {
+    return window.matchMedia('(min-width: 1000px) and (pointer: fine)').matches;
+  } catch (_) {
+    return false;
+  }
+}
+
+function applyDeviceClass() {
+  const desktop = isDesktop();
+  document.body.classList.toggle('desktop', desktop);
+  document.body.classList.toggle('mobile', !desktop);
+  // a négy választás szövege a készülékhez igazodik: ami itt kényelmes,
+  // azt emeljük ki, a másikat pedig őszintén megjelöljük
+  const tag = (sel, text) => {
+    const n = $(sel + ' .mode-tag');
+    if (n) n.textContent = text;
+  };
+  tag('#home-plan', desktop ? 'Ezen a gépen a legkényelmesebb' : 'Megy telefonon is, gépen kényelmesebb');
+  tag('#home-walk', desktop ? 'Ehhez telefon kell, a helyszínen' : 'Telefonon, a helyszínen');
+  tag('#home-escort', desktop ? 'A szállítás napján, telefonon' : 'A szállítás napján');
+}
+
+/** A legutóbbi munkák a kezdőlapon — egy koppintás a folytatáshoz. */
+async function renderHome() {
+  applyDeviceClass();
+  const list = $('#home-list');
+  if (!list) return;
+  list.innerHTML = '';
+  let sessions = [];
+  try {
+    sessions = await db.listSessions();
+  } catch (_) { /* üres lista marad */ }
+  $('#home-empty').hidden = sessions.length !== 0;
+  for (const s of sessions.slice(0, 4)) {
+    list.appendChild(el('button', { class: 'card', type: 'button', onclick: () => openSession(s.id) }, [
+      el('div', { class: 'card-main' }, [
+        el('div', { class: 'card-title', text: s.name }),
+        el('div', { class: 'card-sub', text: formatDateTime(s.created) }),
+        el('div', { class: 'card-tags' }, [
+          el('span', { class: 'tag', text: formatDistance(s.stats?.distance || 0) }),
+        ]),
+      ]),
+      el('span', { class: 'card-chev', text: '›' }),
+    ]));
+  }
+}
+
+/**
+ * Kíséret a kezdőlapról: előbb meg kell mondani, melyik bejárás alapján
+ * megyünk — a kíséret ebből tudja, mi következik az úton.
+ */
+async function escortFromHome() {
+  const sessions = await db.listSessions();
+  if (!sessions.length) {
+    await modal({
+      title: 'Ehhez előbb bejárás kell',
+      text: 'A kíséret egy kész bejárás adataiból dolgozik: abból tudja, hol van '
+        + 'szűkület, tábla vagy jelzéskép. Tervezzen meg egy útvonalat, vagy járja be.',
+      okText: 'Értem',
+    });
+    return;
+  }
+  if (sessions.length === 1) {
+    await openSession(sessions[0].id);
+    await startEscort();
+    return;
+  }
+  const res = await modal({
+    title: 'Kíséret indítása',
+    text: 'Melyik bejárás alapján kísérjük a szállítmányt?',
+    fields: [{
+      name: 'id',
+      label: 'Bejárás',
+      type: 'select',
+      value: sessions[0].id,
+      options: sessions.map((s) => ({ value: s.id, label: `${s.name} — ${formatDateTime(s.created)}` })),
+    }],
+    okText: 'Indítás',
+  });
+  if (!res || !res.id) return;
+  await openSession(res.id);
+  await startEscort();
 }
 
 /* ------------------------------------------------- bejárások listája */
@@ -10557,15 +10844,28 @@ const vehicleFields = (v = {}) => [
   { name: 'note', label: 'Megjegyzés', type: 'textarea', value: v.note || '' },
 ];
 
-async function newSession() {
+/**
+ * Új munka létrehozása. A `mod` dönti el, mi történik utána:
+ *   'terv'  — rögtön a térképes szerkesztő nyílik (előzetes tervezés)
+ *   'gps'   — azonnal indul a nyomvonal rögzítése (bejárás a helyszínen)
+ *   egyéb   — csak megnyitjuk a bejárást
+ */
+async function newSession(mod) {
   const allowed = await canCreateSession((await db.listSessions()).length);
   if (!allowed.ok) {
     await modal({ title: allowed.title, text: allowed.message, okText: 'Értem' });
     await renderLicenceStatus();
     return;
   }
+  const cim = mod === 'terv' ? 'Új útvonalterv'
+    : mod === 'gps' ? 'Új bejárás — a GPS indul' : 'Új bejárás';
   const res = await modal({
-    title: 'Új bejárás',
+    title: cim,
+    text: mod === 'terv'
+      ? 'A szerelvény adatai később is megadhatók — elég a megnevezés, és jöhet a térkép.'
+      : mod === 'gps'
+        ? 'A létrehozás után azonnal indul a nyomvonal rögzítése.'
+        : '',
     fields: vehicleFields({ name: defaultSessionName() }),
     okText: 'Létrehozás',
   });
@@ -10579,6 +10879,15 @@ async function newSession() {
     },
   });
   await openSession(s.id);
+  if (mod === 'terv') {
+    toast('Rajzolja meg az útvonalat a térképen. A „Rajz” módban koppintva adhat hozzá pontokat.');
+    await openTrackEditor();
+    return;
+  }
+  if (mod === 'gps') {
+    await startRecording();
+    return;
+  }
   toast('Bejárás létrehozva. Indíthatja a nyomvonal rögzítését.');
 }
 
@@ -12930,9 +13239,21 @@ async function deleteSession() {
 /* ------------------------------------------------------------ indítás */
 
 function bind() {
-  $('#new-session').addEventListener('click', newSession);
+  $('#new-session').addEventListener('click', () => newSession());
   $('#list-filter').addEventListener('input', renderSessionList);
-  $('#back-btn').addEventListener('click', () => show('list'));
+  // vissza: a bejárásból a listára, a listából a kezdőképernyőre
+  $('#back-btn').addEventListener('click', () => show(state.screen === 'session' ? 'list' : 'home'));
+
+  // a kezdőképernyő négy választása
+  $('#home-plan').addEventListener('click', () => newSession('terv'));
+  $('#home-walk').addEventListener('click', () => newSession('gps'));
+  $('#home-edit').addEventListener('click', () => show('list'));
+  $('#home-escort').addEventListener('click', escortFromHome);
+  $('#home-all').addEventListener('click', () => show('list'));
+  try {
+    window.matchMedia('(min-width: 1000px) and (pointer: fine)')
+      .addEventListener('change', applyDeviceClass);
+  } catch (_) { /* régebbi böngésző: marad a betöltéskori állapot */ }
 
   for (const t of $$('.tab')) {
     t.addEventListener('click', () => { if (!t.disabled) show(t.dataset.screen); });
@@ -13069,8 +13390,9 @@ async function init() {
   // a jelzésképek a térképre képként kerülnek: töltsük be őket előre, hogy
   // az első rajzoláskor már a tábla látszódjon, ne egy üres karika
   preloadSigns().then(() => { if (state.session) drawTrack(); });
+  applyDeviceClass();
   await renderSessionList();
-  show('list');
+  show('home');
 
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persist().catch(() => {});
