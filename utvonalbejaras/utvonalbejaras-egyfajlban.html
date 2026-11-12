@@ -526,6 +526,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .road-val { font-weight: 650; font-variant-numeric: tabular-nums; }
 .road-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .road-hint { margin: 8px 0 0; font-size: 11.5px; color: var(--muted); }
+.road-hint p { margin: 6px 0 0; }
+.road-lepesek { margin: 4px 0 0; padding-left: 18px; }
+.road-lepesek li { margin: 1px 0; }
 .road-reszlet { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
 .road-reszlet .meta-row { padding: 2px 0; border: 0; }
 .road-reszlet .meta-key { font-size: 11.5px; }
@@ -12015,11 +12018,17 @@ async function openViewer(id) {
       }) : null,
     ].filter(Boolean)),
     item.lat != null
-      ? el('p', { class: 'road-hint', text: 'A keresőhöz a GPS-koordináta kerül a vágólapra ('
-          + `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`
-          + ') — a Koordinátakeresőben a Beilleszt gomb ezt várja. EOV: '
-          + formatEov(item.lat, item.lon) + '. A találatot a panelből kimásolva a '
-          + '„Beillesztés” gomb veszi át.' })
+      ? el('div', { class: 'road-hint' }, [
+          el('p', { text: `A 🔎 gomb a koordinátát (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}) `
+            + 'a vágólapra teszi, és megnyitja a keresőt. Ott három lépés:' }),
+          el('ol', { class: 'road-lepesek' }, [
+            el('li', { text: 'bal oldalon nyissa le a „Koordinátakereső” sort' }),
+            el('li', { text: '„Beilleszt”, majd „Keres”' }),
+            el('li', { text: 'a jobb oldali panelt jelölje ki és másolja ki (Ctrl+C)' }),
+          ]),
+          el('p', { text: 'Ide visszatérve magától felajánlom az átvételt. '
+            + `(EOV: ${formatEov(item.lat, item.lon)})` }),
+        ])
       : null,
   ].filter(Boolean));
   body.appendChild(roadBox);

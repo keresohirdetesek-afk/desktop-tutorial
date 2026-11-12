@@ -1714,11 +1714,17 @@ async function openViewer(id) {
       }) : null,
     ].filter(Boolean)),
     item.lat != null
-      ? el('p', { class: 'road-hint', text: 'A keresőhöz a GPS-koordináta kerül a vágólapra ('
-          + `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`
-          + ') — a Koordinátakeresőben a Beilleszt gomb ezt várja. EOV: '
-          + formatEov(item.lat, item.lon) + '. A találatot a panelből kimásolva a '
-          + '„Beillesztés” gomb veszi át.' })
+      ? el('div', { class: 'road-hint' }, [
+          el('p', { text: `A 🔎 gomb a koordinátát (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}) `
+            + 'a vágólapra teszi, és megnyitja a keresőt. Ott három lépés:' }),
+          el('ol', { class: 'road-lepesek' }, [
+            el('li', { text: 'bal oldalon nyissa le a „Koordinátakereső” sort' }),
+            el('li', { text: '„Beilleszt”, majd „Keres”' }),
+            el('li', { text: 'a jobb oldali panelt jelölje ki és másolja ki (Ctrl+C)' }),
+          ]),
+          el('p', { text: 'Ide visszatérve magától felajánlom az átvételt. '
+            + `(EOV: ${formatEov(item.lat, item.lon)})` }),
+        ])
       : null,
   ].filter(Boolean));
   body.appendChild(roadBox);
