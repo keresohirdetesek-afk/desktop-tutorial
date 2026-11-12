@@ -69,6 +69,7 @@ export class TrackEditor {
     this.sel = null;
     this.draft = null;        // éppen rajzolt szakasz
     this.selectedDrawn = null;
+    this.drawnSel = null;      // rész a berajzolt szakaszon belül
     this.mapView.reset();
     this.lastFit = null;
     this.dirty = false;
@@ -150,6 +151,13 @@ export class TrackEditor {
       this.renderPanel();
       toast('Eldobva. Kattintson az első pontra, ha újrakezdi.');
     });
+    $('#trackedit-drawnsel-del', this.root).addEventListener('click', () => this.deleteDrawnRange());
+    $('#trackedit-drawnsel-split', this.root).addEventListener('click', () => this.splitDrawn());
+    $('#trackedit-drawnsel-clear', this.root).addEventListener('click', () => {
+      this.drawnSel = null;
+      this.draw();
+      this.renderPanel();
+    });
     $('#trackedit-drawn-delete', this.root).addEventListener('click', () => this.deleteDrawn());
     $('#trackedit-drawn-rename', this.root).addEventListener('click', () => this.renameDrawn());
 
@@ -203,6 +211,7 @@ export class TrackEditor {
   renderPickPanel() {
     for (const id of ['#trackedit-drawbar', '#trackedit-normalbar', '#trackedit-modes',
       '#trackedit-selinfo', '#trackedit-sections-wrap', '#trackedit-drawn-wrap',
+      '#trackedit-drawnsel',
       '#trackedit-turnaround', '#trackedit-keys', '#trackedit-badge']) {
       const node = $(id, this.root);
       if (node) node.hidden = true;
@@ -414,7 +423,15 @@ export class TrackEditor {
     const dn = this.hit.nearestDrawn(p.x, p.y);
     const { index, distance } = this.hit.nearest(p.x, p.y);
     if (dn.distance < 26 && dn.distance < distance) {
-      this.selectedDrawn = this.selectedDrawn === dn.id ? null : dn.id;
+      // Kijelölő módban a berajzolt szakaszon belül is lehet részt kijelölni:
+      // az első koppintás az egyik vége, a második a másik. Így a fölösleges
+      // kerülő kivehető anélkül, hogy az egész szakaszt el kellene dobni.
+      if (this.mode === 'select') {
+        this.jeloldKirajzoltban(dn);
+      } else {
+        this.selectedDrawn = this.selectedDrawn === dn.id ? null : dn.id;
+        this.drawnSel = null;
+      }
       this.sel = null;
       this.draw();
       this.renderPanel();
@@ -449,6 +466,107 @@ export class TrackEditor {
   selectedPoints() {
     if (!this.sel) return [];
     return this.points.slice(this.sel.from, this.sel.to + 1);
+  }
+
+  /* ------------------- rész kijelölése egy berajzolt szakaszon belül */
+
+  /** Az első koppintás az egyik vég, a második a másik; utána a közelebbi. */
+  jeloldKirajzoltban(dn) {
+    this.selectedDrawn = dn.id;
+    const d = this.drawnSel;
+    if (!d || d.id !== dn.id) {
+      this.drawnSel = { id: dn.id, from: dn.index, to: dn.index };
+      toast('Most koppintson a kivenni kívánt rész másik végére.');
+      return;
+    }
+    if (d.from === d.to) {
+      this.drawnSel = {
+        id: dn.id,
+        from: Math.min(d.from, dn.index),
+        to: Math.max(d.from, dn.index),
+      };
+      return;
+    }
+    // kész kijelölésnél a közelebbi véget igazítjuk
+    if (Math.abs(dn.index - d.from) <= Math.abs(dn.index - d.to)) {
+      this.drawnSel = { id: d.id, from: Math.min(dn.index, d.to), to: d.to };
+    } else {
+      this.drawnSel = { id: d.id, from: d.from, to: Math.max(dn.index, d.from) };
+    }
+  }
+
+  /** A kijelölt rész pontjai — a panel és a megerősítés ebből számol. */
+  drawnSelPts() {
+    const d = this.drawnSel;
+    if (!d) return [];
+    const seg = this.drawn.find((s) => s.id === d.id);
+    return seg ? seg.pts.slice(d.from, d.to + 1) : [];
+  }
+
+  /**
+   * A kijelölt rész kivétele a berajzolt szakaszból. A két megmaradó vég
+   * összeér: ha a kivett rész középen volt, egyenes köti össze őket — ezt
+   * utána az „Úthoz illesztve” újrarajzolással lehet pontosítani.
+   */
+  async deleteDrawnRange() {
+    const d = this.drawnSel;
+    const seg = d && this.drawn.find((s) => s.id === d.id);
+    if (!seg) return;
+    const kivett = seg.pts.slice(d.from, d.to + 1);
+    const marad = seg.pts.length - kivett.length;
+    const kozepen = d.from > 0 && d.to < seg.pts.length - 1;
+
+    const ok = await modal({
+      title: 'Kijelölt rész törlése?',
+      text: `${formatDistance(trackLength(kivett))} · ${kivett.length} pont kerül ki`
+        + (marad < 2 ? '\n\nEzzel az egész berajzolt szakasz elfogy, tehát törlöm.' : '')
+        + (kozepen && marad >= 2 ? '\n\nA két megmaradó vég egyenessel ér össze.' : ''),
+      okText: 'Törlés',
+    });
+    if (!ok) return;
+
+    if (marad < 2) {
+      this.drawn = this.drawn.filter((s) => s.id !== seg.id);
+      this.selectedDrawn = null;
+    } else {
+      seg.pts = seg.pts.slice(0, d.from).concat(seg.pts.slice(d.to + 1));
+    }
+    this.drawnSel = null;
+    await this.onApply({ drawn: this.drawn });
+    this.dirty = true;
+    this.draw();
+    this.renderPanel();
+    toast(marad < 2 ? 'A berajzolt szakasz törölve.' : 'A kijelölt rész kivéve.');
+  }
+
+  /**
+   * Kettévágás: a kijelölés elejénél kettészeli a szakaszt. Így a fölösleges
+   * fele külön szakasz lesz, és egyben törölhető.
+   */
+  async splitDrawn() {
+    const d = this.drawnSel;
+    const seg = d && this.drawn.find((s) => s.id === d.id);
+    if (!seg) return;
+    const at = d.from;
+    if (at < 1 || at > seg.pts.length - 2) {
+      toast('A szakasz végén nincs mit kettévágni — koppintson beljebb.', 'error');
+      return;
+    }
+    const masodik = {
+      id: 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name: (seg.name || 'Szakasz') + ' (2)',
+      note: seg.note || '',
+      pts: seg.pts.slice(at),
+    };
+    seg.pts = seg.pts.slice(0, at + 1);
+    this.drawn.push(masodik);
+    this.drawnSel = null;
+    this.selectedDrawn = masodik.id;
+    await this.onApply({ drawn: this.drawn });
+    this.dirty = true;
+    this.draw();
+    this.renderPanel();
+    toast('Kettévágva. A két fele külön-külön törölhető.');
   }
 
   /* ------------------------------------------- kézzel berajzolt szakasz
@@ -705,6 +823,7 @@ export class TrackEditor {
       // egérrel: halvány vonal az utolsó ponttól a kurzorig
       ghost: this.mode === 'draw' && last && this.hoverPt ? { from: last, to: this.hoverPt } : null,
       selectedDrawn: this.selectedDrawn,
+      drawnSel: this.drawnSel,
       lineWidth: 5,
     };
     this.hit = renderTrack(this.canvas, this.points, this.items, opts);
@@ -747,6 +866,9 @@ export class TrackEditor {
     $('#trackedit-normalbar', this.root).hidden = mode !== 'select';
     $('#trackedit-turnaround', this.root).hidden = mode !== 'select';
     $('#trackedit-selinfo', this.root).hidden = mode !== 'select' || !this.sel;
+    $('#trackedit-drawnsel', this.root).hidden = mode !== 'select' || !this.drawnSel;
+    // a berajzolt vonalon belüli kijelölés csak a kijelölő módban él
+    if (mode !== 'select') this.drawnSel = null;
 
     const hint = $('#trackedit-hint', this.root);
     const keys = $('#trackedit-keys', this.root);
@@ -804,6 +926,24 @@ export class TrackEditor {
     }
 
     if (mode === 'select') {
+      // berajzolt szakaszon belüli kijelölés: saját gombsor
+      const dpts = this.drawnSelPts();
+      const dbox = $('#trackedit-drawnsel', this.root);
+      dbox.hidden = dpts.length === 0;
+      if (dpts.length) {
+        $('#trackedit-drawnsel-stats', this.root).textContent =
+          `${dpts.length} pont · ${formatDistance(trackLength(dpts))}`;
+        $('#trackedit-drawnsel-del', this.root).disabled = dpts.length < 1;
+        $('#trackedit-drawnsel-split', this.root).disabled = dpts.length < 1;
+        hint.hidden = false;
+        hint.textContent = this.drawnSel.from === this.drawnSel.to
+          ? `Most ${tap} a kivenni kívánt rész másik végére.`
+          : 'A pirossal jelölt rész kerül ki. A két megmaradó vég összeér.';
+        badge.hidden = false;
+        badge.innerHTML = '✂️ Szakasz kijelölése<span class="sub"> · a berajzolt vonalon</span>';
+        return;
+      }
+
       const hasSel = !!this.sel;
       for (const id of ['#trackedit-reject', '#trackedit-accept', '#trackedit-delete',
                         '#trackedit-clear-sel', '#trackedit-turnaround']) {
@@ -812,7 +952,8 @@ export class TrackEditor {
       hint.hidden = false;
       hint.textContent = hasSel
         ? 'A csúszkákkal pontosítható a két vég. Utána: elvetett, érvényes vagy törlés.'
-        : `${Tap} a nyomvonalra a szakasz elejénél, majd a végénél.`;
+        : `${Tap} a nyomvonalra — vagy a berajzolt vonalra — a kivenni kívánt `
+          + 'rész elejénél, majd a végénél.';
       badge.hidden = false;
       badge.innerHTML = '✂️ Szakasz kijelölése<span class="sub"> · a bejárt nyomvonalon</span>';
 

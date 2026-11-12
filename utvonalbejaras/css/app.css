@@ -1248,3 +1248,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .szin-info { color: var(--info); }
 .szin-accent { color: var(--accent-text); }
 .icon-btn svg { display: block; }
+
+/* Kijelölt rész a berajzolt vonalon — a törlés előtt itt látszik, mi megy el */
+.drawnsel {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+}
+.drawnsel-head { margin: 0 0 2px; font-size: 13px; font-weight: 650; }
+.drawnsel .hint { margin: 0 0 8px; }
+.drawnsel .editor-row { gap: 6px; }

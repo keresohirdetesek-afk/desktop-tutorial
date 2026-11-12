@@ -625,6 +625,18 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
       width: selected ? lineW * 1.8 : lineW,
       vertices: selected,
     });
+    // a berajzolt szakaszon belül kijelölt rész (törlésre, vágásra):
+    // pirosan, vastagon — hogy törlés előtt pontosan látszódjon, mi megy el
+    const ds = opts.drawnSel;
+    if (ds && ds.id === seg.id) {
+      const resz = seg.pts.slice(ds.from, ds.to + 1);
+      drawPoly(resz, { color: '#ef4444', width: lineW * 2.4, vertices: resz.length < 60 });
+      // a két végén karika, hogy a határ is látszódjon
+      for (const i of [ds.from, ds.to]) {
+        const v = seg.pts[i];
+        if (v) dot(ctx, project(v.lat, v.lon), 6, '#ef4444', '#ffffff');
+      }
+    }
   }
   if (draft) {
     drawPoly(draft.pts, { color: drawColor, width: lineW, dash: [2, lineW * 1.6], vertices: true });
@@ -736,14 +748,36 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   };
 
   /** A legközelebbi berajzolt szakasz-csúcs (illesztéshez, kijelöléshez). */
+  /**
+   * A koppintáshoz legközelebbi berajzolt szakasz. A távolságot a vonalra
+   * mérjük, nem a csúcsokra: sűrű vonalnál ez mindegy, ritkánál viszont
+   * nem — két távoli csúcs között félúton koppintva is találat kell legyen.
+   * A visszaadott csúcs a koppintáshoz közelebbi végpont.
+   */
   const nearestDrawn = (x, y) => {
     let best = null, bestD = Infinity;
     for (const seg of drawn) {
-      seg.pts.forEach((pt, i) => {
-        const p = project(pt.lat, pt.lon);
+      const pts = seg.pts || [];
+      if (pts.length === 1) {
+        const p = project(pts[0].lat, pts[0].lon);
         const d = Math.hypot(p.x - x, p.y - y);
-        if (d < bestD) { bestD = d; best = { id: seg.id, index: i, point: pt }; }
-      });
+        if (d < bestD) { bestD = d; best = { id: seg.id, index: 0, point: pts[0] }; }
+        continue;
+      }
+      for (let i = 1; i < pts.length; i++) {
+        const a = project(pts[i - 1].lat, pts[i - 1].lon);
+        const b = project(pts[i].lat, pts[i].lon);
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const hossz2 = dx * dx + dy * dy;
+        // vetület a szakaszra, 0..1 közé szorítva
+        const t = hossz2 ? Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / hossz2)) : 0;
+        const d = Math.hypot(a.x + dx * t - x, a.y + dy * t - y);
+        if (d < bestD) {
+          bestD = d;
+          const kozelebbi = t < 0.5 ? i - 1 : i;
+          best = { id: seg.id, index: kozelebbi, point: pts[kozelebbi] };
+        }
+      }
     }
     return best ? { ...best, distance: bestD } : { distance: Infinity };
   };
