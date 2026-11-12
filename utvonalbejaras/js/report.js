@@ -264,6 +264,7 @@ export async function buildReport(session, points, items, opts = {}, progress = 
       it.road ? ['Útszám, szelvény', [it.road.utszam, it.road.szelveny].filter(Boolean).join(' · ')
         + (it.road.telepules ? ' · ' + it.road.telepules : '')] : null,
       it.road && it.road.utNev ? ['Út megnevezése', it.road.utNev] : null,
+      it.road && it.road.nemzetkozi ? ['Nemzetközi útszám', it.road.nemzetkozi] : null,
       it.road && it.road.palyakod ? ['Pályakód', it.road.palyakod] : null,
       it.road && it.road.mernokseg ? ['Mérnökség', it.road.mernokseg] : null,
       it.road && it.road.uzemelteto ? ['Üzemeltető', it.road.uzemelteto] : null,

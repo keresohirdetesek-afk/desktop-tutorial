@@ -60,8 +60,9 @@ export const UTSZAM_KERESO = 'https://utszamkereso.kozut.hu/';
  * következő feliratig összefűzzük.
  */
 const KERESO_FELIRATOK = [
-  'Út megnevezése', 'Mérnökség', 'Üzemeltető', 'GPS', 'EOV', 'Út', 'Útszám',
-  'Szelvény', 'Pályakód', 'Település', 'fok', 'Bezár', 'Keresés',
+  'Út megnevezése', 'Nemzetközi útszám', 'Mérnökség', 'Üzemeltető', 'GPS',
+  'EOV', 'Út', 'Útszám', 'Szelvény', 'Pályakód', 'Település', 'fok',
+  'Bezár', 'Keresés',
 ];
 
 export function parseKeresoSzoveg(text) {
@@ -75,8 +76,14 @@ export function parseKeresoSzoveg(text) {
     const re = new RegExp('^' + felirat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:?\\s*', 'i');
     const i = sorok.findIndex((l) => re.test(l));
     if (i < 0) return '';
+    // a zárójeles magyarázat gyakran a következő sorba törik
+    const folytatas = (tol) => {
+      const extra = [];
+      for (let j = tol; j < sorok.length && sorok[j].startsWith('('); j++) extra.push(sorok[j]);
+      return extra;
+    };
     const egySorban = sorok[i].replace(re, '').trim();
-    if (egySorban) return egySorban;
+    if (egySorban) return [egySorban, ...folytatas(i + 1)].join(' ').trim();
     const reszek = [];
     for (let j = i + 1; j < sorok.length; j++) {
       const sor = sorok[j];
@@ -98,9 +105,10 @@ export function parseKeresoSzoveg(text) {
     if (plus) out.szelveny = `${Number(plus[1])} km + ${Number(plus[2])} m`;
   }
 
-  // pályakód a zárójeles magyarázatával együtt („0 (osztatlan útszakasz)”)
-  const palya = /P[áa]lyak[óo]d\s*:?\s*([^\n\r|·;]+)/i.exec(nyers);
-  if (palya) out.palyakod = palya[1].trim();
+  // A pályakód magyarázata a következő sorba is törhet:
+  //   „1 – osztott, jobb pálya” + „(szelvény szerinti növekvő irány)”
+  const palya = ertek('Pályakód');
+  if (palya) out.palyakod = palya.replace(/\s+/g, ' ').trim();
 
   const nev = ertek('Út megnevezése');
   if (nev) out.utNev = nev;
@@ -108,6 +116,8 @@ export function parseKeresoSzoveg(text) {
   if (mern) out.mernokseg = mern;
   const uzem = ertek('Üzemeltető');
   if (uzem) out.uzemelteto = uzem;
+  const nemzetkozi = ertek('Nemzetközi útszám');
+  if (nemzetkozi) out.nemzetkozi = nemzetkozi;
 
   // koordináták: a panel É.sz./K.h. alakban hozza
   const lat = /[ÉE]\.?\s*sz\.?\s*:?\s*(-?\d+[.,]\d+)/i.exec(nyers);

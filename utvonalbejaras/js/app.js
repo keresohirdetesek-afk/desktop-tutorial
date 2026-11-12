@@ -1679,6 +1679,7 @@ async function openViewer(id) {
   const r = item.road || {};
   const roadReszletek = [
     ['Út megnevezése', r.utNev],
+    ['Nemzetközi útszám', r.nemzetkozi],
     ['Pályakód', r.palyakod],
     ['Település', r.telepules],
     ['Mérnökség', r.mernokseg],
@@ -1713,8 +1714,10 @@ async function openViewer(id) {
       }) : null,
     ].filter(Boolean)),
     item.lat != null
-      ? el('p', { class: 'road-hint', text: 'A keresőhöz a koordináta a vágólapra kerül (EOV: '
-          + formatEov(item.lat, item.lon) + '). A találatot a panelből kimásolva a '
+      ? el('p', { class: 'road-hint', text: 'A keresőhöz a GPS-koordináta kerül a vágólapra ('
+          + `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`
+          + ') — a Koordinátakeresőben a Beilleszt gomb ezt várja. EOV: '
+          + formatEov(item.lat, item.lon) + '. A találatot a panelből kimásolva a '
           + '„Beillesztés” gomb veszi át.' })
       : null,
   ].filter(Boolean));
@@ -1847,14 +1850,16 @@ async function editRoad(item) {
 let keresoVarakozik = null;
 
 async function openKeresoFor(item) {
-  const eov = formatEov(item.lat, item.lon);
-  const copied = await toClipboard(eov);
+  // A Koordinátakereső Y/X mezői a GPS-koordinátát várják (szélesség,
+  // hosszúság) — a „Beilleszt” gomb ebben az alakban olvassa a vágólapot.
+  const gps = `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`;
+  const copied = await toClipboard(gps);
   keresoVarakozik = item.id;
   window.open(UTSZAM_KERESO, 'utszamkereso');
   toast(copied
-    ? 'EOV koordináta a vágólapon. A Koordinátakeresőbe: Beilleszt → Keres. '
+    ? `A koordináta a vágólapon (${gps}). A Koordinátakeresőben: Beilleszt → Keres. `
       + 'A találatot másolja ki, és ide visszatérve felajánlom az átvételt.'
-    : `Koordinátakereső, EOV: ${eov}`);
+    : `Koordinátakereső: ${gps}`);
 }
 
 /** Visszatértünk a keresőből — van-e a vágólapon használható találat? */
@@ -1929,6 +1934,7 @@ async function alkalmazKereso(item, data) {
     utNev: data.utNev || '',
     mernokseg: data.mernokseg || '',
     uzemelteto: data.uzemelteto || '',
+    nemzetkozi: data.nemzetkozi || '',
     // a panel koordinátája az útra vetített pont; a felvétel helyét nem
     // írjuk át vele, de megtartjuk, mert a beadott anyagban ez a hivatkozás
     utLat: data.lat != null ? data.lat : null,

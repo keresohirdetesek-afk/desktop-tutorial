@@ -4675,6 +4675,7 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
       it.road ? ['Útszám, szelvény', [it.road.utszam, it.road.szelveny].filter(Boolean).join(' · ')
         + (it.road.telepules ? ' · ' + it.road.telepules : '')] : null,
       it.road && it.road.utNev ? ['Út megnevezése', it.road.utNev] : null,
+      it.road && it.road.nemzetkozi ? ['Nemzetközi útszám', it.road.nemzetkozi] : null,
       it.road && it.road.palyakod ? ['Pályakód', it.road.palyakod] : null,
       it.road && it.road.mernokseg ? ['Mérnökség', it.road.mernokseg] : null,
       it.road && it.road.uzemelteto ? ['Üzemeltető', it.road.uzemelteto] : null,
@@ -7116,8 +7117,9 @@ const UTSZAM_KERESO = 'https://utszamkereso.kozut.hu/';
  * következő feliratig összefűzzük.
  */
 const KERESO_FELIRATOK = [
-  'Út megnevezése', 'Mérnökség', 'Üzemeltető', 'GPS', 'EOV', 'Út', 'Útszám',
-  'Szelvény', 'Pályakód', 'Település', 'fok', 'Bezár', 'Keresés',
+  'Út megnevezése', 'Nemzetközi útszám', 'Mérnökség', 'Üzemeltető', 'GPS',
+  'EOV', 'Út', 'Útszám', 'Szelvény', 'Pályakód', 'Település', 'fok',
+  'Bezár', 'Keresés',
 ];
 
 function parseKeresoSzoveg(text) {
@@ -7131,8 +7133,14 @@ function parseKeresoSzoveg(text) {
     const re = new RegExp('^' + felirat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:?\\s*', 'i');
     const i = sorok.findIndex((l) => re.test(l));
     if (i < 0) return '';
+    // a zárójeles magyarázat gyakran a következő sorba törik
+    const folytatas = (tol) => {
+      const extra = [];
+      for (let j = tol; j < sorok.length && sorok[j].startsWith('('); j++) extra.push(sorok[j]);
+      return extra;
+    };
     const egySorban = sorok[i].replace(re, '').trim();
-    if (egySorban) return egySorban;
+    if (egySorban) return [egySorban, ...folytatas(i + 1)].join(' ').trim();
     const reszek = [];
     for (let j = i + 1; j < sorok.length; j++) {
       const sor = sorok[j];
@@ -7154,9 +7162,10 @@ function parseKeresoSzoveg(text) {
     if (plus) out.szelveny = `${Number(plus[1])} km + ${Number(plus[2])} m`;
   }
 
-  // pályakód a zárójeles magyarázatával együtt („0 (osztatlan útszakasz)”)
-  const palya = /P[áa]lyak[óo]d\s*:?\s*([^\n\r|·;]+)/i.exec(nyers);
-  if (palya) out.palyakod = palya[1].trim();
+  // A pályakód magyarázata a következő sorba is törhet:
+  //   „1 – osztott, jobb pálya” + „(szelvény szerinti növekvő irány)”
+  const palya = ertek('Pályakód');
+  if (palya) out.palyakod = palya.replace(/\s+/g, ' ').trim();
 
   const nev = ertek('Út megnevezése');
   if (nev) out.utNev = nev;
@@ -7164,6 +7173,8 @@ function parseKeresoSzoveg(text) {
   if (mern) out.mernokseg = mern;
   const uzem = ertek('Üzemeltető');
   if (uzem) out.uzemelteto = uzem;
+  const nemzetkozi = ertek('Nemzetközi útszám');
+  if (nemzetkozi) out.nemzetkozi = nemzetkozi;
 
   // koordináták: a panel É.sz./K.h. alakban hozza
   const lat = /[ÉE]\.?\s*sz\.?\s*:?\s*(-?\d+[.,]\d+)/i.exec(nyers);
@@ -11969,6 +11980,7 @@ async function openViewer(id) {
   const r = item.road || {};
   const roadReszletek = [
     ['Út megnevezése', r.utNev],
+    ['Nemzetközi útszám', r.nemzetkozi],
     ['Pályakód', r.palyakod],
     ['Település', r.telepules],
     ['Mérnökség', r.mernokseg],
@@ -12003,8 +12015,10 @@ async function openViewer(id) {
       }) : null,
     ].filter(Boolean)),
     item.lat != null
-      ? el('p', { class: 'road-hint', text: 'A keresőhöz a koordináta a vágólapra kerül (EOV: '
-          + formatEov(item.lat, item.lon) + '). A találatot a panelből kimásolva a '
+      ? el('p', { class: 'road-hint', text: 'A keresőhöz a GPS-koordináta kerül a vágólapra ('
+          + `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`
+          + ') — a Koordinátakeresőben a Beilleszt gomb ezt várja. EOV: '
+          + formatEov(item.lat, item.lon) + '. A találatot a panelből kimásolva a '
           + '„Beillesztés” gomb veszi át.' })
       : null,
   ].filter(Boolean));
@@ -12137,14 +12151,16 @@ async function editRoad(item) {
 let keresoVarakozik = null;
 
 async function openKeresoFor(item) {
-  const eov = formatEov(item.lat, item.lon);
-  const copied = await toClipboard(eov);
+  // A Koordinátakereső Y/X mezői a GPS-koordinátát várják (szélesség,
+  // hosszúság) — a „Beilleszt” gomb ebben az alakban olvassa a vágólapot.
+  const gps = `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`;
+  const copied = await toClipboard(gps);
   keresoVarakozik = item.id;
   window.open(UTSZAM_KERESO, 'utszamkereso');
   toast(copied
-    ? 'EOV koordináta a vágólapon. A Koordinátakeresőbe: Beilleszt → Keres. '
+    ? `A koordináta a vágólapon (${gps}). A Koordinátakeresőben: Beilleszt → Keres. `
       + 'A találatot másolja ki, és ide visszatérve felajánlom az átvételt.'
-    : `Koordinátakereső, EOV: ${eov}`);
+    : `Koordinátakereső: ${gps}`);
 }
 
 /** Visszatértünk a keresőből — van-e a vágólapon használható találat? */
@@ -12219,6 +12235,7 @@ async function alkalmazKereso(item, data) {
     utNev: data.utNev || '',
     mernokseg: data.mernokseg || '',
     uzemelteto: data.uzemelteto || '',
+    nemzetkozi: data.nemzetkozi || '',
     // a panel koordinátája az útra vetített pont; a felvétel helyét nem
     // írjuk át vele, de megtartjuk, mert a beadott anyagban ez a hivatkozás
     utLat: data.lat != null ? data.lat : null,

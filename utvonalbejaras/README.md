@@ -488,6 +488,11 @@ marad, és kézzel pótolható.
 > és a helyes értéket az adatlapon beírni — a kézzel megadott értéket az app
 > soha nem írja felül.
 
+**A keresőbe a GPS-koordináta megy.** A *🔎 Útszámkereső* gomb a pont
+**szélesség, hosszúság** értékét teszi a vágólapra (`47.392453, 21.535665`)
+— a Koordinátakereső *Beilleszt* gombja ebben az alakban várja. Az EOV-érték
+is látszik az adatlapon, ha máshová kell.
+
 **A kereső paneljéből minden adat átjön.** A *📋 Beillesztés a keresőből*
 (vagy a visszatéréskor felajánlott átvétel) nemcsak az útszámot és a
 szelvényt veszi át, hanem a panel többi sorát is:
