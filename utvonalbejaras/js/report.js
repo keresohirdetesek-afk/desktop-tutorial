@@ -248,6 +248,7 @@ export async function buildReport(session, points, items, opts = {}, progress = 
     ['Hossz', v.length && v.length + ' m'],
     ['Szélesség', v.width && v.width + ' m'],
     ['Magasság', v.height && v.height + ' m'],
+    ['Csökkentett magasság', v.csokkHeight && v.csokkHeight + ' m'],
     ['Össztömeg', v.weight && v.weight + ' t'],
     ['Max. tengelyterhelés', v.axleLoad && v.axleLoad + ' t'],
   ].filter(([, val]) => val);

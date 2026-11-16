@@ -76,7 +76,7 @@ export async function createSession(data = {}) {
     note: data.note || '',
     // túlméretes szerelvény adatai
     vehicle: Object.assign(
-      { plate: '', length: '', width: '', height: '', weight: '', axleLoad: '' },
+      { plate: '', length: '', width: '', height: '', csokkHeight: '', weight: '', axleLoad: '' },
       data.vehicle || {}
     ),
     // összegzett nyomvonal-statisztika (a felvétel alatt frissül)

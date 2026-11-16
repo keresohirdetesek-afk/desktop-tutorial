@@ -274,6 +274,7 @@ function vehicleSummary(v) {
   if (v.length) parts.push(`H ${v.length} m`);
   if (v.width) parts.push(`Sz ${v.width} m`);
   if (v.height) parts.push(`M ${v.height} m`);
+  if (v.csokkHeight) parts.push(`M(csökk) ${v.csokkHeight} m`);
   if (v.weight) parts.push(`${v.weight} t`);
   if (v.plate) parts.push(v.plate);
   return parts.join(' · ');
@@ -294,6 +295,14 @@ const vehicleFields = (v = {}) => [
   { name: 'length', label: 'Hossz (m)', type: 'text', inputmode: 'decimal', value: v.length || '' },
   { name: 'width', label: 'Szélesség (m)', type: 'text', inputmode: 'decimal', value: v.width || '' },
   { name: 'height', label: 'Magasság (m)', type: 'text', inputmode: 'decimal', value: v.height || '' },
+  {
+    name: 'csokkHeight',
+    label: 'Csökkentett magasság (m)',
+    type: 'text',
+    inputmode: 'decimal',
+    value: v.csokkHeight || '',
+    hint: 'Ha a rakomány leengedhető — a Közút itinerén külön rovat. Ha nincs ilyen, hagyja üresen.',
+  },
   { name: 'weight', label: 'Össztömeg (t)', type: 'text', inputmode: 'decimal', value: v.weight || '' },
   { name: 'axleLoad', label: 'Max. tengelyterhelés (t)', type: 'text', inputmode: 'decimal', value: v.axleLoad || '' },
   { name: 'note', label: 'Megjegyzés', type: 'textarea', value: v.note || '' },
@@ -330,7 +339,8 @@ async function newSession(mod) {
     note: res.note,
     vehicle: {
       plate: res.plate, length: res.length, width: res.width,
-      height: res.height, weight: res.weight, axleLoad: res.axleLoad,
+      height: res.height, csokkHeight: res.csokkHeight,
+      weight: res.weight, axleLoad: res.axleLoad,
     },
   });
   await openSession(s.id);
@@ -363,7 +373,8 @@ async function editSessionData() {
   s.note = res.note;
   s.vehicle = {
     plate: res.plate, length: res.length, width: res.width,
-    height: res.height, weight: res.weight, axleLoad: res.axleLoad,
+    height: res.height, csokkHeight: res.csokkHeight,
+    weight: res.weight, axleLoad: res.axleLoad,
   };
   await db.saveSession(s);
   $('#topbar-title').textContent = s.name;

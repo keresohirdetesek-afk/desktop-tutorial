@@ -2166,7 +2166,7 @@ async function createSession(data = {}) {
     note: data.note || '',
     // túlméretes szerelvény adatai
     vehicle: Object.assign(
-      { plate: '', length: '', width: '', height: '', weight: '', axleLoad: '' },
+      { plate: '', length: '', width: '', height: '', csokkHeight: '', weight: '', axleLoad: '' },
       data.vehicle || {}
     ),
     // összegzett nyomvonal-statisztika (a felvétel alatt frissül)
@@ -5240,6 +5240,7 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
     ['Hossz', v.length && v.length + ' m'],
     ['Szélesség', v.width && v.width + ' m'],
     ['Magasság', v.height && v.height + ' m'],
+    ['Csökkentett magasság', v.csokkHeight && v.csokkHeight + ' m'],
     ['Össztömeg', v.weight && v.weight + ' t'],
     ['Max. tengelyterhelés', v.axleLoad && v.axleLoad + ' t'],
   ].filter(([, val]) => val);
@@ -6303,6 +6304,36 @@ function fillTable(tbl, rows) {
 }
 
 /** Az a bekezdés, amelynek szövege tartalmazza a keresett részletet. */
+/**
+ * „Felirat | érték” alakú táblázatsor kitöltése: megkeresi azt a cellát,
+ * amelyik pontosan a feliratot tartalmazza, és a sorban utána következő
+ * ÜRES cellába írja az értéket.
+ *
+ * Csak üresbe ír: a Közút űrlapjain a szerelvény adatai gyakran már ki
+ * vannak töltve az engedélykérelemből — azokat nem szabad felülírni.
+ */
+function fillLabelledCell(doc, label, value, filled = new Set()) {
+  if (value == null || value === '') return 0;
+  const re = new RegExp(
+    '^\\s*' + String(label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:?\\s*$', 'i');
+  let count = 0;
+  for (const tbl of tablesOf(doc)) {
+    for (const tr of rowsOf(tbl)) {
+      const cells = cellsOf(tr);
+      for (let i = 0; i < cells.length - 1; i++) {
+        const cel = cells[i + 1];
+        if (filled.has(cel)) continue;
+        if (!re.test(textOf(cells[i]))) continue;
+        if (textOf(cel).trim()) continue;          // már ki van töltve
+        setCellText(cel, String(value));
+        filled.add(cel);
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
 function findParagraph(doc, needle) {
   return findParagraphs(doc, needle)[0] || null;
 }
@@ -6343,6 +6374,60 @@ function fillDotsNear(doc, label, text, filled = new Set()) {
       }
       el = el.nextElementSibling;
     }
+  }
+  return count;
+}
+
+/** Szöveg beírása egy meglévő bekezdésbe (a régi futamok helyére). */
+function setParagraphText(p, text, opts = {}) {
+  const doc = p.ownerDocument;
+  for (const r of wTags(p, 'r')) r.remove();
+  const run = doc.createElementNS(WNS, 'w:r');
+  const pPr = wTags(p, 'pPr')[0];
+  const rPr = pPr && wTags(pPr, 'rPr')[0];
+  if (rPr) {
+    const copyRPr = rPr.cloneNode(true);
+    if (opts.plain) for (const b of wTags(copyRPr, 'b')) b.remove();
+    run.appendChild(copyRPr);
+  }
+  String(text).split('\n').forEach((line, i) => {
+    if (i) run.appendChild(doc.createElementNS(WNS, 'w:br'));
+    const t = doc.createElementNS(WNS, 'w:t');
+    t.setAttribute('xml:space', 'preserve');
+    t.textContent = line;
+    run.appendChild(t);
+  });
+  p.appendChild(run);
+  return p;
+}
+
+/**
+ * „Felirat, alatta üres hely” alakú űrlap kitöltése. A Közút itinerén a
+ * rovatok nem táblázatban vannak: a felirat egy bekezdés, alatta pedig egy
+ * üres bekezdés várja a választ. Oda írunk — így a lap elrendezése marad.
+ * Ha nincs üres hely, a felirat alá szúrunk be egy új bekezdést.
+ */
+function fillAfterLabel(doc, label, text, filled = new Set()) {
+  if (text == null || text === '') return 0;
+  let count = 0;
+  for (const p of findLeafParagraphs(doc, label)) {
+    if (filled.has(p)) continue;
+    let el = p.nextElementSibling;
+    let cel = null;
+    for (let step = 0; step < 3 && el; step++) {
+      if (el.localName === 'p') {
+        // csak a közvetlenül következő üres bekezdés a rovat helye; ha ott
+        // már a következő felirat áll, új sort szúrunk a felirat alá
+        if (!filled.has(el) && !textOf(el).trim()) cel = el;
+        break;
+      }
+      el = el.nextElementSibling;
+    }
+    if (cel) setParagraphText(cel, text, { plain: true });
+    else cel = addParagraphAfter(p, text, { plain: true });
+    filled.add(p);
+    filled.add(cel);
+    count += 1;
   }
   return count;
 }
@@ -8178,6 +8263,41 @@ class KozutDocs {
     toast(n ? `${n} mező kitöltve az úthálózatból.` : 'Nem volt mit kitölteni.');
   }
 
+  /**
+   * Vázlat a zárási tervhez: a bejáráson rögzített helyszínek, útszámmal és
+   * szelvénnyel, sorszámozva. A teendőket a bejárást végző írja hozzá — azt
+   * nem találjuk ki helyette, mert ez forgalombiztonsági kérdés.
+   */
+  zarasiVazlat() {
+    const helyszinek = this.items.filter(
+      (i) => i.lat != null && (i.type === 'condition' || i.type === 'jelzes'));
+    if (!helyszinek.length) return '';
+    const sorok = [];
+    helyszinek.forEach((it, i) => {
+      const k = it.kozut || {};
+      const hely = [k.telepules, k.utszam, k.km].filter(Boolean).join(', ')
+        || formatCoord(it.lat, it.lon);
+      sorok.push(`${i + 1}. ${hely} — ${describeForDoc(it)}`);
+      sorok.push('   Kísérő járművek mozgása, feladata: ');
+      sorok.push('   Rendőrségi jármű feladata: ');
+      sorok.push('   Keresztező forgalom megállítása, irányítása: ');
+      sorok.push('');
+    });
+    return sorok.join('\n');
+  }
+
+  insertZarasiVazlat() {
+    const vazlat = this.zarasiVazlat();
+    if (!vazlat) {
+      toast('Ehhez előbb rögzíteni kell helyszíneket (állapot vagy jelzéskép).', 'error');
+      return;
+    }
+    this.form.zarasi = (this.form.zarasi ? this.form.zarasi.replace(/\s+$/, '') + '\n\n' : '') + vazlat;
+    this.save();
+    this.render();
+    toast('Helyszínek beillesztve — a teendőket írja hozzá soronként.');
+  }
+
   renderNetwork() {
     const box = $('#kozut-net', this.root);
     box.innerHTML = '';
@@ -8278,7 +8398,15 @@ class KozutDocs {
     field('mogottes', 'Mögöttes forgalom elengedésére alkalmas helyszín', { multiline: true, rows: 2 });
     field('erkezes', 'Tervezett érkezés időpontja');
     field('cel', 'Célállomás');
-    field('zarasi', 'Zárási terv', { multiline: true, rows: 4 });
+    field('zarasi', 'Zárási terv', { multiline: true, rows: 6 });
+    form.appendChild(el('p', { class: 'hint', text:
+      'A Közút ide a kereszteződések és csomópontok zárásának gyakorlati leírását kéri: '
+      + 'a kísérő és a rendőrségi járművek mozgását, feladatukat az egyes helyszíneken, '
+      + 'és a keresztező forgalom megállításának, irányításának rendjét.' }));
+    form.appendChild(el('button', {
+      class: 'btn ghost small', type: 'button', text: '⤵ Helyszínek beillesztése a bejárásból',
+      onclick: () => this.insertZarasiVazlat(),
+    }));
     field('rendkivuli', 'Rendkívüli jegyzék — további megjegyzés', { multiline: true, rows: 2 });
 
     this.renderNetwork();
@@ -8510,6 +8638,25 @@ class KozutDocs {
     const tableWith = (needle) => tablesOf(doc).find((t) => textOf(t).includes(needle));
     let touched = 0;
 
+    // A szerelvény adatai minden űrlap fejlécében szerepelhetnek. Csak az
+    // üres rovatokat töltjük ki: amit a Közút már beírt az engedélykérelemből,
+    // azt nem írjuk felül.
+    const v = (this.session && this.session.vehicle) || {};
+    const cellaKitoltve = new Set();
+    const fejlec = [
+      ['Forgalmi rendszám', v.plate],
+      ['Rendszám', v.plate],
+      ['Hosszúság (m)', v.length],
+      ['Szélesség (m)', v.width],
+      ['Magasság (m)', v.height],
+      ['Csökk. magasság (m)', v.csokkHeight],
+      ['Csökkentett magasság (m)', v.csokkHeight],
+      ['Össztömeg (t)', v.weight],
+    ];
+    for (const [cimke, ertek] of fejlec) {
+      touched += fillLabelledCell(doc, cimke, ertek, cellaKitoltve);
+    }
+
     if (id === 'jegyzek' || id === 'reszletezo') {
       const t = tableWith('Elbontandó jelzőtábla');
       if (t) touched += fillTable(t, this.jegyzekRows());
@@ -8559,6 +8706,9 @@ class KozutDocs {
       }
     }
     if (id === 'itiner') {
+      // Az itineren a rovatok „felirat, alatta üres sor” alakúak — abba
+      // írunk, nem új bekezdést szúrunk be, hogy a lap ne csússzon szét.
+      const kitoltve = new Set();
       const pairs = [
         ['Kiinduló állomás', f.kiindulo],
         ['Indulás időpontja', f.indulas],
@@ -8567,14 +8717,15 @@ class KozutDocs {
         ['Mögöttes forgalom', f.mogottes],
         ['Tervezett érkezés', f.erkezes],
         ['Célállomás', f.cel],
-        ['Zárási terv', f.zarasi],
       ];
       for (const [label, value] of pairs) {
-        if (!value) continue;
-        for (const p of findLeafParagraphs(doc, label)) {
-          addParagraphAfter(p, value, { plain: true });
-          touched++;
-        }
+        touched += fillAfterLabel(doc, label, value, kitoltve);
+      }
+      // a zárási terv az űrlap magyarázó mondata UTÁN kezdődik
+      if (f.zarasi) {
+        const n = fillAfterLabel(doc, 'Kereszteződések, csomópontok', f.zarasi, kitoltve)
+          || fillAfterLabel(doc, 'Zárási terv', f.zarasi, kitoltve);
+        touched += n;
       }
     }
     if (id === 'rendkivuli') {
@@ -11351,6 +11502,7 @@ function vehicleSummary(v) {
   if (v.length) parts.push(`H ${v.length} m`);
   if (v.width) parts.push(`Sz ${v.width} m`);
   if (v.height) parts.push(`M ${v.height} m`);
+  if (v.csokkHeight) parts.push(`M(csökk) ${v.csokkHeight} m`);
   if (v.weight) parts.push(`${v.weight} t`);
   if (v.plate) parts.push(v.plate);
   return parts.join(' · ');
@@ -11371,6 +11523,14 @@ const vehicleFields = (v = {}) => [
   { name: 'length', label: 'Hossz (m)', type: 'text', inputmode: 'decimal', value: v.length || '' },
   { name: 'width', label: 'Szélesség (m)', type: 'text', inputmode: 'decimal', value: v.width || '' },
   { name: 'height', label: 'Magasság (m)', type: 'text', inputmode: 'decimal', value: v.height || '' },
+  {
+    name: 'csokkHeight',
+    label: 'Csökkentett magasság (m)',
+    type: 'text',
+    inputmode: 'decimal',
+    value: v.csokkHeight || '',
+    hint: 'Ha a rakomány leengedhető — a Közút itinerén külön rovat. Ha nincs ilyen, hagyja üresen.',
+  },
   { name: 'weight', label: 'Össztömeg (t)', type: 'text', inputmode: 'decimal', value: v.weight || '' },
   { name: 'axleLoad', label: 'Max. tengelyterhelés (t)', type: 'text', inputmode: 'decimal', value: v.axleLoad || '' },
   { name: 'note', label: 'Megjegyzés', type: 'textarea', value: v.note || '' },
@@ -11407,7 +11567,8 @@ async function newSession(mod) {
     note: res.note,
     vehicle: {
       plate: res.plate, length: res.length, width: res.width,
-      height: res.height, weight: res.weight, axleLoad: res.axleLoad,
+      height: res.height, csokkHeight: res.csokkHeight,
+      weight: res.weight, axleLoad: res.axleLoad,
     },
   });
   await openSession(s.id);
@@ -11440,7 +11601,8 @@ async function editSessionData() {
   s.note = res.note;
   s.vehicle = {
     plate: res.plate, length: res.length, width: res.width,
-    height: res.height, weight: res.weight, axleLoad: res.axleLoad,
+    height: res.height, csokkHeight: res.csokkHeight,
+    weight: res.weight, axleLoad: res.axleLoad,
   };
   await db.saveSession(s);
   $('#topbar-title').textContent = s.name;

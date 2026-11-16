@@ -12,6 +12,7 @@
 import {
   unzip, zipFiles, parseDocumentXml, serializeDocumentXml,
   textOf, tablesOf, fillTable, findLeafParagraphs, addParagraphAfter, fillDotsNear,
+  fillLabelledCell, fillAfterLabel,
   insertImageAfter,
 } from './docx.js';
 import { signsLabel } from './jelzes.js';
@@ -524,6 +525,41 @@ export class KozutDocs {
     toast(n ? `${n} mező kitöltve az úthálózatból.` : 'Nem volt mit kitölteni.');
   }
 
+  /**
+   * Vázlat a zárási tervhez: a bejáráson rögzített helyszínek, útszámmal és
+   * szelvénnyel, sorszámozva. A teendőket a bejárást végző írja hozzá — azt
+   * nem találjuk ki helyette, mert ez forgalombiztonsági kérdés.
+   */
+  zarasiVazlat() {
+    const helyszinek = this.items.filter(
+      (i) => i.lat != null && (i.type === 'condition' || i.type === 'jelzes'));
+    if (!helyszinek.length) return '';
+    const sorok = [];
+    helyszinek.forEach((it, i) => {
+      const k = it.kozut || {};
+      const hely = [k.telepules, k.utszam, k.km].filter(Boolean).join(', ')
+        || formatCoord(it.lat, it.lon);
+      sorok.push(`${i + 1}. ${hely} — ${describeForDoc(it)}`);
+      sorok.push('   Kísérő járművek mozgása, feladata: ');
+      sorok.push('   Rendőrségi jármű feladata: ');
+      sorok.push('   Keresztező forgalom megállítása, irányítása: ');
+      sorok.push('');
+    });
+    return sorok.join('\n');
+  }
+
+  insertZarasiVazlat() {
+    const vazlat = this.zarasiVazlat();
+    if (!vazlat) {
+      toast('Ehhez előbb rögzíteni kell helyszíneket (állapot vagy jelzéskép).', 'error');
+      return;
+    }
+    this.form.zarasi = (this.form.zarasi ? this.form.zarasi.replace(/\s+$/, '') + '\n\n' : '') + vazlat;
+    this.save();
+    this.render();
+    toast('Helyszínek beillesztve — a teendőket írja hozzá soronként.');
+  }
+
   renderNetwork() {
     const box = $('#kozut-net', this.root);
     box.innerHTML = '';
@@ -624,7 +660,15 @@ export class KozutDocs {
     field('mogottes', 'Mögöttes forgalom elengedésére alkalmas helyszín', { multiline: true, rows: 2 });
     field('erkezes', 'Tervezett érkezés időpontja');
     field('cel', 'Célállomás');
-    field('zarasi', 'Zárási terv', { multiline: true, rows: 4 });
+    field('zarasi', 'Zárási terv', { multiline: true, rows: 6 });
+    form.appendChild(el('p', { class: 'hint', text:
+      'A Közút ide a kereszteződések és csomópontok zárásának gyakorlati leírását kéri: '
+      + 'a kísérő és a rendőrségi járművek mozgását, feladatukat az egyes helyszíneken, '
+      + 'és a keresztező forgalom megállításának, irányításának rendjét.' }));
+    form.appendChild(el('button', {
+      class: 'btn ghost small', type: 'button', text: '⤵ Helyszínek beillesztése a bejárásból',
+      onclick: () => this.insertZarasiVazlat(),
+    }));
     field('rendkivuli', 'Rendkívüli jegyzék — további megjegyzés', { multiline: true, rows: 2 });
 
     this.renderNetwork();
@@ -856,6 +900,25 @@ export class KozutDocs {
     const tableWith = (needle) => tablesOf(doc).find((t) => textOf(t).includes(needle));
     let touched = 0;
 
+    // A szerelvény adatai minden űrlap fejlécében szerepelhetnek. Csak az
+    // üres rovatokat töltjük ki: amit a Közút már beírt az engedélykérelemből,
+    // azt nem írjuk felül.
+    const v = (this.session && this.session.vehicle) || {};
+    const cellaKitoltve = new Set();
+    const fejlec = [
+      ['Forgalmi rendszám', v.plate],
+      ['Rendszám', v.plate],
+      ['Hosszúság (m)', v.length],
+      ['Szélesség (m)', v.width],
+      ['Magasság (m)', v.height],
+      ['Csökk. magasság (m)', v.csokkHeight],
+      ['Csökkentett magasság (m)', v.csokkHeight],
+      ['Össztömeg (t)', v.weight],
+    ];
+    for (const [cimke, ertek] of fejlec) {
+      touched += fillLabelledCell(doc, cimke, ertek, cellaKitoltve);
+    }
+
     if (id === 'jegyzek' || id === 'reszletezo') {
       const t = tableWith('Elbontandó jelzőtábla');
       if (t) touched += fillTable(t, this.jegyzekRows());
@@ -905,6 +968,9 @@ export class KozutDocs {
       }
     }
     if (id === 'itiner') {
+      // Az itineren a rovatok „felirat, alatta üres sor” alakúak — abba
+      // írunk, nem új bekezdést szúrunk be, hogy a lap ne csússzon szét.
+      const kitoltve = new Set();
       const pairs = [
         ['Kiinduló állomás', f.kiindulo],
         ['Indulás időpontja', f.indulas],
@@ -913,14 +979,15 @@ export class KozutDocs {
         ['Mögöttes forgalom', f.mogottes],
         ['Tervezett érkezés', f.erkezes],
         ['Célállomás', f.cel],
-        ['Zárási terv', f.zarasi],
       ];
       for (const [label, value] of pairs) {
-        if (!value) continue;
-        for (const p of findLeafParagraphs(doc, label)) {
-          addParagraphAfter(p, value, { plain: true });
-          touched++;
-        }
+        touched += fillAfterLabel(doc, label, value, kitoltve);
+      }
+      // a zárási terv az űrlap magyarázó mondata UTÁN kezdődik
+      if (f.zarasi) {
+        const n = fillAfterLabel(doc, 'Kereszteződések, csomópontok', f.zarasi, kitoltve)
+          || fillAfterLabel(doc, 'Zárási terv', f.zarasi, kitoltve);
+        touched += n;
       }
     }
     if (id === 'rendkivuli') {

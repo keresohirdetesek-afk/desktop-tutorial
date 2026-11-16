@@ -261,6 +261,36 @@ export function fillTable(tbl, rows) {
 }
 
 /** Az a bekezdés, amelynek szövege tartalmazza a keresett részletet. */
+/**
+ * „Felirat | érték” alakú táblázatsor kitöltése: megkeresi azt a cellát,
+ * amelyik pontosan a feliratot tartalmazza, és a sorban utána következő
+ * ÜRES cellába írja az értéket.
+ *
+ * Csak üresbe ír: a Közút űrlapjain a szerelvény adatai gyakran már ki
+ * vannak töltve az engedélykérelemből — azokat nem szabad felülírni.
+ */
+export function fillLabelledCell(doc, label, value, filled = new Set()) {
+  if (value == null || value === '') return 0;
+  const re = new RegExp(
+    '^\\s*' + String(label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:?\\s*$', 'i');
+  let count = 0;
+  for (const tbl of tablesOf(doc)) {
+    for (const tr of rowsOf(tbl)) {
+      const cells = cellsOf(tr);
+      for (let i = 0; i < cells.length - 1; i++) {
+        const cel = cells[i + 1];
+        if (filled.has(cel)) continue;
+        if (!re.test(textOf(cells[i]))) continue;
+        if (textOf(cel).trim()) continue;          // már ki van töltve
+        setCellText(cel, String(value));
+        filled.add(cel);
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
 export function findParagraph(doc, needle) {
   return findParagraphs(doc, needle)[0] || null;
 }
@@ -301,6 +331,60 @@ export function fillDotsNear(doc, label, text, filled = new Set()) {
       }
       el = el.nextElementSibling;
     }
+  }
+  return count;
+}
+
+/** Szöveg beírása egy meglévő bekezdésbe (a régi futamok helyére). */
+export function setParagraphText(p, text, opts = {}) {
+  const doc = p.ownerDocument;
+  for (const r of wTags(p, 'r')) r.remove();
+  const run = doc.createElementNS(WNS, 'w:r');
+  const pPr = wTags(p, 'pPr')[0];
+  const rPr = pPr && wTags(pPr, 'rPr')[0];
+  if (rPr) {
+    const copyRPr = rPr.cloneNode(true);
+    if (opts.plain) for (const b of wTags(copyRPr, 'b')) b.remove();
+    run.appendChild(copyRPr);
+  }
+  String(text).split('\n').forEach((line, i) => {
+    if (i) run.appendChild(doc.createElementNS(WNS, 'w:br'));
+    const t = doc.createElementNS(WNS, 'w:t');
+    t.setAttribute('xml:space', 'preserve');
+    t.textContent = line;
+    run.appendChild(t);
+  });
+  p.appendChild(run);
+  return p;
+}
+
+/**
+ * „Felirat, alatta üres hely” alakú űrlap kitöltése. A Közút itinerén a
+ * rovatok nem táblázatban vannak: a felirat egy bekezdés, alatta pedig egy
+ * üres bekezdés várja a választ. Oda írunk — így a lap elrendezése marad.
+ * Ha nincs üres hely, a felirat alá szúrunk be egy új bekezdést.
+ */
+export function fillAfterLabel(doc, label, text, filled = new Set()) {
+  if (text == null || text === '') return 0;
+  let count = 0;
+  for (const p of findLeafParagraphs(doc, label)) {
+    if (filled.has(p)) continue;
+    let el = p.nextElementSibling;
+    let cel = null;
+    for (let step = 0; step < 3 && el; step++) {
+      if (el.localName === 'p') {
+        // csak a közvetlenül következő üres bekezdés a rovat helye; ha ott
+        // már a következő felirat áll, új sort szúrunk a felirat alá
+        if (!filled.has(el) && !textOf(el).trim()) cel = el;
+        break;
+      }
+      el = el.nextElementSibling;
+    }
+    if (cel) setParagraphText(cel, text, { plain: true });
+    else cel = addParagraphAfter(p, text, { plain: true });
+    filled.add(p);
+    filled.add(cel);
+    count += 1;
   }
   return count;
 }
