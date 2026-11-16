@@ -34,6 +34,7 @@ import { ikonos, ikonEl } from './ikonok.js';
 import { EscortMode } from './kiseres.js';
 import {
   licence, licencingConfigured, saveLicence, clearLicence, canCreateSession, reportLicence,
+  documentAccess, useCredit, creditInfo,
 } from './licenc.js';
 import { $, $$, el, toast, modal, download, formatDateTime, formatTime } from './ui.js';
 
@@ -2397,6 +2398,8 @@ async function openKozut() {
     },
     // betöltött vagy törölt úthálózat után újra kell olvasni
     onNetwork: () => { roadNet = undefined; },
+    // a kitöltött dokumentum a fizetős lépés: egy bejárás egyszer visz kreditet
+    canIssue: () => dokumentumEngedely('Közút-dokumentumok kitöltése'),
   });
 }
 
@@ -2446,6 +2449,34 @@ function escortRefresh() {
 
 /* -------------------------------------------------------------- licenc */
 
+/**
+ * Dokumentum kiállítása előtt: szabad-e, és kell-e hozzá kreditet használni.
+ * Egy bejárás egyszer visz el kreditet — az újranyomtatás ingyen van.
+ */
+async function dokumentumEngedely(mire) {
+  const s = state.session;
+  const acc = await documentAccess(s ? s.id : null);
+  if (!acc.ok) {
+    await modal({ title: acc.title, text: acc.message, okText: 'Értem' });
+    return false;
+  }
+  if (acc.mode === 'credit') {
+    const ok = await modal({
+      title: 'Ez 1 kreditet használ fel',
+      text: `${mire}\n\nEhhez a bejáráshoz most vonódik le egy kredit, utána `
+        + `${acc.left - 1} marad. Ugyanennek a bejárásnak a dokumentumai később `
+        + 'már ingyen, újra kiállíthatók.',
+      okText: 'Rendben',
+      cancelText: 'Mégse',
+    });
+    if (!ok) return false;
+    const info = await useCredit(s.id);
+    await renderLicenceStatus();
+    if (info) toast(`Felhasználva 1 kredit — maradt ${info.left}.`);
+  }
+  return true;
+}
+
 async function renderLicenceStatus() {
   const box = $('#licence-status');
   if (!box) return;
@@ -2457,10 +2488,12 @@ async function renderLicenceStatus() {
 
   if (l.status === 'valid') {
     const soon = l.daysLeft != null && l.daysLeft <= 30;
-    if (soon) box.classList.add('warn');
+    const k = await creditInfo();
+    if (soon || (k && k.left <= 1)) box.classList.add('warn');
+    const kredit = k ? ` — ${k.left}/${k.total} kredit maradt` : '';
     box.textContent = soon
-      ? `⚠️ ${l.company} — a licenc ${l.daysLeft} nap múlva lejár (${l.expiry}). Megújítás`
-      : `✓ Licencelve: ${l.company} (érvényes ${l.expiry}-ig)`;
+      ? `⚠️ ${l.company} — a licenc ${l.daysLeft} nap múlva lejár (${l.expiry})${kredit}. Megújítás`
+      : `✓ Licencelve: ${l.company} (érvényes ${l.expiry}-ig)${kredit}`;
     return;
   }
   if (l.status === 'expired') {
@@ -2625,6 +2658,7 @@ async function exportHTML() {
     okText: 'Riport készítése',
   });
   if (!res) return;
+  if (!await dokumentumEngedely('Jegyzőkönyv (riport) készítése')) return;
 
   try {
     const html = await buildReport(

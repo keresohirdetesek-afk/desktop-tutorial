@@ -9,8 +9,12 @@
 //       beíródik az alkalmazásba (js/licenc-kulcs.js).
 //
 //   node eszkozok/licenc.mjs kiad --ceg "Példa Kft." --lejarat 2027-12-31
-//       Kiad egy licenckulcsot. Ezt kapja meg az ügyfél, és ezt illeszti be
-//       az alkalmazás Licenc mezőjébe.
+//       Időalapú kulcs: a lejáratig korlátlan dokumentumkiállítás.
+//
+//   node eszkozok/licenc.mjs kiad --ceg "Példa Kft." --lejarat 2027-12-31 --kredit 10
+//       Alkalmankénti kulcs: 10 bejárás dokumentációja állítható ki vele.
+//       Egy bejárás egyszer visz el kreditet, az újranyomtatás ingyen van.
+//       A lejárat ilyenkor azt mondja meg, meddig használhatók fel.
 //
 //   node eszkozok/licenc.mjs ellenoriz "UB1.…"
 //       Megmutatja, mit tartalmaz egy kulcs, és érvényes-e az aláírása.
@@ -91,6 +95,12 @@ function kiad() {
     k: new Date().toISOString().slice(0, 10),
     id: crypto.randomUUID().slice(0, 8),
   };
+  const kredit = arg('kredit');
+  if (kredit !== null) {
+    const n = Number(kredit);
+    if (!Number.isInteger(n) || n < 1) die('a --kredit egész szám legyen, legalább 1');
+    payload.d = n;
+  }
   const note = arg('megjegyzes');
   if (note) payload.m = note;
 
@@ -101,7 +111,9 @@ function kiad() {
   });
 
   const licence = `UB1.${b64url(data)}.${b64url(sig)}`;
-  console.log(`\nLicenc — ${ceg}, érvényes ${lejarat}-ig (azonosító: ${payload.id})\n`);
+  console.log(`\nLicenc — ${ceg}, érvényes ${lejarat}-ig`
+    + (payload.d ? `, ${payload.d} kredit` : ', korlátlan')
+    + ` (azonosító: ${payload.id})\n`);
   console.log(licence);
   console.log('\nEzt kell beilleszteni az alkalmazásban: Bejárások → Licenc megadása.');
 }
@@ -128,6 +140,7 @@ function ellenoriz() {
   console.log('Cég:      ' + data.c);
   console.log('Lejárat:  ' + data.e + (data.e < new Date().toISOString().slice(0, 10) ? '  (LEJÁRT)' : ''));
   console.log('Kiadva:   ' + data.k);
+  console.log('Kreditek: ' + (data.d ? data.d + ' bejárás' : 'korlátlan a lejáratig'));
   if (data.m) console.log('Megjegyzés: ' + data.m);
   console.log('Aláírás:  ' + (ok ? 'érvényes' : 'ÉRVÉNYTELEN'));
   if (!ok) process.exit(1);

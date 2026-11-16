@@ -122,6 +122,9 @@ export async function licence() {
     company: res.data.c,
     expiry,
     issued: res.data.k,
+    issuedId: res.data.id || 'nincs',
+    // alkalmankénti vásárlásnál ennyi bejárás dokumentációja áll ki vele
+    credits: Number(res.data.d) > 0 ? Number(res.data.d) : 0,
     note: res.data.m,
     daysLeft,
   };
@@ -151,6 +154,99 @@ export async function canCreateSession(existingCount) {
     };
   }
   return { ok: true };
+}
+
+/* ----------------------------------------------------------- kreditek
+
+Alkalmankénti vásárlás: a kulcs `d` mezője megmondja, hány bejárás
+dokumentációja állítható ki vele. Egy bejárás egyszer visz el kreditet,
+akárhányszor készül belőle riport vagy Közút-dokumentum — a javítás,
+újranyomtatás nem kerül újra pénzbe.
+
+Ha a kulcsban nincs `d`, akkor időalapú (havi/éves) a licenc: a lejáratig
+korlátlan. A felhasznált kreditek nyilvántartása a készüléken van, tehát
+nem feltörhetetlen; a védelem itt is a névre szólóság és a vízjel.      */
+
+const USED_KEY = 'licenc-fizetett';
+
+function usedMap() {
+  try {
+    return JSON.parse(localStorage.getItem(USED_KEY) || '{}') || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function usedIds(keyId) {
+  const m = usedMap();
+  return Array.isArray(m[keyId]) ? m[keyId] : [];
+}
+
+/** Hány kredit van a kulcson, mennyi fogyott, mennyi maradt. */
+export async function creditInfo() {
+  const l = await licence();
+  if (l.status !== 'valid' || !l.credits) return null;
+  const used = usedIds(l.issuedId).length;
+  return { total: l.credits, used, left: Math.max(0, l.credits - used) };
+}
+
+/**
+ * Kiállítható-e dokumentum ehhez a bejáráshoz?
+ * @returns {Promise<{ok:boolean, mode:string, left?:number, title?:string, message?:string}>}
+ *   mode: 'unconfigured' | 'trial' | 'unlimited' | 'already' | 'credit' | 'none'
+ */
+export async function documentAccess(sessionId) {
+  const l = await licence();
+  if (l.status === 'unconfigured') return { ok: true, mode: 'unconfigured' };
+
+  if (l.status === 'none') {
+    // nincs kulcs: kiállítható, de „PRÓBAVERZIÓ” vízjellel
+    return { ok: true, mode: 'trial' };
+  }
+  if (l.status === 'expired') {
+    return {
+      ok: false,
+      mode: 'none',
+      title: 'Lejárt licenc',
+      message: `A(z) ${l.company} licence ${l.expiry}-án lejárt, ezért hivatalos dokumentum `
+        + 'nem állítható ki. A bejárás adatai megmaradnak és kimenthetők. '
+        + 'A folytatáshoz kérjen új kulcsot.',
+    };
+  }
+
+  if (!l.credits) return { ok: true, mode: 'unlimited' };
+
+  if (sessionId && usedIds(l.issuedId).includes(sessionId)) {
+    // ezt a bejárást már kifizették — újranyomtatás ingyen van
+    const info = await creditInfo();
+    return { ok: true, mode: 'already', left: info ? info.left : 0 };
+  }
+
+  const info = await creditInfo();
+  if (!info || info.left <= 0) {
+    return {
+      ok: false,
+      mode: 'none',
+      title: 'Elfogytak a kreditek',
+      message: `A(z) ${l.company} kulcsán mind a(z) ${info ? info.total : 0} kredit elfogyott. `
+        + 'A korábban kifizetett bejárások dokumentumai továbbra is kiállíthatók. '
+        + 'Új kreditekhez kérjen új kulcsot.',
+    };
+  }
+  return { ok: true, mode: 'credit', left: info.left };
+}
+
+/** Kredit felhasználása erre a bejárásra. Ugyanarra többször nem von le. */
+export async function useCredit(sessionId) {
+  const l = await licence();
+  if (!sessionId || l.status !== 'valid' || !l.credits) return null;
+  const m = usedMap();
+  const lista = Array.isArray(m[l.issuedId]) ? m[l.issuedId] : [];
+  if (lista.includes(sessionId)) return await creditInfo();
+  lista.push(sessionId);
+  m[l.issuedId] = lista;
+  try { localStorage.setItem(USED_KEY, JSON.stringify(m)); } catch (_) {}
+  return await creditInfo();
 }
 
 /** A jegyzőkönyv fejléce és vízjele a licencállapot szerint. */

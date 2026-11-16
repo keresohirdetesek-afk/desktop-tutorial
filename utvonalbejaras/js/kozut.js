@@ -249,7 +249,7 @@ export class KozutDocs {
     });
   }
 
-  async open({ session, points, items, onSave, onNetwork }) {
+  async open({ session, points, items, onSave, onNetwork, canIssue }) {
     this.session = session;
     this.points = points;
     this.items = items;
@@ -257,6 +257,8 @@ export class KozutDocs {
     // az app a betöltött úthálózatot gyorsítótárazza — szólni kell neki,
     // ha változott, különben az új pontok nem kapnának szelvényt
     this.onNetwork = onNetwork;
+    // a kitöltés előtti engedélykérés (licenc, kredit) — ha nincs, szabad az út
+    this.canIssue = canIssue;
     this.form = Object.assign({
       nevek: '',
       datum: dateHu(session.created),
@@ -967,6 +969,7 @@ export class KozutDocs {
 
   /** Egy dokumentum kitöltése és letöltése. */
   async fillOne(d) {
+    if (this.canIssue && !await this.canIssue()) return false;
     this.save();
     try {
       const files = await unzip(await d.blob.arrayBuffer());
@@ -992,6 +995,7 @@ export class KozutDocs {
   }
 
   async fillAll() {
+    if (this.canIssue && !await this.canIssue()) return;
     if (!this.docs.length) {
       toast('Előbb töltse be a Közúttól kapott .docx fájlokat.', 'error');
       return;
