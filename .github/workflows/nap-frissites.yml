@@ -1,27 +1,40 @@
-# Az országos szelvényadat heti frissítése.
+# Az országos szelvényadat frissítése.
 #
-# A NAP (napportal.kozut.hu) statikus adatcsomagjai hetente frissülnek. Ez a
-# munkafolyamat letölti a szelvényjelek adatcsomagot, átalakítja az app
-# tömör formátumára, és ha változott, be is commitolja. Innentől minden
-# felhasználó a következő oldalfrissítéskor megkapja — nincs letöltés,
-# nincs feltöltés.
+# A NAP (napportal.kozut.hu) statikus adatcsomagjai hetente frissülnek. Az
+# app a `utvonalbejaras/adatok/szelvenyjelek.json` állományból dolgozik —
+# ez a munkafolyamat állítja elő. A felhasználóknak így semmit nem kell
+# letölteniük vagy betölteniük.
 #
-# EGYSZERI BEÁLLÍTÁS
+# HÁROM MÓDON INDULHAT
 #
-#   Settings → Secrets and variables → Actions → New repository secret
+# 1. HETENTE MAGÁTÓL — ehhez kell egy közvetlen letöltési cím:
 #
-#     NAP_SZELVENY_URL   a szelvényjelek adatcsomag letöltési címe
-#                        (a NAP-portálon, feliratkozás után jelenik meg)
+#      Settings → Secrets and variables → Actions → New repository secret
+#        NAP_SZELVENY_URL   a szelvényjelek adatcsomag letöltési címe
+#        NAP_FEJLEC         (ha kell) pl. "Authorization: Bearer ..."
 #
-#   Ha a letöltéshez fejléc is kell (token, süti), vegyük fel ezt is:
+#    A portál oldalai (…/#/configuration/data-provider/profile/91)
+#    bejelentkezést kérnek, és nem fájlra mutatnak. A valódi letöltési cím
+#    a feliratkozás után jelenik meg: azon jobb gomb → „Hivatkozás címének
+#    másolása”. Ha az nem nyilvános, hagyjuk üresen a titkot, és marad a
+#    2. vagy a 3. mód.
 #
-#     NAP_FEJLEC         pl. "Authorization: Bearer ..." vagy "Cookie: ..."
+# 2. KÉZI FELTÖLTÉSSEL (bejelentkezés nélkül nem megy másképp):
 #
-# A cím lehet .zip (benne .shp + .dbf), .shp, vagy .geojson.
+#    Töltsd le a portálról a szelvényjelek csomagot, és tedd be ide a
+#    tárolóba ZIP-ként (a .shp és a .dbf legyen benne):
+#
+#      utvonalbejaras/nap-nyers/szelvenyjelek.zip
+#
+#    A GitHub webes felületén is megy: Add file → Upload files. A ZIP pár
+#    száz kilobájt. Feltöltés után ez a munkafolyamat magától lefut,
+#    átalakítja, és frissíti az app adatát.
+#
+# 3. KÉZZEL INDÍTVA, egy beírt címmel: Actions → ez a munkafolyamat →
+#    Run workflow → a „cim” mezőbe beillesztve a letöltési link.
 #
 # Az adat a Nemzeti Adathozzáférési Pont (NAP) szolgáltatása, CC BY 4.0
-# licenc alatt. A forrásmegjelölés az alkalmazásban és a jegyzőkönyvekben
-# szerepel — ezt a licenc megköveteli.
+# licenc alatt. A forrásmegjelölés az appban és a jegyzőkönyvekben szerepel.
 
 name: NAP szelvényadat frissítése
 
@@ -29,7 +42,16 @@ on:
   schedule:
     # hetente egyszer, kedd hajnalban (a NAP heti frissítése után)
     - cron: '17 3 * * 2'
+  push:
+    branches: [main]
+    paths:
+      - 'utvonalbejaras/nap-nyers/**'
   workflow_dispatch:
+    inputs:
+      cim:
+        description: 'Letöltési cím (ha üres, a NAP_SZELVENY_URL titkot használja)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -44,58 +66,68 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Van-e beállítva letöltési cím
-        id: ellenorzes
+      - name: Forrás kiválasztása
+        id: forras
         env:
-          CIM: ${{ secrets.NAP_SZELVENY_URL }}
+          CIM_INPUT: ${{ github.event.inputs.cim }}
+          CIM_SECRET: ${{ secrets.NAP_SZELVENY_URL }}
         run: |
-          if [ -z "$CIM" ]; then
-            echo "A NAP_SZELVENY_URL titok nincs beállítva — a frissítés kimarad."
-            echo "fut=nem" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          CIM="${CIM_INPUT:-$CIM_SECRET}"
+          if [ -n "$CIM" ]; then
+            echo "mod=letoltes" >> "$GITHUB_OUTPUT"
+            echo "cim=$CIM" >> "$GITHUB_OUTPUT"
+          elif ls utvonalbejaras/nap-nyers/* >/dev/null 2>&1; then
+            echo "mod=helyi" >> "$GITHUB_OUTPUT"
           else
-            echo "fut=igen" >> "$GITHUB_OUTPUT"
+            echo "Nincs letöltési cím és nincs feltöltött csomag — kimarad."
+            echo "mod=nincs" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Letöltés
-        if: steps.ellenorzes.outputs.fut == 'igen'
+        if: steps.forras.outputs.mod == 'letoltes'
         env:
-          CIM: ${{ secrets.NAP_SZELVENY_URL }}
+          CIM: ${{ steps.forras.outputs.cim }}
           FEJLEC: ${{ secrets.NAP_FEJLEC }}
         run: |
           set -euo pipefail
-          mkdir -p letoltes
+          mkdir -p munka
           if [ -n "${FEJLEC:-}" ]; then
-            curl -fsSL -H "$FEJLEC" -o letoltes/csomag "$CIM"
+            curl -fsSL -H "$FEJLEC" -o munka/csomag "$CIM"
           else
-            curl -fsSL -o letoltes/csomag "$CIM"
+            curl -fsSL -o munka/csomag "$CIM"
           fi
-          ls -la letoltes
 
-      - name: Kicsomagolás és átalakítás
-        if: steps.ellenorzes.outputs.fut == 'igen'
+      - name: Feltöltött csomag átvétele
+        if: steps.forras.outputs.mod == 'helyi'
         run: |
           set -euo pipefail
-          cd letoltes
-          # a fájl típusát a tartalma mondja meg, nem a neve
-          TIPUS=$(file -b --mime-type csomag || echo ismeretlen)
-          echo "típus: $TIPUS"
-          case "$TIPUS" in
-            application/zip) unzip -o csomag ;;
-            *) cp csomag adat.bin ;;
-          esac
+          mkdir -p munka
+          cp utvonalbejaras/nap-nyers/* munka/
+          ls -la munka
+
+      - name: Átalakítás
+        if: steps.forras.outputs.mod != 'nincs'
+        run: |
+          set -euo pipefail
+          cd munka
+          for f in *; do
+            if [ "$(file -b --mime-type "$f")" = "application/zip" ]; then
+              unzip -o "$f"
+            fi
+          done
           BE=$(ls *.shp 2>/dev/null | head -1 || true)
+          [ -n "$BE" ] || BE=$(ls *.geojson *.json 2>/dev/null | head -1 || true)
           if [ -z "$BE" ]; then
-            BE=$(ls *.geojson *.json 2>/dev/null | head -1 || true)
-          fi
-          if [ -z "$BE" ]; then
-            echo "A letöltött csomagban nincs .shp és nincs GeoJSON." >&2
+            echo "A csomagban nincs .shp és nincs GeoJSON." >&2
+            ls -la
             exit 1
           fi
           cd ..
-          node utvonalbejaras/eszkozok/nap-szelvenyek.mjs "letoltes/$BE"
+          node utvonalbejaras/eszkozok/nap-szelvenyek.mjs "munka/$BE"
 
       - name: Commit, ha változott
-        if: steps.ellenorzes.outputs.fut == 'igen'
+        if: steps.forras.outputs.mod != 'nincs'
         run: |
           set -euo pipefail
           if git diff --quiet -- utvonalbejaras/adatok/szelvenyjelek.json; then
