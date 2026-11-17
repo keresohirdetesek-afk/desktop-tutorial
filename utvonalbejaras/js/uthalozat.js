@@ -12,11 +12,12 @@
 
 import { eovToWgs84 } from './eov.js';
 import { unzip } from './docx.js';
+import { shapefileToGeoJson, readShp } from './shapefile.js';
 
 /** Mezőnév-tippek szerepenként (ékezet és elválasztók nélkül hasonlítunk). */
 const FIELD_HINTS = {
-  utszam: ['utszam', 'utszama', 'utszamozas', 'utjel', 'jel', 'szam', 'ref', 'road', 'roadnumber', 'roadref', 'kozutszam'],
-  kmKezd: ['kezdoszelveny', 'kezdoszelv', 'szelvenykezd', 'kmkezd', 'kezdokm', 'kmtol', 'fromkm', 'kmfrom', 'kezdo', 'start'],
+  utszam: ['kszam', 'utszam', 'utszama', 'utszamozas', 'utjel', 'jel', 'szam', 'ref', 'road', 'roadnumber', 'roadref', 'kozutszam'],
+  kmKezd: ['kmjel', 'kezdoszelveny', 'kezdoszelv', 'szelvenykezd', 'kmkezd', 'kezdokm', 'kmtol', 'fromkm', 'kmfrom', 'kezdo', 'start'],
   kmVeg: ['vegszelveny', 'vegszelv', 'szelvenyveg', 'kmveg', 'vegkm', 'kmig', 'tokm', 'kmto', 'veg', 'end'],
   telepules: ['telepules', 'telepulesnev', 'helyseg', 'varos', 'kozigegyseg', 'settlement', 'city', 'town'],
 };
@@ -120,16 +121,46 @@ function projectToSegment(lat, lon, aLat, aLon, bLat, bLon) {
 const isZip = (buf) => buf.byteLength > 4 && new Uint8Array(buf, 0, 2)[0] === 0x50
   && new Uint8Array(buf, 0, 2)[1] === 0x4b;
 
-/** GeoJSON kinyerése: sima fájl vagy ZIP, amiben benne van. */
+/**
+ * GeoJSON kinyerése. Lehet sima fájl, ZIP (benne GeoJSON vagy shapefile),
+ * vagy több kijelölt fájl: a NAP letöltése .shp + .dbf + .prj párosban jön.
+ */
 async function readGeoJson(file) {
+  // több fájl egyszerre (shapefile: .shp és .dbf)
+  if (Array.isArray(file)) {
+    const shp = file.find((f) => /\.shp$/i.test(f.name));
+    if (!shp) {
+      const egy = file.find((f) => /\.(geojson|json|zip)$/i.test(f.name));
+      if (!egy) throw new Error('a kijelölt fájlok között nincs .shp vagy GeoJSON');
+      return readGeoJson(egy);
+    }
+    const dbf = file.find((f) => /\.dbf$/i.test(f.name));
+    if (!dbf) {
+      throw new Error('a .shp mellé a .dbf fájl is kell — a szelvény és az '
+        + 'útszám abban van. Jelölje ki mindkettőt.');
+    }
+    return shapefileToGeoJson(await shp.arrayBuffer(), await dbf.arrayBuffer());
+  }
+
   const buf = await file.arrayBuffer();
   if (isZip(buf)) {
     const parts = await unzip(buf);
-    const hit = parts.find((p) => /\.(geojson|json)$/i.test(p.name));
-    if (!hit) {
-      throw new Error('a ZIP-ben nincs GeoJSON (a Shape formátumot az app nem olvassa)');
+    const geo = parts.find((p) => /\.(geojson|json)$/i.test(p.name));
+    if (geo) return JSON.parse(new TextDecoder().decode(geo.data));
+    const shp = parts.find((p) => /\.shp$/i.test(p.name));
+    const dbf = parts.find((p) => /\.dbf$/i.test(p.name));
+    if (shp && dbf) {
+      return shapefileToGeoJson(
+        shp.data.buffer.slice(shp.data.byteOffset, shp.data.byteOffset + shp.data.byteLength),
+        dbf.data.buffer.slice(dbf.data.byteOffset, dbf.data.byteOffset + dbf.data.byteLength));
     }
-    return JSON.parse(new TextDecoder().decode(hit.data));
+    throw new Error('a ZIP-ben nincs sem GeoJSON, sem .shp + .dbf páros');
+  }
+  // sima .shp fájl, .dbf nélkül: a geometria megvan, az adatok nem
+  if (buf.byteLength > 100 && new DataView(buf).getUint32(0, false) === 9994) {
+    readShp(buf);           // hogy beszédes hibát adjon, ha nem támogatott típus
+    throw new Error('a .shp mellé a .dbf fájl is kell — az útszám és a szelvény '
+      + 'abban van. Jelölje ki mindkettőt, vagy töltse be a ZIP-et.');
   }
   return JSON.parse(new TextDecoder().decode(buf));
 }
@@ -147,14 +178,85 @@ function looksLikeEov(c) {
  * @param {object} [fields]  mezőhozzárendelés; ha nincs, az app tippel
  * @param {(msg: string) => void} [progress]
  */
+/**
+ * Szelvénykövek pontrétegéből vonalak. A NAP „közúti szelvénykövek” rétege
+ * nem vonalas: kilométerenként egy-egy pont, útszámmal, pályakóddal és a
+ * kilométer számával. Ezeket útszámonként és pályakódonként sorba fűzzük —
+ * így a kész vonalas feldolgozás tud velük dolgozni, és két szelvénykő
+ * között arányosan osztja szét a métereket.
+ *
+ * Ahol a számozásban nagyobb hézag van (külön szakasz, hiányzó kő), ott új
+ * vonal kezdődik, hogy ne húzzunk vonalat két távoli pont közé.
+ */
+function szelvenykovekbolVonalak(features, map, pkodMezo) {
+  const utMezo = map.utszam;
+  const kmMezo = map.kmKezd;
+  const csoportok = new Map();
+
+  for (const f of features) {
+    const g = f.geometry;
+    if (!g || g.type !== 'Point' || !Array.isArray(g.coordinates)) continue;
+    const pr = f.properties || {};
+    const ut = String(pr[utMezo] == null ? '' : pr[utMezo]).trim();
+    const km = Number(String(pr[kmMezo] == null ? '' : pr[kmMezo]).replace(',', '.'));
+    if (!ut || !isFinite(km)) continue;
+    const pk = pkodMezo ? String(pr[pkodMezo] == null ? '' : pr[pkodMezo]).trim() : '';
+    const kulcs = ut + '\u0000' + pk;
+    let arr = csoportok.get(kulcs);
+    if (!arr) { arr = []; csoportok.set(kulcs, arr); }
+    arr.push({ km, c: g.coordinates, pr, ut });
+  }
+
+  const out = [];
+  for (const arr of csoportok.values()) {
+    arr.sort((a, b) => a.km - b.km);
+    let futam = [];
+    const zar = () => {
+      if (futam.length >= 2) {
+        out.push({
+          type: 'Feature',
+          properties: Object.assign({}, futam[0].pr, {
+            [utMezo]: futam[0].ut,
+            __kmKezd: futam[0].km,
+            __kmVeg: futam[futam.length - 1].km,
+          }),
+          geometry: { type: 'LineString', coordinates: futam.map((p) => p.c) },
+        });
+      }
+      futam = [];
+    };
+    for (const p of arr) {
+      // két szomszédos kő között legfeljebb 2 km hézagot tűrünk
+      if (futam.length && p.km - futam[futam.length - 1].km > 2) zar();
+      futam.push(p);
+    }
+    zar();
+  }
+  return out;
+}
+
 export async function buildNetwork(file, fields, progress = () => {}) {
   progress('Úthálózati adat beolvasása…');
   const data = await readGeoJson(file);
-  const features = data && (data.features || (data.type === 'Feature' ? [data] : null));
+  let features = data && (data.features || (data.type === 'Feature' ? [data] : null));
+  let szelvenykoves = false;
   if (!features || !features.length) throw new Error('nincs benne úthálózati vonal');
 
-  const sample = (features.find((f) => f.properties) || {}).properties || {};
-  const map = Object.assign(guessFields(sample), fields || {});
+  let sample = (features.find((f) => f.properties) || {}).properties || {};
+  let map = Object.assign(guessFields(sample), fields || {});
+
+  // pontréteg (szelvénykövek) → vonalakká fűzzük
+  const pontDb = features.filter((f) => f.geometry && f.geometry.type === 'Point').length;
+  if (pontDb > features.length / 2 && map.utszam && map.kmKezd) {
+    const pkodMezo = Object.keys(sample).find((k) => /^(pkod|palyakod|palya_kod)$/i.test(k));
+    progress(`Szelvénykövek összefűzése… (${pontDb} kő)`);
+    features = szelvenykovekbolVonalak(features, map, pkodMezo);
+    if (!features.length) throw new Error('a pontrétegből nem állt össze útvonal');
+    sample = features[0].properties || {};
+    map = Object.assign({}, map, { kmKezd: '__kmKezd', kmVeg: '__kmVeg' });
+    szelvenykoves = true;
+  }
+
   if (!map.utszam) {
     // a mezőnevek kiírása sokat segít: ebből látszik, mit kell kézzel kijelölni
     const oszlopok = Object.keys(sample).slice(0, 12).join(', ');
@@ -261,7 +363,8 @@ export async function buildNetwork(file, fields, progress = () => {}) {
   return {
     version: 1,
     created: Date.now(),
-    name: file.name || 'úthálózat',
+    name: (Array.isArray(file) ? (file[0] && file[0].name) : file.name) || 'úthálózat',
+    szelvenykoves,
     fields: map,
     sampleKeys: Object.keys(sample),
     roads,

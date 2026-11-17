@@ -244,9 +244,11 @@ export class KozutDocs {
 
     $('#kozut-net-add', this.root).addEventListener('click', () => $('#kozut-net-file', this.root).click());
     $('#kozut-net-file', this.root).addEventListener('change', (e) => {
-      const f = e.target.files[0];
+      // shapefile esetén több fájl tartozik össze (.shp + .dbf)
+      const fajlok = Array.from(e.target.files || []);
       e.target.value = '';
-      if (f) this.loadNetwork(f);
+      if (!fajlok.length) return;
+      this.loadNetwork(fajlok.length > 1 ? fajlok : fajlok[0]);
     });
   }
 
