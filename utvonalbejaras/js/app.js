@@ -1836,20 +1836,14 @@ async function openViewer(id) {
           el('span', { class: 'meta-val', text: v }),
         ])))
       : null,
-    el('div', { class: 'road-acts' }, [
+    // A keresős gombok csak akkor kellenek, ha nincs betöltve országos adat —
+    // azokat a `roadHintFeltolt` teszi ide, mert a hálózat állapota aszinkron.
+    el('div', { class: 'road-acts', id: 'road-acts' }, [
       el('button', {
         class: 'btn ghost tiny', type: 'button',
         onclick: () => editRoad(item),
       }, ikonos('ceruza', 'Beírás kézzel')),
-      item.lat != null ? el('button', {
-        class: 'btn ghost tiny', type: 'button',
-        onclick: () => openKeresoFor(item),
-      }, ikonos('kereses', 'Útszámkereső')) : null,
-      item.lat != null ? el('button', {
-        class: 'btn ghost tiny', type: 'button',
-        onclick: () => pasteKeresoInto(item),
-      }, ikonos('vagolap', 'Beillesztés a keresőből')) : null,
-    ].filter(Boolean)),
+    ]),
     // a súgót az állapot szabja meg: ha van betöltött országos adat, abból
     // magától kitöltődik — ilyenkor felesleges a kézi keresgélés leírása
     item.lat != null ? el('div', { class: 'road-hint', id: 'road-hint-box' }) : null,
@@ -1997,6 +1991,18 @@ async function roadHintFeltolt(item) {
   const net = await roadNetwork();
 
   if (!net) {
+    // nincs országos adat: ilyenkor van értelme a Közút keresőjének
+    const acts = $('#road-acts');
+    if (acts) {
+      acts.appendChild(el('button', {
+        class: 'btn ghost tiny', type: 'button',
+        onclick: () => openKeresoFor(item),
+      }, ikonos('kereses', 'Útszámkereső')));
+      acts.appendChild(el('button', {
+        class: 'btn ghost tiny', type: 'button',
+        onclick: () => pasteKeresoInto(item),
+      }, ikonos('vagolap', 'Beillesztés a keresőből')));
+    }
     box.appendChild(el('p', { class: 'road-hint-fo', text:
       'Az útszám és a km szelvény magától kitöltődik, ha betölti az országos '
       + 'úthálózati adatot. Egyszer kell megtenni, utána offline is működik.' }));
