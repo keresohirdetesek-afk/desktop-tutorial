@@ -33,7 +33,8 @@ export function readDbf(buffer) {
     o += 1;
     const sor = {};
     for (const m of mezok) {
-      sor[m.nev] = dekod.decode(bytes.subarray(o, o + m.hossz)).trim();
+      // a NAP állományaiban van NUL-okkal feltöltött, üres mező is
+      sor[m.nev] = dekod.decode(bytes.subarray(o, o + m.hossz)).replace(/\0/g, '').trim();
       o += m.hossz;
     }
     sorok.push(sor);

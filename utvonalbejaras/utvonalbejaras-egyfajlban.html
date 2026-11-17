@@ -6741,7 +6741,8 @@ function readDbf(buffer) {
     o += 1;
     const sor = {};
     for (const m of mezok) {
-      sor[m.nev] = dekod.decode(bytes.subarray(o, o + m.hossz)).trim();
+      // a NAP állományaiban van NUL-okkal feltöltött, üres mező is
+      sor[m.nev] = dekod.decode(bytes.subarray(o, o + m.hossz)).replace(/\0/g, '').trim();
       o += m.hossz;
     }
     sorok.push(sor);
@@ -6845,8 +6846,8 @@ function shapefileToGeoJson(shpBuffer, dbfBuffer) {
 /** Mezőnév-tippek szerepenként (ékezet és elválasztók nélkül hasonlítunk). */
 const FIELD_HINTS = {
   utszam: ['kszam', 'utszam', 'utszama', 'utszamozas', 'utjel', 'jel', 'szam', 'ref', 'road', 'roadnumber', 'roadref', 'kozutszam'],
-  kmKezd: ['kmjel', 'kezdoszelveny', 'kezdoszelv', 'szelvenykezd', 'kmkezd', 'kezdokm', 'kmtol', 'fromkm', 'kmfrom', 'kezdo', 'start'],
-  kmVeg: ['vegszelveny', 'vegszelv', 'szelvenyveg', 'kmveg', 'vegkm', 'kmig', 'tokm', 'kmto', 'veg', 'end'],
+  kmKezd: ['kszelv', 'kmjel', 'kezdoszelveny', 'kezdoszelv', 'szelvenykezd', 'kmkezd', 'kezdokm', 'kmtol', 'fromkm', 'kmfrom', 'kezdo', 'start'],
+  kmVeg: ['vszelv', 'vegszelveny', 'vegszelv', 'szelvenyveg', 'kmveg', 'vegkm', 'kmig', 'tokm', 'kmto', 'veg', 'end'],
   telepules: ['telepules', 'telepulesnev', 'helyseg', 'varos', 'kozigegyseg', 'settlement', 'city', 'town'],
 };
 
