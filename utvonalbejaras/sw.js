@@ -2,7 +2,7 @@
 // A bejárások adatai IndexedDB-ben vannak, azokat a service worker nem érinti.
 
 const PREFIX = 'utvonalbejaras-';
-const CACHE = PREFIX + 'v25';
+const CACHE = PREFIX + 'v26';
 const TILE_CACHE = PREFIX + 'tiles';  // a térképcsempéket az alkalmazás kezeli
 const ASSETS = [
   './',
@@ -28,6 +28,8 @@ const ASSETS = [
   'js/kozut.js',
   'js/eov.js',
   'js/shapefile.js',
+  'js/orszagos.js',
+  'adatok/szelvenyjelek.json',
   'js/uthalozat.js',
   'js/jelzes.js',
   'js/utvonalterv.js',
@@ -85,6 +87,22 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req).catch(() => caches.match('index.html').then((r) => r || caches.match('./')))
+    );
+    return;
+  }
+
+  // Az országos szelvényadat mindig a frissebb legyen: előbb a hálózat, és
+  // csak akkor a gyorsítótár, ha nincs net. Így a heti frissítés azonnal
+  // megérkezik, nem csak a következő indításkor.
+  if (url.pathname.includes('/adatok/')) {
+    e.respondWith(
+      fetch(req).then((res) => {
+        if (res && res.ok && res.type === 'basic') {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      }).catch(() => caches.match(req))
     );
     return;
   }

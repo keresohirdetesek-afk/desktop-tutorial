@@ -30,6 +30,7 @@ import {
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO, keresoUrl } from './kozut.js';
+import { beepitettAdat } from './orszagos.js';
 import { ikonos, ikonEl } from './ikonok.js';
 import { EscortMode } from './kiseres.js';
 import {
@@ -2964,6 +2965,19 @@ async function init() {
   applyDeviceClass();
   await renderSessionList();
   show('home');
+
+  // Az országos szelvényadat magától érkezik és magától frissül — a
+  // felhasználónak nincs vele dolga. Háttérben megy, hogy ne várakoztassa.
+  beepitettAdat((msg) => toast(msg)).then((res) => {
+    if (res.allapot === 'telepitve' || res.allapot === 'frissitve') {
+      roadNet = res.net;
+      toast(res.allapot === 'telepitve'
+        ? 'Kész: az útszám és a km szelvény mostantól magától kitöltődik.'
+        : 'Az országos szelvényadat frissült.');
+    } else if (res.net) {
+      roadNet = res.net;
+    }
+  }).catch(() => { /* enélkül is működik minden más */ });
 
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persist().catch(() => {});

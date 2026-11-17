@@ -17,7 +17,7 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(dir, p), 'utf8');
 
 // a betöltési sorrend számít: az app.js indítja el a többit
-const MODULES = ['js/ui.js', 'js/ikonok.js', 'js/db.js', 'js/tiles.js', 'js/terkepnezet.js', 'js/jelzes.js', 'js/geo.js', 'js/media.js', 'js/compass.js', 'js/licenc-kulcs.js', 'js/licenc.js', 'js/report.js', 'js/terkepfajl.js', 'js/docx.js', 'js/eov.js', 'js/shapefile.js', 'js/uthalozat.js', 'js/utadat.js', 'js/utvonalterv.js', 'js/kozut.js', 'js/kiseres.js', 'js/editor.js', 'js/trackedit.js', 'js/app.js'];
+const MODULES = ['js/ui.js', 'js/ikonok.js', 'js/db.js', 'js/tiles.js', 'js/terkepnezet.js', 'js/jelzes.js', 'js/geo.js', 'js/media.js', 'js/compass.js', 'js/licenc-kulcs.js', 'js/licenc.js', 'js/report.js', 'js/terkepfajl.js', 'js/docx.js', 'js/eov.js', 'js/shapefile.js', 'js/uthalozat.js', 'js/orszagos.js', 'js/utadat.js', 'js/utvonalterv.js', 'js/kozut.js', 'js/kiseres.js', 'js/editor.js', 'js/trackedit.js', 'js/app.js'];
 
 // az app.js `db.valami()` alakban hivatkozik a tárolóra, ezért a modulok
 // összefűzése után össze kell raknunk neki ezt a névteret
@@ -136,6 +136,14 @@ const iconDataUri =
 
 const bodyContent = buildBody();
 
+// Az országos szelvényadat is a fájlba kerül: az egyfájlos változat
+// pont attól használható, hogy magában hordoz mindent.
+const adatFile = path.join(dir, 'adatok', 'szelvenyjelek.json');
+const szelvenyAdat = fs.existsSync(adatFile)
+  ? `<script>window.__UB_SZELVENY=${fs.readFileSync(adatFile, 'utf8')
+      .replace(/<\//g, '<\\/')};</script>\n`
+  : '';
+
 const standalone = `<!DOCTYPE html>
 <html lang="hu">
 <head>
@@ -146,7 +154,7 @@ const standalone = `<!DOCTYPE html>
 <link rel="icon" href="${iconDataUri}" type="image/svg+xml">
 </head>
 <body>
-${bodyContent}</body>
+${szelvenyAdat}${bodyContent}</body>
 </html>
 `;
 

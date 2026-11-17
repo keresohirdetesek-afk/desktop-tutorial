@@ -1,0 +1,109 @@
+# Az országos szelvényadat heti frissítése.
+#
+# A NAP (napportal.kozut.hu) statikus adatcsomagjai hetente frissülnek. Ez a
+# munkafolyamat letölti a szelvényjelek adatcsomagot, átalakítja az app
+# tömör formátumára, és ha változott, be is commitolja. Innentől minden
+# felhasználó a következő oldalfrissítéskor megkapja — nincs letöltés,
+# nincs feltöltés.
+#
+# EGYSZERI BEÁLLÍTÁS
+#
+#   Settings → Secrets and variables → Actions → New repository secret
+#
+#     NAP_SZELVENY_URL   a szelvényjelek adatcsomag letöltési címe
+#                        (a NAP-portálon, feliratkozás után jelenik meg)
+#
+#   Ha a letöltéshez fejléc is kell (token, süti), vegyük fel ezt is:
+#
+#     NAP_FEJLEC         pl. "Authorization: Bearer ..." vagy "Cookie: ..."
+#
+# A cím lehet .zip (benne .shp + .dbf), .shp, vagy .geojson.
+#
+# Az adat a Nemzeti Adathozzáférési Pont (NAP) szolgáltatása, CC BY 4.0
+# licenc alatt. A forrásmegjelölés az alkalmazásban és a jegyzőkönyvekben
+# szerepel — ezt a licenc megköveteli.
+
+name: NAP szelvényadat frissítése
+
+on:
+  schedule:
+    # hetente egyszer, kedd hajnalban (a NAP heti frissítése után)
+    - cron: '17 3 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  frissites:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Van-e beállítva letöltési cím
+        id: ellenorzes
+        env:
+          CIM: ${{ secrets.NAP_SZELVENY_URL }}
+        run: |
+          if [ -z "$CIM" ]; then
+            echo "A NAP_SZELVENY_URL titok nincs beállítva — a frissítés kimarad."
+            echo "fut=nem" >> "$GITHUB_OUTPUT"
+          else
+            echo "fut=igen" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Letöltés
+        if: steps.ellenorzes.outputs.fut == 'igen'
+        env:
+          CIM: ${{ secrets.NAP_SZELVENY_URL }}
+          FEJLEC: ${{ secrets.NAP_FEJLEC }}
+        run: |
+          set -euo pipefail
+          mkdir -p letoltes
+          if [ -n "${FEJLEC:-}" ]; then
+            curl -fsSL -H "$FEJLEC" -o letoltes/csomag "$CIM"
+          else
+            curl -fsSL -o letoltes/csomag "$CIM"
+          fi
+          ls -la letoltes
+
+      - name: Kicsomagolás és átalakítás
+        if: steps.ellenorzes.outputs.fut == 'igen'
+        run: |
+          set -euo pipefail
+          cd letoltes
+          # a fájl típusát a tartalma mondja meg, nem a neve
+          TIPUS=$(file -b --mime-type csomag || echo ismeretlen)
+          echo "típus: $TIPUS"
+          case "$TIPUS" in
+            application/zip) unzip -o csomag ;;
+            *) cp csomag adat.bin ;;
+          esac
+          BE=$(ls *.shp 2>/dev/null | head -1 || true)
+          if [ -z "$BE" ]; then
+            BE=$(ls *.geojson *.json 2>/dev/null | head -1 || true)
+          fi
+          if [ -z "$BE" ]; then
+            echo "A letöltött csomagban nincs .shp és nincs GeoJSON." >&2
+            exit 1
+          fi
+          cd ..
+          node utvonalbejaras/eszkozok/nap-szelvenyek.mjs "letoltes/$BE"
+
+      - name: Commit, ha változott
+        if: steps.ellenorzes.outputs.fut == 'igen'
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- utvonalbejaras/adatok/szelvenyjelek.json; then
+            echo "Nem változott az adat."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add utvonalbejaras/adatok/szelvenyjelek.json
+          git commit -m "NAP szelvényadat frissítése ($(date +%Y-%m-%d))"
+          git push
