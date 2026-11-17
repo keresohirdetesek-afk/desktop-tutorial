@@ -608,10 +608,17 @@ export class TrackEditor {
         for (const m of mid) this.draft.pts.push({ lat: m.lat, lon: m.lon, snap: 'road', routed: true });
         routed = mid.length;
       } else if (mid === null) {
-        const onlineForras = this.road.source && this.road.source() === 'online';
-        toast(onlineForras
-          ? 'Az útvonaltervező nem válaszolt (vagy nincs net) — egyenes vonallal kötöm össze.'
-          : 'Az úthálózaton nem találtam ide utat — egyenes vonallal kötöm össze.');
+        // mondjuk meg, MIÉRT nem sikerült — a „nem találtam utat” önmagában
+        // csak bosszantó, mert nem derül ki belőle, mit lehet tenni
+        const tervezheto = this.road.routeReady ? this.road.routeReady() : true;
+        toast(!tervezheto
+          ? 'A beépített adat szelvényjelekből áll: útszámhoz és szelvényhez jó, '
+            + 'útvonaltervezésre nem. Kapcsolja be az online kiegészítést, vagy '
+            + 'töltse be a vonalas úthálózatot — addig egyenes vonallal kötöm össze.'
+          : this.road.source && this.road.source() === 'online'
+            ? 'Az útvonaltervező nem válaszolt (vagy nincs net) — egyenes vonallal kötöm össze.'
+            : 'Az úthálózaton nem találtam ide utat (külföldön nincs adat) — '
+              + 'egyenes vonallal kötöm össze.');
       }
     }
 

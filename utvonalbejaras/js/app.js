@@ -636,9 +636,17 @@ async function openTrackEditor() {
       },
       route: async (a, b) => {
         const net = await roadNetwork();
-        if (net) return routeBetween(net, a, b);
+        // A szelvényjelekből épített hálózat útszámhoz és szelvényhez jó, de
+        // útvonaltervezésre nem: a kövek útszámonként külön vonalat adnak,
+        // kereszteződés nincs bennük. Ilyenkor rögtön az online tervező jön.
+        if (net && !net.szelvenykoves) {
+          const sajat = await routeBetween(net, a, b);
+          if (sajat && sajat.length) return sajat;
+        }
         return routeOnline(a, b);
       },
+      // tud-e egyáltalán útvonalat tervezni a mostani forrás
+      routeReady: () => !!(roadNet && !roadNet.szelvenykoves) || onlineRouting(),
     },
     onApply: async ({ updated, deleted, drawn }) => {
       if (updated) await db.updatePoints(updated);
