@@ -882,10 +882,15 @@ export class TrackEditor {
     const forras = snapReady && this.road.source ? this.road.source() : null;
     const snapBtn = $('#trackedit-roadsnap', this.root);
     snapBtn.hidden = mode !== 'draw';
+    // A felirat azt mondja, mi történik koppintásra — a mostani állapotot a
+    // gomb kiemelése mutatja. (Korábban „Úthoz illesztés ki” állt rajta, amit
+    // parancsnak is lehetett érteni, pedig az állapotot jelentette.)
     snapBtn.textContent = !snapReady
-      ? '🛣️ Úthoz illesztés bekapcsolása'
-      : !this.roadSnap ? '🛣️ Úthoz illesztés ki'
-        : forras === 'online' ? '🛣️ Úthoz illesztve (online)' : '🛣️ Úthoz illesztve (NAP)';
+      ? '🛣️ Úthoz illesztés beállítása'
+      : !this.roadSnap ? '🛣️ Úthoz illesztés bekapcsolása'
+        : forras === 'online'
+          ? '🛣️ Úthoz illesztve (online) — kikapcsolás'
+          : '🛣️ Úthoz illesztve (NAP) — kikapcsolás';
     snapBtn.title = snapReady
       ? (forras === 'online'
         ? 'Online útvonaltervezővel. Útszámot és szelvényt a NAP-adat ad.'
@@ -902,6 +907,7 @@ export class TrackEditor {
       hint.hidden = false;
       hint.textContent = n
         ? `${n} pont · ${hossz} — ${tap} a következő pontra.`
+          + (snapReady && !this.roadSnap ? ' Az úthoz illesztés most ki van kapcsolva.' : '')
         : snapReady && this.roadSnap
           ? `${Tap} a szakasz elejére, majd a végére — a vonal magától az utat követi.`
           : `${Tap} sorban a szakasz pontjaira. Ha az utat kövesse magától: „🛣️ Úthoz illesztés bekapcsolása”.`;

@@ -1259,3 +1259,5 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .drawnsel-head { margin: 0 0 2px; font-size: 13px; font-weight: 650; }
 .drawnsel .hint { margin: 0 0 8px; }
 .drawnsel .editor-row { gap: 6px; }
+.road-hint-fo { margin: 0 0 8px; font-weight: 600; color: var(--text); }
+.road-hint .btn { margin: 2px 0; }

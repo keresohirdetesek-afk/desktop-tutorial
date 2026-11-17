@@ -587,6 +587,9 @@ async function stopRecording(silent = false) {
  * jóváhagyandó útvonal, ezért szakaszonként elvethető vagy törölhető.
  */
 async function openTrackEditor() {
+  // az úthálózat állapota kelljen a szerkesztőnek: enélkül úgy látná, hogy
+  // nincs mihez illeszteni, pedig csak még nem olvastuk be
+  await roadNetwork();
   // GPS-pont nélkül is megnyitható: így otthon, utólag is meg lehet rajzolni
   // az útvonalat a térképen (ld. „Hiányzó szakasz berajzolása”)
   if (!state.points.length && !(state.session.drawn || []).length) {
@@ -1847,33 +1850,12 @@ async function openViewer(id) {
         onclick: () => pasteKeresoInto(item),
       }, ikonos('vagolap', 'Beillesztés a keresőből')) : null,
     ].filter(Boolean)),
-    item.lat != null
-      ? el('div', { class: 'road-hint' }, keresoUrl(item.road) !== UTSZAM_KERESO
-          ? [
-              // már tudjuk a szelvényt: a kereső rögtön annak az adatlapján nyílik
-              el('p', { text: 'Az „Útszámkereső” gomb rögtön ennek a szelvénynek az adatlapját nyitja meg '
-                + `a Közút keresőjében (${roadLabel(item.road)}). A hivatalos adatokat `
-                + 'a jobb oldali panelből kijelölve és kimásolva (Ctrl+C) ide visszatérve átveszem.' }),
-              el('p', { text: `A koordináta is a vágólapra kerül (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}), `
-                + 'ha a Koordinátakeresővel ellenőrizni szeretné. '
-                + `(EOV: ${formatEov(item.lat, item.lon)})` }),
-            ]
-          : [
-              // útszám nélkül linkből nem indítható keresés: a kereső csak a
-              // `section` paramétert olvassa, koordinátát nem
-              el('p', { text: `Az „Útszámkereső” gomb a koordinátát (${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}) `
-                + 'a vágólapra teszi, és megnyitja a keresőt. Ott három lépés:' }),
-              el('ol', { class: 'road-lepesek' }, [
-                el('li', { text: 'bal oldalon nyissa le a „Koordinátakereső” sort' }),
-                el('li', { text: '„Beilleszt”, majd „Keres”' }),
-                el('li', { text: 'a jobb oldali panelt jelölje ki és másolja ki (Ctrl+C)' }),
-              ]),
-              el('p', { text: 'Ide visszatérve magától felajánlom az átvételt. '
-                + `(EOV: ${formatEov(item.lat, item.lon)})` }),
-            ])
-      : null,
+    // a súgót az állapot szabja meg: ha van betöltött országos adat, abból
+    // magától kitöltődik — ilyenkor felesleges a kézi keresgélés leírása
+    item.lat != null ? el('div', { class: 'road-hint', id: 'road-hint-box' }) : null,
   ].filter(Boolean));
   body.appendChild(roadBox);
+  roadHintFeltolt(item);
 
   if (item.type === 'photo') {
     actions.appendChild(el('button', { class: 'btn primary small', onclick: async () => {
@@ -2000,6 +1982,77 @@ async function editRoad(item) {
  * „Beillesztés a keresőből” gomb.
  */
 let keresoVarakozik = null;
+
+/**
+ * Az útszám-doboz súgója. Három eset van, és mindegyikben mást kell mondani:
+ *   — van betöltött országos adat, és talált: nincs teendő;
+ *   — van adat, de ezen a ponton nem talált: mondjuk meg, és kínáljunk
+ *     tágabb keresést;
+ *   — nincs adat betöltve: ez a valódi teendő, nem a kereső kézi nyitogatása.
+ */
+async function roadHintFeltolt(item) {
+  const box = $('#road-hint-box');
+  if (!box || item.lat == null) return;
+  box.innerHTML = '';
+  const net = await roadNetwork();
+
+  if (!net) {
+    box.appendChild(el('p', { class: 'road-hint-fo', text:
+      'Az útszám és a km szelvény magától kitöltődik, ha betölti az országos '
+      + 'úthálózati adatot. Egyszer kell megtenni, utána offline is működik.' }));
+    box.appendChild(el('button', {
+      class: 'btn primary tiny', type: 'button',
+      onclick: () => { closeViewer(); openKozut(); },
+    }, ikonos('mappa', 'Úthálózati adat betöltése')));
+    box.appendChild(el('p', { text: 'Addig beírhatja kézzel, vagy kikeresheti '
+      + 'a Közút útszámkeresőjében.' }));
+    return;
+  }
+
+  if (!item.road) {
+    box.appendChild(el('p', { class: 'road-hint-fo', text:
+      'Ezen a ponton 150 méteren belül nincs országos közút a betöltött adatban. '
+      + 'Lehet, hogy önkormányzati úton vagy telephelyen van.' }));
+    box.appendChild(el('button', {
+      class: 'btn ghost tiny', type: 'button',
+      onclick: () => ujraSzamol(item, 500),
+    }, ikonos('kereses', 'Keresés 500 méteres körben')));
+    return;
+  }
+
+  if (item.road.forras !== 'nap' && item.road.forras !== 'kezi') {
+    box.appendChild(el('button', {
+      class: 'btn ghost tiny', type: 'button',
+      onclick: () => ujraSzamol(item, 150),
+    }, ikonos('ut', 'Újraszámolás az országos adatból')));
+  }
+  box.appendChild(el('p', { text: `EOV: ${formatEov(item.lat, item.lon)}` }));
+}
+
+/** Útszám újraszámolása a betöltött hálózatból, tágabb körben is. */
+async function ujraSzamol(item, sugar) {
+  const net = await roadNetwork();
+  if (!net) return;
+  const hit = lookupRoad(net, item.lat, item.lon, sugar);
+  if (!hit) {
+    toast(`${sugar} méteren belül sincs közút az adatban.`, 'error');
+    return;
+  }
+  item.road = {
+    utszam: hit.utszam || '',
+    szelveny: hit.szelveny || '',
+    meters: hit.meters,
+    telepules: hit.telepules || '',
+    forras: 'nap',
+    tavolsag: hit.distance,
+  };
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  openViewer(item.id);
+  toast(`Útszám, szelvény: ${roadLabel(item.road)} (az úttól ${hit.distance} m).`);
+}
 
 async function openKeresoFor(item) {
   // A Koordinátakereső Y/X mezői a GPS-koordinátát várják (szélesség,
