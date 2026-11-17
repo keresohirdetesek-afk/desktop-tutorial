@@ -1261,3 +1261,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .drawnsel .editor-row { gap: 6px; }
 .road-hint-fo { margin: 0 0 8px; font-weight: 600; color: var(--text); }
 .road-hint .btn { margin: 2px 0; }
+
+/* Odavezetés: a gomb, amiért a panelt megnyitottuk, villantson egyet. */
+.kiemelve {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  animation: kiemel 1.1s ease-in-out 2;
+}
+@keyframes kiemel { 50% { outline-color: transparent; } }

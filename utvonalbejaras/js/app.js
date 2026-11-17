@@ -2002,7 +2002,7 @@ async function roadHintFeltolt(item) {
       + 'úthálózati adatot. Egyszer kell megtenni, utána offline is működik.' }));
     box.appendChild(el('button', {
       class: 'btn primary tiny', type: 'button',
-      onclick: () => { closeViewer(); openKozut(); },
+      onclick: () => { closeViewer(); openKozut({ halozat: true }); },
     }, ikonos('mappa', 'Úthálózati adat betöltése')));
     box.appendChild(el('p', { text: 'Addig beírhatja kézzel, vagy kikeresheti '
       + 'a Közút útszámkeresőjében.' }));
@@ -2449,7 +2449,7 @@ közeledve előhozza, amit ott találtunk, és menet közben is lehet újat
 rögzíteni — az ilyen elemek „szállítás közben” jelölést kapnak.          */
 
 /** A Közúttól kapott Word-űrlapok kitöltése a bejárás adataiból. */
-async function openKozut() {
+async function openKozut(opts = {}) {
   if (!state.session) return;
   if (!kozut) kozut = new KozutDocs($('#kozut'));
   await kozut.open({
@@ -2468,6 +2468,16 @@ async function openKozut() {
     // a kitöltött dokumentum a fizetős lépés: egy bejárás egyszer visz kreditet
     canIssue: () => dokumentumEngedely('Közút-dokumentumok kitöltése'),
   });
+
+  // az adatlapról érkezve ne kelljen végiggörgetni a panelt
+  if (opts.halozat) {
+    const cel = $('#kozut-net-add');
+    if (cel) {
+      cel.scrollIntoView({ block: 'center' });
+      cel.classList.add('kiemelve');
+      setTimeout(() => cel.classList.remove('kiemelve'), 2600);
+    }
+  }
 }
 
 async function startEscort() {

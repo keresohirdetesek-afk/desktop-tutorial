@@ -1273,6 +1273,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .road-hint-fo { margin: 0 0 8px; font-weight: 600; color: var(--text); }
 .road-hint .btn { margin: 2px 0; }
 
+/* Odavezetés: a gomb, amiért a panelt megnyitottuk, villantson egyet. */
+.kiemelve {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  animation: kiemel 1.1s ease-in-out 2;
+}
+@keyframes kiemel { 50% { outline-color: transparent; } }
+
 </style>
 
 <header id="topbar">
@@ -1598,13 +1606,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
     <h3 class="section-head">2. Közös adatok</h3>
     <div id="kozut-form" class="kozut-fields"></div>
 
-    <h3 class="section-head">3. Úthálózati adat (NAP) — nem kötelező</h3>
+    <h3 class="section-head">3. Úthálózati adat (NAP) — ezzel lesz magától az útszám</h3>
     <p class="hint">
       A <a href="https://napportal.kozut.hu/" target="_blank" rel="noopener">Nemzeti
       Adathozzáférési Pontról</a> (regisztráció után, ingyen) letölthető az országos
-      úthálózat <b>GeoJSON</b> állománya. Ha betölti, az app minden ponthoz magától
-      kiírja az útszámot — és ha az adat tartalmazza a szelvényezést, a km szelvényt is.
-      Az adat a készüléken marad, hálózat nélkül is működik.
+      közúthálózat és a szelvényjelek adatcsomag. <b>Ha betölti, minden ponthoz magától
+      megjelenik az útszám és a km szelvény</b> — keresgélés nélkül, a készüléken,
+      hálózat nélkül is.
+    </p>
+    <p class="hint">
+      Formátum: <b>GeoJSON</b>, vagy <b>shapefile</b> — ilyenkor a <code>.shp</code> és a
+      <code>.dbf</code> fájlt <b>együtt</b> jelölje ki (ZIP-ben is jó). Elég az egyik
+      adatcsomag: a <i>szelvényjelek</i> kicsi és gyors, az <i>országos közúthálózat</i>
+      pontosabb, de nagyobb helyet foglal.
     </p>
     <div id="kozut-net" class="kozut-net"></div>
     <input id="kozut-net-file" type="file" hidden multiple accept=".geojson,.json,.zip,.shp,.dbf,application/geo+json,application/json,application/zip">
@@ -13513,7 +13527,7 @@ async function roadHintFeltolt(item) {
       + 'úthálózati adatot. Egyszer kell megtenni, utána offline is működik.' }));
     box.appendChild(el('button', {
       class: 'btn primary tiny', type: 'button',
-      onclick: () => { closeViewer(); openKozut(); },
+      onclick: () => { closeViewer(); openKozut({ halozat: true }); },
     }, ikonos('mappa', 'Úthálózati adat betöltése')));
     box.appendChild(el('p', { text: 'Addig beírhatja kézzel, vagy kikeresheti '
       + 'a Közút útszámkeresőjében.' }));
@@ -13960,7 +13974,7 @@ közeledve előhozza, amit ott találtunk, és menet közben is lehet újat
 rögzíteni — az ilyen elemek „szállítás közben” jelölést kapnak.          */
 
 /** A Közúttól kapott Word-űrlapok kitöltése a bejárás adataiból. */
-async function openKozut() {
+async function openKozut(opts = {}) {
   if (!state.session) return;
   if (!kozut) kozut = new KozutDocs($('#kozut'));
   await kozut.open({
@@ -13979,6 +13993,16 @@ async function openKozut() {
     // a kitöltött dokumentum a fizetős lépés: egy bejárás egyszer visz kreditet
     canIssue: () => dokumentumEngedely('Közút-dokumentumok kitöltése'),
   });
+
+  // az adatlapról érkezve ne kelljen végiggörgetni a panelt
+  if (opts.halozat) {
+    const cel = $('#kozut-net-add');
+    if (cel) {
+      cel.scrollIntoView({ block: 'center' });
+      cel.classList.add('kiemelve');
+      setTimeout(() => cel.classList.remove('kiemelve'), 2600);
+    }
+  }
 }
 
 async function startEscort() {
