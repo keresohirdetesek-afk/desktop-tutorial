@@ -11,6 +11,7 @@ import {
 } from './geo.js';
 import { signSvg, itemSigns, signsLabel, signName, preloadSigns } from './jelzes.js';
 import { tilesEnabled, setTilesEnabled, pendingTiles } from './tiles.js';
+import { NAP_FORRAS } from './uthalozat.js';
 
 /** A jegyzőkönyvben használt jelölésszínek — a táblázatok ugyanezt viselik. */
 const MARK_ITEM = '#0a6ed1';
@@ -174,6 +175,9 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   const rejected = rejectedSections(points);
   const drawn = session.drawn || [];
   const ordered = items.slice().sort((a, b) => a.created - b.created);
+  // CC BY 4.0: ha a NAP adatából vettünk útszámot vagy szelvényt, a forrást
+  // a jegyzőkönyvön is meg kell nevezni
+  const napHasznalva = ordered.some((i) => i.road && i.road.forras === 'nap');
 
   // a térképi jelölések és a táblázatok sorszámai ugyanazok
   const labels = [];
@@ -565,6 +569,10 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   ${itemBlocks || '<p class="muted">Nincs rögzített elem.</p>'}
 
   <footer>
+    ${napHasznalva ? `Útszám és km szelvény forrása: ${rEsc(NAP_FORRAS.szoveg)}
+      (<a href="${NAP_FORRAS.csomagok[0].url}">${rEsc(NAP_FORRAS.csomagok[0].nev)}</a>,
+      <a href="${NAP_FORRAS.csomagok[1].url}">${rEsc(NAP_FORRAS.csomagok[1].nev)}</a>),
+      ${rEsc(NAP_FORRAS.licenc)}.<br>` : ''}
     ${lic.line ? rEsc(lic.line) + '<br>' : ''}
     Készítette az Útvonalbejárás alkalmazás. A jegyzőkönyv önálló fájl:
     a képek, hangfelvételek${include.video ? ' és videók' : ''} benne vannak,

@@ -5166,6 +5166,9 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   const rejected = rejectedSections(points);
   const drawn = session.drawn || [];
   const ordered = items.slice().sort((a, b) => a.created - b.created);
+  // CC BY 4.0: ha a NAP adatából vettünk útszámot vagy szelvényt, a forrást
+  // a jegyzőkönyvön is meg kell nevezni
+  const napHasznalva = ordered.some((i) => i.road && i.road.forras === 'nap');
 
   // a térképi jelölések és a táblázatok sorszámai ugyanazok
   const labels = [];
@@ -5557,6 +5560,10 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
   ${itemBlocks || '<p class="muted">Nincs rögzített elem.</p>'}
 
   <footer>
+    ${napHasznalva ? `Útszám és km szelvény forrása: ${rEsc(NAP_FORRAS.szoveg)}
+      (<a href="${NAP_FORRAS.csomagok[0].url}">${rEsc(NAP_FORRAS.csomagok[0].nev)}</a>,
+      <a href="${NAP_FORRAS.csomagok[1].url}">${rEsc(NAP_FORRAS.csomagok[1].nev)}</a>),
+      ${rEsc(NAP_FORRAS.licenc)}.<br>` : ''}
     ${lic.line ? rEsc(lic.line) + '<br>' : ''}
     Készítette az Útvonalbejárás alkalmazás. A jegyzőkönyv önálló fájl:
     a képek, hangfelvételek${include.video ? ' és videók' : ''} benne vannak,
@@ -6842,6 +6849,28 @@ function shapefileToGeoJson(shpBuffer, dbfBuffer) {
 // ezért az app megpróbálja kitalálni, melyik mező mit jelent, és a
 // felhasználó felül tudja bírálni.
 
+
+/**
+ * Forrásmegjelölés. A NAP adatai CC BY 4.0 licenc alatt érhetők el: szabadon
+ * felhasználhatók és terjeszthetők, de a forrást meg KELL nevezni. A portál
+ * által kért alak: a portál neve + az adatcsomag hivatkozása, nevével együtt.
+ *
+ * Ezért szerepel az úthálózat kártyáján és minden jegyzőkönyvben, amelyik
+ * ezekből az adatokból vett útszámot vagy szelvényt.
+ */
+const NAP_FORRAS = {
+  szoveg: 'Nemzeti Adathozzáférési Pont (NAP): Országos közúthálózat és Szelvényjelek adatcsomag',
+  licenc: 'CC BY 4.0',
+  portal: 'https://napportal.kozut.hu/',
+  csomagok: [
+    { nev: 'Országos közúthálózat', url: 'https://napportal.kozut.hu/#/configuration/data-provider/profile/30' },
+    { nev: 'Szelvényjelek', url: 'https://napportal.kozut.hu/#/configuration/data-provider/profile/91' },
+  ],
+};
+
+/** Egy sorban, sima szövegként — ahova nem fér ki hivatkozás. */
+const napForrasSor = () =>
+  `${NAP_FORRAS.szoveg} (${NAP_FORRAS.licenc}) — ${NAP_FORRAS.portal}`;
 
 /** Mezőnév-tippek szerepenként (ékezet és elválasztók nélkül hasonlítunk). */
 const FIELD_HINTS = {
@@ -8543,6 +8572,24 @@ class KozutDocs {
           + (n.hasSzelveny ? 'szelvényezéssel' : 'szelvény nélkül'),
       }),
       el('span', { class: 'muted small', text: 'Mezők — ' + fields }),
+      n.created
+        ? el('span', { class: 'muted small', text: 'Betöltve: ' + dateHu(n.created)
+            + ' — a NAP adatcsomagjai hetente frissülnek' })
+        : null,
+      // CC BY 4.0: a forrást meg kell nevezni ott, ahol az adat látszik
+      el('span', { class: 'muted small forras' }, [
+        'Forrás: Nemzeti Adathozzáférési Pont (NAP) — ',
+        el('a', {
+          href: NAP_FORRAS.csomagok[0].url, target: '_blank', rel: 'noopener',
+          text: NAP_FORRAS.csomagok[0].nev,
+        }),
+        ', ',
+        el('a', {
+          href: NAP_FORRAS.csomagok[1].url, target: '_blank', rel: 'noopener',
+          text: NAP_FORRAS.csomagok[1].nev,
+        }),
+        ` (${NAP_FORRAS.licenc})`,
+      ]),
       el('div', { class: 'editor-row' }, [
         el('button', {
           class: 'btn primary tiny', type: 'button', text: '⤵ Üres mezők kitöltése',
@@ -12209,6 +12256,7 @@ async function roadStamp(lat, lon, acc = null) {
     szelveny: hit.szelveny || '',
     meters: hit.meters,
     telepules: hit.telepules || '',
+    forras: 'nap',               // a NAP országos adatából
     tavolsag: hit.distance,      // ennyire volt a ponttól az út
     // pontatlan GPS-fixnél a szomszédos út is „legközelebbi” lehet, ezért
     // megjegyezzük, mekkora volt a hibahatár — az adatlap figyelmeztet
@@ -13218,7 +13266,9 @@ async function openViewer(id) {
   if (item.road) {
     rows.push(['Útszám, szelvény', roadLabel(item.road)
       + (item.road.telepules ? ` · ${item.road.telepules}` : '')
-      + (item.road.forras === 'kozut'
+      + (item.road.forras === 'nap'
+        ? ` (a NAP országos adatából${item.road.tavolsag != null ? `, az úttól ${item.road.tavolsag} m` : ''})`
+        : item.road.forras === 'kozut'
         ? ' (a Közút útszámkeresőjéből)'
         : item.road.forras === 'kereso'
         ? ' (az útszámkeresőből, kézi átvétellel)'

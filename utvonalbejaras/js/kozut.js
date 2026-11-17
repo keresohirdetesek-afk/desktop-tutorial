@@ -18,7 +18,7 @@ import {
 import { signsLabel } from './jelzes.js';
 import { formatCoord, formatDistance, typeLabel, categoryLabel, conditionLabel, severityLabel, isRejected, trackLength } from './geo.js';
 import { formatEov } from './eov.js';
-import { buildNetwork, lookupRoad } from './uthalozat.js';
+import { buildNetwork, lookupRoad, NAP_FORRAS } from './uthalozat.js';
 import * as db from './db.js';
 import { $, el, toast, modal, download, formatDateTime } from './ui.js';
 
@@ -579,6 +579,24 @@ export class KozutDocs {
           + (n.hasSzelveny ? 'szelvényezéssel' : 'szelvény nélkül'),
       }),
       el('span', { class: 'muted small', text: 'Mezők — ' + fields }),
+      n.created
+        ? el('span', { class: 'muted small', text: 'Betöltve: ' + dateHu(n.created)
+            + ' — a NAP adatcsomagjai hetente frissülnek' })
+        : null,
+      // CC BY 4.0: a forrást meg kell nevezni ott, ahol az adat látszik
+      el('span', { class: 'muted small forras' }, [
+        'Forrás: Nemzeti Adathozzáférési Pont (NAP) — ',
+        el('a', {
+          href: NAP_FORRAS.csomagok[0].url, target: '_blank', rel: 'noopener',
+          text: NAP_FORRAS.csomagok[0].nev,
+        }),
+        ', ',
+        el('a', {
+          href: NAP_FORRAS.csomagok[1].url, target: '_blank', rel: 'noopener',
+          text: NAP_FORRAS.csomagok[1].nev,
+        }),
+        ` (${NAP_FORRAS.licenc})`,
+      ]),
       el('div', { class: 'editor-row' }, [
         el('button', {
           class: 'btn primary tiny', type: 'button', text: '⤵ Üres mezők kitöltése',

@@ -14,6 +14,28 @@ import { eovToWgs84 } from './eov.js';
 import { unzip } from './docx.js';
 import { shapefileToGeoJson, readShp } from './shapefile.js';
 
+/**
+ * Forrásmegjelölés. A NAP adatai CC BY 4.0 licenc alatt érhetők el: szabadon
+ * felhasználhatók és terjeszthetők, de a forrást meg KELL nevezni. A portál
+ * által kért alak: a portál neve + az adatcsomag hivatkozása, nevével együtt.
+ *
+ * Ezért szerepel az úthálózat kártyáján és minden jegyzőkönyvben, amelyik
+ * ezekből az adatokból vett útszámot vagy szelvényt.
+ */
+export const NAP_FORRAS = {
+  szoveg: 'Nemzeti Adathozzáférési Pont (NAP): Országos közúthálózat és Szelvényjelek adatcsomag',
+  licenc: 'CC BY 4.0',
+  portal: 'https://napportal.kozut.hu/',
+  csomagok: [
+    { nev: 'Országos közúthálózat', url: 'https://napportal.kozut.hu/#/configuration/data-provider/profile/30' },
+    { nev: 'Szelvényjelek', url: 'https://napportal.kozut.hu/#/configuration/data-provider/profile/91' },
+  ],
+};
+
+/** Egy sorban, sima szövegként — ahova nem fér ki hivatkozás. */
+export const napForrasSor = () =>
+  `${NAP_FORRAS.szoveg} (${NAP_FORRAS.licenc}) — ${NAP_FORRAS.portal}`;
+
 /** Mezőnév-tippek szerepenként (ékezet és elválasztók nélkül hasonlítunk). */
 const FIELD_HINTS = {
   utszam: ['kszam', 'utszam', 'utszama', 'utszamozas', 'utjel', 'jel', 'szam', 'ref', 'road', 'roadnumber', 'roadref', 'kozutszam'],

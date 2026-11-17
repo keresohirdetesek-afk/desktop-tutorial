@@ -753,6 +753,7 @@ async function roadStamp(lat, lon, acc = null) {
     szelveny: hit.szelveny || '',
     meters: hit.meters,
     telepules: hit.telepules || '',
+    forras: 'nap',               // a NAP országos adatából
     tavolsag: hit.distance,      // ennyire volt a ponttól az út
     // pontatlan GPS-fixnél a szomszédos út is „legközelebbi” lehet, ezért
     // megjegyezzük, mekkora volt a hibahatár — az adatlap figyelmeztet
@@ -1762,7 +1763,9 @@ async function openViewer(id) {
   if (item.road) {
     rows.push(['Útszám, szelvény', roadLabel(item.road)
       + (item.road.telepules ? ` · ${item.road.telepules}` : '')
-      + (item.road.forras === 'kozut'
+      + (item.road.forras === 'nap'
+        ? ` (a NAP országos adatából${item.road.tavolsag != null ? `, az úttól ${item.road.tavolsag} m` : ''})`
+        : item.road.forras === 'kozut'
         ? ' (a Közút útszámkeresőjéből)'
         : item.road.forras === 'kereso'
         ? ' (az útszámkeresőből, kézi átvétellel)'
