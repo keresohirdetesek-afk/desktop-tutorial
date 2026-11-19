@@ -1784,6 +1784,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
         <button id="trackedit-draw-undo" class="btn ghost small">↶ Vissza</button>
         <button id="trackedit-draw-cancel" class="btn ghost small">Eldobás</button>
         <button id="trackedit-roadsnap" class="btn ghost small" hidden>🛣️ Úthoz illesztés</button>
+        <button id="trackedit-kijelolt" class="btn ghost small block">📋 A Közút által kijelölt útvonal beolvasása</button>
       </div>
 
       <!-- szakasz kijelölése -->
@@ -7153,6 +7154,9 @@ async function buildNetwork(file, fields, progress = () => {}) {
   const segPlace = [];
   const aLat = []; const aLon = []; const bLat = []; const bLon = [];
   const segRoad = []; const segKm = []; const segLen = [];
+  // melyik forrásvonalból származik a szakasz — ebből derül ki, hogy
+  // osztott pályánál melyik oldalon vagyunk, és hol szakad meg a vonal
+  const segLine = []; let lineIdx = -1;
   let skipped = 0;
 
   features.forEach((f, n) => {
@@ -7182,6 +7186,7 @@ async function buildNetwork(file, fields, progress = () => {}) {
     }
 
     for (const line of lines) {
+      lineIdx += 1;
       const pts = line.map((c) => (eov ? eovToWgs84(c[0], c[1]) : { lat: c[1], lon: c[0] }));
       // a vonal hossza a szelvény szétosztásához
       let total = 0;
@@ -7195,6 +7200,7 @@ async function buildNetwork(file, fields, progress = () => {}) {
         aLat.push(pts[i - 1].lat); aLon.push(pts[i - 1].lon);
         bLat.push(pts[i].lat); bLon.push(pts[i].lon);
         segRoad.push(ri);
+        segLine.push(lineIdx);
         segPlace.push(pi);
         segLen.push(d);
         // a szakasz elejéhez tartozó szelvény (ha van mihez viszonyítani)
@@ -7250,6 +7256,7 @@ async function buildNetwork(file, fields, progress = () => {}) {
     bLat: Float64Array.from(bLat),
     bLon: Float64Array.from(bLon),
     segRoad: Int32Array.from(segRoad),
+    segLine: Int32Array.from(segLine),
     segKm: Float64Array.from(segKm.map((v) => (v == null ? NaN : v))),
     segLen: Float64Array.from(segLen),
     cells,
@@ -7474,6 +7481,108 @@ function routeBetween(net, from, to, margin = 3000) {
   }
   path.reverse();
   return path;
+}
+
+/* ------------------------------- Közút által kijelölt útvonal szelvényekből
+
+A Közút az engedélyben nem térképet ad, hanem szakaszok listáját:
+
+    51    179 -> 159 km
+    M44    44 ->  57 km
+
+Ebből a betöltött úthálózat alapján kirajzolható a tényleges nyomvonal:
+minden szakaszhoz kikeressük az adott útszám megadott szelvénytartományba
+eső darabjait, és sorrendbe fűzzük őket.                                  */
+
+/** Egy sor: „51 179 -> 159 km”. A nyíl sokféle lehet, a „km” elhagyható. */
+const SZAKASZ_MINTA =
+  /^\s*([A-Za-zÁÉÍÓÖŐÚÜŰ0-9][A-Za-z0-9./-]*)\s+(\d+(?:[.,]\d+)?)\s*(?:->|→|–|—|-|\.\.\.|\.\.)\s*(\d+(?:[.,]\d+)?)\s*(?:km)?\s*$/i;
+
+/**
+ * A kijelölt útvonal szövegének feldolgozása.
+ * @returns {{szakaszok: Array<{ut:string, tol:number, ig:number}>, kihagyott: string[]}}
+ */
+function parseKijeloltUtvonal(szoveg) {
+  const szakaszok = [];
+  const kihagyott = [];
+  for (const nyers of String(szoveg || '').split(/\r?\n/)) {
+    const sor = nyers.trim();
+    if (!sor) continue;
+    const m = SZAKASZ_MINTA.exec(sor);
+    if (!m) { kihagyott.push(sor); continue; }
+    szakaszok.push({
+      ut: m[1],
+      tol: Number(m[2].replace(',', '.')),
+      ig: Number(m[3].replace(',', '.')),
+    });
+  }
+  return { szakaszok, kihagyott };
+}
+
+/**
+ * Nyomvonal a szakaszlistából, a betöltött úthálózat alapján.
+ *
+ * Osztott pályánál (autópálya) ugyanarra a szelvényre két vonal is esik.
+ * Ezért vonalanként csoportosítunk, és azt választjuk, amelyik a megadott
+ * tartományt a legjobban lefedi — így nem cikcakkozik a két pálya között.
+ *
+ * @returns {{pts: Array<{lat:number, lon:number}>, reszek: Array, hiany: Array}}
+ */
+function utvonalSzelvenyekbol(net, szakaszok) {
+  const pts = [];
+  const reszek = [];
+  const hiany = [];
+  if (!net || !net.count) return { pts, reszek, hiany };
+
+  for (const sz of szakaszok) {
+    const ri = net.roads.indexOf(sz.ut);
+    if (ri < 0) {
+      hiany.push({ ...sz, ok: 'nincs ilyen útszám a betöltött adatban' });
+      continue;
+    }
+    const lo = Math.min(sz.tol, sz.ig) * 1000;
+    const hi = Math.max(sz.tol, sz.ig) * 1000;
+
+    // vonalanként gyűjtjük a tartományba eső szakaszokat
+    const vonalak = new Map();
+    for (let i = 0; i < net.segRoad.length; i++) {
+      if (net.segRoad[i] !== ri) continue;
+      const km = net.segKm[i];
+      if (!isFinite(km) || km < lo || km > hi) continue;
+      const kulcs = net.segLine ? net.segLine[i] : 0;
+      let arr = vonalak.get(kulcs);
+      if (!arr) { arr = []; vonalak.set(kulcs, arr); }
+      arr.push(i);
+    }
+    if (!vonalak.size) {
+      hiany.push({ ...sz, ok: 'erre a szelvénytartományra nincs adat' });
+      continue;
+    }
+
+    // a legtöbb szakaszt adó vonal nyer (osztott pályánál az egyik oldal)
+    let best = null;
+    for (const arr of vonalak.values()) if (!best || arr.length > best.length) best = arr;
+    best.sort((a, b) => net.segKm[a] - net.segKm[b]);
+
+    const resz = [];
+    for (const i of best) resz.push({ lat: net.aLat[i], lon: net.aLon[i] });
+    const utolso = best[best.length - 1];
+    resz.push({ lat: net.bLat[utolso], lon: net.bLon[utolso] });
+    if (sz.tol > sz.ig) resz.reverse();
+
+    let hossz = 0;
+    for (let i = 1; i < resz.length; i++) {
+      hossz += metersBetween(resz[i - 1].lat, resz[i - 1].lon, resz[i].lat, resz[i].lon);
+    }
+    // a szakaszok közötti ugrás: a csomópont a két szelvénykő között van,
+    // ezért pár száz méter természetes; a nagyobb hézagot jelezzük
+    const ugras = pts.length
+      ? Math.round(metersBetween(pts[pts.length - 1].lat, pts[pts.length - 1].lon, resz[0].lat, resz[0].lon))
+      : 0;
+    reszek.push({ ...sz, pontok: resz.length, hossz, ugras });
+    pts.push(...resz);
+  }
+  return { pts, reszek, hiany };
 }
 
 /* ===== js/orszagos.js ===== */
@@ -10754,6 +10863,7 @@ class TrackEditor {
 
     $('#trackedit-roadsnap', this.root).addEventListener('click', () => this.toggleRoadSnap());
     $('#trackedit-goto', this.root).addEventListener('click', () => this.gotoPlace());
+    $('#trackedit-kijelolt', this.root).addEventListener('click', () => this.kijeloltUtvonal());
     $('#trackedit-draw-undo', this.root).addEventListener('click', () => this.undoVertex());
     $('#trackedit-draw-done', this.root).addEventListener('click', () => this.finishDraw());
     $('#trackedit-draw-cancel', this.root).addEventListener('click', () => {
@@ -11274,6 +11384,83 @@ class TrackEditor {
     toast('Szakasz mentve. Rajzolhat továbbit, vagy válasszon másik módot.');
   }
 
+  /**
+   * A Közút által kijelölt útvonal beolvasása. Az engedélyben nem térkép
+   * van, hanem szakaszok listája („51 179 -> 159 km”); ebből a betöltött
+   * úthálózat alapján kirajzolható a tényleges nyomvonal.
+   */
+  async kijeloltUtvonal() {
+    if (!this.road || !this.road.kijelolt) return;
+    const res = await modal({
+      title: 'A Közút által kijelölt útvonal',
+      text: 'Másolja ide az engedélyben szereplő szakaszlistát, soronként egyet:\n'
+        + '51    179 -> 159 km\nM44    44 -> 57 km\n\n'
+        + 'A felesleges sorokat (induló állomás, célállomás) kihagyom.',
+      fields: [{ name: 'szoveg', label: 'Szakaszok', type: 'textarea', rows: 8, value: '' }],
+      okText: 'Beolvasás',
+    });
+    if (!res || !res.szoveg) return;
+
+    toast('Útvonal összeállítása a szelvényekből…');
+    const ki = await this.road.kijelolt(res.szoveg);
+    if (!ki) {
+      toast('Ehhez előbb be kell töltődnie az országos úthálózati adatnak.', 'error');
+      return;
+    }
+    if (!ki.szakaszok.length) {
+      toast('Egyetlen szakaszt sem ismertem fel. Soronként egy kell: „51 179 -> 159 km”.', 'error');
+      return;
+    }
+    if (!ki.pts.length) {
+      toast('A felismert szakaszokhoz nem találtam adatot az úthálózatban.', 'error');
+      return;
+    }
+
+    const hossz = trackLength(ki.pts);
+    // a szakaszokon megtett út, a csomóponti összekötések nélkül
+    const utonHossz = ki.reszek.reduce((sum, r) => sum + r.hossz, 0);
+    const ugrasok = ki.reszek.filter((r) => r.ugras > 1500);
+    const sorok = [
+      `${ki.reszek.length} szakasz · ${formatDistance(utonHossz)} az utakon · ${ki.pts.length} pont`,
+      `A megrajzolt vonal ${formatDistance(hossz)}, mert a szakaszok közötti `
+        + 'csomópontokat egyenes köti össze.',
+    ];
+    if (ki.hiany.length) {
+      sorok.push('', 'Nem találtam adatot ezekhez:');
+      for (const h of ki.hiany) sorok.push(`  ${h.ut} ${h.tol}–${h.ig} km — ${h.ok}`);
+    }
+    if (ugrasok.length) {
+      sorok.push('', 'Nagyobb ugrás a szakaszok között (a csomópontot egyenes köti össze):');
+      for (const u of ugrasok) sorok.push(`  ${u.ut} ${u.tol}–${u.ig} km előtt ${u.ugras} m`);
+    }
+    if (ki.kihagyott.length) {
+      sorok.push('', `Kihagyott sorok: ${ki.kihagyott.length} (pl. induló és célállomás)`);
+    }
+
+    const ok = await modal({
+      title: 'Ezt rajzoljam meg?',
+      text: sorok.join('\n'),
+      okText: 'Megrajzolom',
+      cancelText: 'Mégse',
+    });
+    if (!ok) return;
+
+    this.drawn.push({
+      id: 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name: 'Közút által kijelölt útvonal',
+      note: ki.reszek.map((r) => `${r.ut} ${r.tol}–${r.ig} km`).join(', '),
+      pts: ki.pts,
+      kijelolt: true,
+    });
+    await this.onApply({ drawn: this.drawn });
+    this.dirty = true;
+    this.setMode('view', { quiet: true });
+    this.mapView.reset();            // az egész útvonal látszódjon
+    this.draw();
+    this.renderPanel();
+    toast(`Megrajzolva: ${ki.reszek.length} szakasz, ${formatDistance(utonHossz)} az utakon.`);
+  }
+
   currentDrawn() {
     return this.drawn.find((s) => s.id === this.selectedDrawn) || null;
   }
@@ -11533,7 +11720,9 @@ class TrackEditor {
       badge.innerHTML = `✏️ Útvonal rajzolása<span class="sub">${
         n ? ` · ${n} pont · ${hossz}` : (snapReady && this.roadSnap ? ' · úthoz illesztve' : '')
       }</span>`;
-      $('#trackedit-draw-done', this.root).disabled = n < 2;
+      const kij = $('#trackedit-kijelolt', this.root);
+    if (kij) kij.hidden = !(this.road && this.road.kijelolt);
+    $('#trackedit-draw-done', this.root).disabled = n < 2;
       $('#trackedit-draw-undo', this.root).disabled = n === 0;
       $('#trackedit-draw-cancel', this.root).disabled = n === 0;
       return;
@@ -12272,6 +12461,17 @@ async function openTrackEditor() {
       },
       // tud-e egyáltalán útvonalat tervezni a mostani forrás
       routeReady: () => !!(roadNet && !roadNet.szelvenykoves) || onlineRouting(),
+      /**
+       * A Közút által kijelölt útvonal (útszám + szelvénytartomány lista)
+       * kirajzolása a betöltött úthálózatból.
+       */
+      kijelolt: async (szoveg) => {
+        const net = await roadNetwork();
+        if (!net) return null;
+        const { szakaszok, kihagyott } = parseKijeloltUtvonal(szoveg);
+        if (!szakaszok.length) return { pts: [], reszek: [], hiany: [], szakaszok, kihagyott };
+        return { ...utvonalSzelvenyekbol(net, szakaszok), szakaszok, kihagyott };
+      },
     },
     onApply: async ({ updated, deleted, drawn }) => {
       if (updated) await db.updatePoints(updated);

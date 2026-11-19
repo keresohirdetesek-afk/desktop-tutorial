@@ -143,6 +143,7 @@ export class TrackEditor {
 
     $('#trackedit-roadsnap', this.root).addEventListener('click', () => this.toggleRoadSnap());
     $('#trackedit-goto', this.root).addEventListener('click', () => this.gotoPlace());
+    $('#trackedit-kijelolt', this.root).addEventListener('click', () => this.kijeloltUtvonal());
     $('#trackedit-draw-undo', this.root).addEventListener('click', () => this.undoVertex());
     $('#trackedit-draw-done', this.root).addEventListener('click', () => this.finishDraw());
     $('#trackedit-draw-cancel', this.root).addEventListener('click', () => {
@@ -663,6 +664,83 @@ export class TrackEditor {
     toast('Szakasz mentve. Rajzolhat továbbit, vagy válasszon másik módot.');
   }
 
+  /**
+   * A Közút által kijelölt útvonal beolvasása. Az engedélyben nem térkép
+   * van, hanem szakaszok listája („51 179 -> 159 km”); ebből a betöltött
+   * úthálózat alapján kirajzolható a tényleges nyomvonal.
+   */
+  async kijeloltUtvonal() {
+    if (!this.road || !this.road.kijelolt) return;
+    const res = await modal({
+      title: 'A Közút által kijelölt útvonal',
+      text: 'Másolja ide az engedélyben szereplő szakaszlistát, soronként egyet:\n'
+        + '51    179 -> 159 km\nM44    44 -> 57 km\n\n'
+        + 'A felesleges sorokat (induló állomás, célállomás) kihagyom.',
+      fields: [{ name: 'szoveg', label: 'Szakaszok', type: 'textarea', rows: 8, value: '' }],
+      okText: 'Beolvasás',
+    });
+    if (!res || !res.szoveg) return;
+
+    toast('Útvonal összeállítása a szelvényekből…');
+    const ki = await this.road.kijelolt(res.szoveg);
+    if (!ki) {
+      toast('Ehhez előbb be kell töltődnie az országos úthálózati adatnak.', 'error');
+      return;
+    }
+    if (!ki.szakaszok.length) {
+      toast('Egyetlen szakaszt sem ismertem fel. Soronként egy kell: „51 179 -> 159 km”.', 'error');
+      return;
+    }
+    if (!ki.pts.length) {
+      toast('A felismert szakaszokhoz nem találtam adatot az úthálózatban.', 'error');
+      return;
+    }
+
+    const hossz = trackLength(ki.pts);
+    // a szakaszokon megtett út, a csomóponti összekötések nélkül
+    const utonHossz = ki.reszek.reduce((sum, r) => sum + r.hossz, 0);
+    const ugrasok = ki.reszek.filter((r) => r.ugras > 1500);
+    const sorok = [
+      `${ki.reszek.length} szakasz · ${formatDistance(utonHossz)} az utakon · ${ki.pts.length} pont`,
+      `A megrajzolt vonal ${formatDistance(hossz)}, mert a szakaszok közötti `
+        + 'csomópontokat egyenes köti össze.',
+    ];
+    if (ki.hiany.length) {
+      sorok.push('', 'Nem találtam adatot ezekhez:');
+      for (const h of ki.hiany) sorok.push(`  ${h.ut} ${h.tol}–${h.ig} km — ${h.ok}`);
+    }
+    if (ugrasok.length) {
+      sorok.push('', 'Nagyobb ugrás a szakaszok között (a csomópontot egyenes köti össze):');
+      for (const u of ugrasok) sorok.push(`  ${u.ut} ${u.tol}–${u.ig} km előtt ${u.ugras} m`);
+    }
+    if (ki.kihagyott.length) {
+      sorok.push('', `Kihagyott sorok: ${ki.kihagyott.length} (pl. induló és célállomás)`);
+    }
+
+    const ok = await modal({
+      title: 'Ezt rajzoljam meg?',
+      text: sorok.join('\n'),
+      okText: 'Megrajzolom',
+      cancelText: 'Mégse',
+    });
+    if (!ok) return;
+
+    this.drawn.push({
+      id: 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name: 'Közút által kijelölt útvonal',
+      note: ki.reszek.map((r) => `${r.ut} ${r.tol}–${r.ig} km`).join(', '),
+      pts: ki.pts,
+      kijelolt: true,
+    });
+    await this.onApply({ drawn: this.drawn });
+    this.dirty = true;
+    this.setMode('view', { quiet: true });
+    this.mapView.reset();            // az egész útvonal látszódjon
+    this.draw();
+    this.renderPanel();
+    toast(`Megrajzolva: ${ki.reszek.length} szakasz, ${formatDistance(utonHossz)} az utakon.`);
+  }
+
   currentDrawn() {
     return this.drawn.find((s) => s.id === this.selectedDrawn) || null;
   }
@@ -922,7 +1000,9 @@ export class TrackEditor {
       badge.innerHTML = `✏️ Útvonal rajzolása<span class="sub">${
         n ? ` · ${n} pont · ${hossz}` : (snapReady && this.roadSnap ? ' · úthoz illesztve' : '')
       }</span>`;
-      $('#trackedit-draw-done', this.root).disabled = n < 2;
+      const kij = $('#trackedit-kijelolt', this.root);
+    if (kij) kij.hidden = !(this.road && this.road.kijelolt);
+    $('#trackedit-draw-done', this.root).disabled = n < 2;
       $('#trackedit-draw-undo', this.root).disabled = n === 0;
       $('#trackedit-draw-cancel', this.root).disabled = n === 0;
       return;

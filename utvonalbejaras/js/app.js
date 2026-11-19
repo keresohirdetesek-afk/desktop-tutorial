@@ -21,6 +21,7 @@ import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './
 import { MapView } from './terkepnezet.js';
 import {
   pointOnRoad, findPlace, lookupRoad, routeBetween, szelvenyMeters, formatSzelveny,
+  parseKijeloltUtvonal, utvonalSzelvenyekbol,
 } from './uthalozat.js';
 import { eovToWgs84, formatEov } from './eov.js';
 import { onlineRouting, setOnlineRouting, snapOnline, routeOnline } from './utvonalterv.js';
@@ -647,6 +648,17 @@ async function openTrackEditor() {
       },
       // tud-e egyáltalán útvonalat tervezni a mostani forrás
       routeReady: () => !!(roadNet && !roadNet.szelvenykoves) || onlineRouting(),
+      /**
+       * A Közút által kijelölt útvonal (útszám + szelvénytartomány lista)
+       * kirajzolása a betöltött úthálózatból.
+       */
+      kijelolt: async (szoveg) => {
+        const net = await roadNetwork();
+        if (!net) return null;
+        const { szakaszok, kihagyott } = parseKijeloltUtvonal(szoveg);
+        if (!szakaszok.length) return { pts: [], reszek: [], hiany: [], szakaszok, kihagyott };
+        return { ...utvonalSzelvenyekbol(net, szakaszok), szakaszok, kihagyott };
+      },
     },
     onApply: async ({ updated, deleted, drawn }) => {
       if (updated) await db.updatePoints(updated);

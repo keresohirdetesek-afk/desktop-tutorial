@@ -300,6 +300,9 @@ export async function buildNetwork(file, fields, progress = () => {}) {
   const segPlace = [];
   const aLat = []; const aLon = []; const bLat = []; const bLon = [];
   const segRoad = []; const segKm = []; const segLen = [];
+  // melyik forrásvonalból származik a szakasz — ebből derül ki, hogy
+  // osztott pályánál melyik oldalon vagyunk, és hol szakad meg a vonal
+  const segLine = []; let lineIdx = -1;
   let skipped = 0;
 
   features.forEach((f, n) => {
@@ -329,6 +332,7 @@ export async function buildNetwork(file, fields, progress = () => {}) {
     }
 
     for (const line of lines) {
+      lineIdx += 1;
       const pts = line.map((c) => (eov ? eovToWgs84(c[0], c[1]) : { lat: c[1], lon: c[0] }));
       // a vonal hossza a szelvény szétosztásához
       let total = 0;
@@ -342,6 +346,7 @@ export async function buildNetwork(file, fields, progress = () => {}) {
         aLat.push(pts[i - 1].lat); aLon.push(pts[i - 1].lon);
         bLat.push(pts[i].lat); bLon.push(pts[i].lon);
         segRoad.push(ri);
+        segLine.push(lineIdx);
         segPlace.push(pi);
         segLen.push(d);
         // a szakasz elejéhez tartozó szelvény (ha van mihez viszonyítani)
@@ -397,6 +402,7 @@ export async function buildNetwork(file, fields, progress = () => {}) {
     bLat: Float64Array.from(bLat),
     bLon: Float64Array.from(bLon),
     segRoad: Int32Array.from(segRoad),
+    segLine: Int32Array.from(segLine),
     segKm: Float64Array.from(segKm.map((v) => (v == null ? NaN : v))),
     segLen: Float64Array.from(segLen),
     cells,
@@ -621,4 +627,106 @@ export function routeBetween(net, from, to, margin = 3000) {
   }
   path.reverse();
   return path;
+}
+
+/* ------------------------------- Közút által kijelölt útvonal szelvényekből
+
+A Közút az engedélyben nem térképet ad, hanem szakaszok listáját:
+
+    51    179 -> 159 km
+    M44    44 ->  57 km
+
+Ebből a betöltött úthálózat alapján kirajzolható a tényleges nyomvonal:
+minden szakaszhoz kikeressük az adott útszám megadott szelvénytartományba
+eső darabjait, és sorrendbe fűzzük őket.                                  */
+
+/** Egy sor: „51 179 -> 159 km”. A nyíl sokféle lehet, a „km” elhagyható. */
+const SZAKASZ_MINTA =
+  /^\s*([A-Za-zÁÉÍÓÖŐÚÜŰ0-9][A-Za-z0-9./-]*)\s+(\d+(?:[.,]\d+)?)\s*(?:->|→|–|—|-|\.\.\.|\.\.)\s*(\d+(?:[.,]\d+)?)\s*(?:km)?\s*$/i;
+
+/**
+ * A kijelölt útvonal szövegének feldolgozása.
+ * @returns {{szakaszok: Array<{ut:string, tol:number, ig:number}>, kihagyott: string[]}}
+ */
+export function parseKijeloltUtvonal(szoveg) {
+  const szakaszok = [];
+  const kihagyott = [];
+  for (const nyers of String(szoveg || '').split(/\r?\n/)) {
+    const sor = nyers.trim();
+    if (!sor) continue;
+    const m = SZAKASZ_MINTA.exec(sor);
+    if (!m) { kihagyott.push(sor); continue; }
+    szakaszok.push({
+      ut: m[1],
+      tol: Number(m[2].replace(',', '.')),
+      ig: Number(m[3].replace(',', '.')),
+    });
+  }
+  return { szakaszok, kihagyott };
+}
+
+/**
+ * Nyomvonal a szakaszlistából, a betöltött úthálózat alapján.
+ *
+ * Osztott pályánál (autópálya) ugyanarra a szelvényre két vonal is esik.
+ * Ezért vonalanként csoportosítunk, és azt választjuk, amelyik a megadott
+ * tartományt a legjobban lefedi — így nem cikcakkozik a két pálya között.
+ *
+ * @returns {{pts: Array<{lat:number, lon:number}>, reszek: Array, hiany: Array}}
+ */
+export function utvonalSzelvenyekbol(net, szakaszok) {
+  const pts = [];
+  const reszek = [];
+  const hiany = [];
+  if (!net || !net.count) return { pts, reszek, hiany };
+
+  for (const sz of szakaszok) {
+    const ri = net.roads.indexOf(sz.ut);
+    if (ri < 0) {
+      hiany.push({ ...sz, ok: 'nincs ilyen útszám a betöltött adatban' });
+      continue;
+    }
+    const lo = Math.min(sz.tol, sz.ig) * 1000;
+    const hi = Math.max(sz.tol, sz.ig) * 1000;
+
+    // vonalanként gyűjtjük a tartományba eső szakaszokat
+    const vonalak = new Map();
+    for (let i = 0; i < net.segRoad.length; i++) {
+      if (net.segRoad[i] !== ri) continue;
+      const km = net.segKm[i];
+      if (!isFinite(km) || km < lo || km > hi) continue;
+      const kulcs = net.segLine ? net.segLine[i] : 0;
+      let arr = vonalak.get(kulcs);
+      if (!arr) { arr = []; vonalak.set(kulcs, arr); }
+      arr.push(i);
+    }
+    if (!vonalak.size) {
+      hiany.push({ ...sz, ok: 'erre a szelvénytartományra nincs adat' });
+      continue;
+    }
+
+    // a legtöbb szakaszt adó vonal nyer (osztott pályánál az egyik oldal)
+    let best = null;
+    for (const arr of vonalak.values()) if (!best || arr.length > best.length) best = arr;
+    best.sort((a, b) => net.segKm[a] - net.segKm[b]);
+
+    const resz = [];
+    for (const i of best) resz.push({ lat: net.aLat[i], lon: net.aLon[i] });
+    const utolso = best[best.length - 1];
+    resz.push({ lat: net.bLat[utolso], lon: net.bLon[utolso] });
+    if (sz.tol > sz.ig) resz.reverse();
+
+    let hossz = 0;
+    for (let i = 1; i < resz.length; i++) {
+      hossz += metersBetween(resz[i - 1].lat, resz[i - 1].lon, resz[i].lat, resz[i].lon);
+    }
+    // a szakaszok közötti ugrás: a csomópont a két szelvénykő között van,
+    // ezért pár száz méter természetes; a nagyobb hézagot jelezzük
+    const ugras = pts.length
+      ? Math.round(metersBetween(pts[pts.length - 1].lat, pts[pts.length - 1].lon, resz[0].lat, resz[0].lon))
+      : 0;
+    reszek.push({ ...sz, pontok: resz.length, hossz, ugras });
+    pts.push(...resz);
+  }
+  return { pts, reszek, hiany };
 }
