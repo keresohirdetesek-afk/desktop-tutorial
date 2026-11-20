@@ -791,9 +791,13 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
    * nem — két távoli csúcs között félúton koppintva is találat kell legyen.
    * A visszaadott csúcs a koppintáshoz közelebbi végpont.
    */
-  const nearestDrawn = (x, y) => {
+  const nearestDrawn = (x, y, csakId = null) => {
     let best = null, bestD = Infinity;
     for (const seg of drawn) {
+      // ha egy adott szakaszon belül keresünk (pl. folyamatban lévő
+      // kijelölésnél), a többit átugorjuk — így az egymásra rajzolt
+      // útvonalak nem kapkodják el egymástól a koppintást
+      if (csakId != null && seg.id !== csakId) continue;
       const pts = seg.pts || [];
       if (pts.length === 1) {
         const p = project(pts[0].lat, pts[0].lon);

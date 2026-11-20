@@ -428,7 +428,18 @@ export class TrackEditor {
     if (box && this.onOpenItem) { this.onOpenItem(box.id); return; }
 
     // berajzolt szakaszra koppintva azt jelöljük ki
-    const dn = this.hit.nearestDrawn(p.x, p.y);
+    // Folyamatban lévő kijelölésnél maradjunk ugyanazon a szakaszon: két
+    // egymásra rajzolt útvonalnál különben minden koppintás átugrana a
+    // másikra, és a kijelölés sosem állna össze.
+    let dn = this.hit.nearestDrawn(p.x, p.y);
+    if (this.mode === 'select' && this.drawnSel) {
+      const sajat = this.hit.nearestDrawn(p.x, p.y, this.drawnSel.id);
+      if (sajat && sajat.distance < 60) dn = sajat;
+    }
+    if (this.mode === 'jelzes' && this.jelzesA && this.jelzesA.fajta === 'rajzolt') {
+      const sajat = this.hit.nearestDrawn(p.x, p.y, this.jelzesA.id);
+      if (sajat && sajat.distance < 60) dn = sajat;
+    }
     const { index, distance } = this.hit.nearest(p.x, p.y);
     if (dn.distance < 26 && dn.distance < distance) {
       // Kijelölő módban a berajzolt szakaszon belül is lehet részt kijelölni:
@@ -758,7 +769,11 @@ export class TrackEditor {
    * útvonalhoz igazítjuk — az a tényleges út, amin a szállítmány megy.
    */
   jelzesPont(p) {
-    const nd = this.hit.nearestDrawn(p.x, p.y);
+    let nd = this.hit.nearestDrawn(p.x, p.y);
+    if (this.jelzesA && this.jelzesA.fajta === 'rajzolt') {
+      const sajat = this.hit.nearestDrawn(p.x, p.y, this.jelzesA.id);
+      if (sajat && sajat.distance < 60) nd = sajat;
+    }
     const nt = this.hit.nearest(p.x, p.y);
     const hatar = 34;
     if (nd && nd.distance < hatar && (nt.index < 0 || nd.distance <= nt.distance)) {

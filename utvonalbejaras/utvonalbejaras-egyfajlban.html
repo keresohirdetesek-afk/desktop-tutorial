@@ -3852,9 +3852,13 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
    * nem — két távoli csúcs között félúton koppintva is találat kell legyen.
    * A visszaadott csúcs a koppintáshoz közelebbi végpont.
    */
-  const nearestDrawn = (x, y) => {
+  const nearestDrawn = (x, y, csakId = null) => {
     let best = null, bestD = Infinity;
     for (const seg of drawn) {
+      // ha egy adott szakaszon belül keresünk (pl. folyamatban lévő
+      // kijelölésnél), a többit átugorjuk — így az egymásra rajzolt
+      // útvonalak nem kapkodják el egymástól a koppintást
+      if (csakId != null && seg.id !== csakId) continue;
       const pts = seg.pts || [];
       if (pts.length === 1) {
         const p = project(pts[0].lat, pts[0].lon);
@@ -11290,7 +11294,18 @@ class TrackEditor {
     if (box && this.onOpenItem) { this.onOpenItem(box.id); return; }
 
     // berajzolt szakaszra koppintva azt jelöljük ki
-    const dn = this.hit.nearestDrawn(p.x, p.y);
+    // Folyamatban lévő kijelölésnél maradjunk ugyanazon a szakaszon: két
+    // egymásra rajzolt útvonalnál különben minden koppintás átugrana a
+    // másikra, és a kijelölés sosem állna össze.
+    let dn = this.hit.nearestDrawn(p.x, p.y);
+    if (this.mode === 'select' && this.drawnSel) {
+      const sajat = this.hit.nearestDrawn(p.x, p.y, this.drawnSel.id);
+      if (sajat && sajat.distance < 60) dn = sajat;
+    }
+    if (this.mode === 'jelzes' && this.jelzesA && this.jelzesA.fajta === 'rajzolt') {
+      const sajat = this.hit.nearestDrawn(p.x, p.y, this.jelzesA.id);
+      if (sajat && sajat.distance < 60) dn = sajat;
+    }
     const { index, distance } = this.hit.nearest(p.x, p.y);
     if (dn.distance < 26 && dn.distance < distance) {
       // Kijelölő módban a berajzolt szakaszon belül is lehet részt kijelölni:
@@ -11620,7 +11635,11 @@ class TrackEditor {
    * útvonalhoz igazítjuk — az a tényleges út, amin a szállítmány megy.
    */
   jelzesPont(p) {
-    const nd = this.hit.nearestDrawn(p.x, p.y);
+    let nd = this.hit.nearestDrawn(p.x, p.y);
+    if (this.jelzesA && this.jelzesA.fajta === 'rajzolt') {
+      const sajat = this.hit.nearestDrawn(p.x, p.y, this.jelzesA.id);
+      if (sajat && sajat.distance < 60) nd = sajat;
+    }
     const nt = this.hit.nearest(p.x, p.y);
     const hatar = 34;
     if (nd && nd.distance < hatar && (nt.index < 0 || nd.distance <= nt.distance)) {
