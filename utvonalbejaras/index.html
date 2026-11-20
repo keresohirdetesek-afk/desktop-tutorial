@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<meta name="theme-color" content="#111827">
+<meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)">
 <meta name="description" content="Útvonalbejárás túlméretes szállítmányhoz: nyomvonal rögzítés, fotók méretjelöléssel, halvány útirány-nyíl és hangjegyzetek.">
 <title>Útvonalbejárás</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -12,6 +13,18 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="css/app.css">
+<script>
+  // Mindig biztonságos kapcsolat: ha valaki http-vel nyitja meg, átvisszük
+  // https-re. A helyi fejlesztés (localhost, fájlból megnyitott egyfájlos
+  // változat) érintetlen marad.
+  (function () {
+    var h = location.hostname;
+    if (location.protocol === 'http:' && h !== 'localhost' && h !== '127.0.0.1' && h !== '[::1]'
+        && !/^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(h)) {
+      location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+    }
+  })();
+</script>
 </head>
 <body>
 
@@ -19,7 +32,6 @@
   <button id="back-btn" class="icon-btn" hidden aria-label="Vissza">‹</button>
   <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 512 512" width="26" height="26"><defs><pattern id="tb-stripes" width="64" height="64" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="64" height="64" fill="#111827"/><rect width="32" height="64" fill="#f59e0b"/></pattern></defs><path fill-rule="evenodd" fill="url(#tb-stripes)" d="M128 8h256a120 120 0 0 1 120 120v256a120 120 0 0 1-120 120H128A120 120 0 0 1 8 384V128A120 120 0 0 1 128 8z M140 40h232a100 100 0 0 1 100 100v232a100 100 0 0 1-100 100H140A100 100 0 0 1 40 372V140A100 100 0 0 1 140 40z"/><path d="M140 40h232a100 100 0 0 1 100 100v232a100 100 0 0 1-100 100H140A100 100 0 0 1 40 372V140A100 100 0 0 1 140 40z" fill="#1f2937"/><path d="M186 150v118a70 70 0 0 0 140 0V196" fill="none" stroke="#d1d5db" stroke-width="44" stroke-linecap="round"/><path d="M326 136l46 74h-92z" fill="#f59e0b"/></svg></span>
   <h1 id="topbar-title">Útvonalbejárás</h1>
-  <button id="topbar-action" class="icon-btn" hidden></button>
 </header>
 
 <main id="main">
@@ -30,8 +42,17 @@
       <div class="home-hero">
         <p class="wordmark"><b>UTVONAL</b><span>bejaras.hu</span></p>
         <p class="szlogen">Tervezés. Biztonság. Engedélyezés.</p>
-        <h2>Mit szeretne most csinálni?</h2>
         <p>Útvonalbejárás túlméretes és túlsúlyos szállítmányhoz — tervezés, bejárás, kíséret.</p>
+      </div>
+
+      <div id="home-install" class="install-card" hidden>
+        <span class="install-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 7v7"/><path d="m9 11 3 3 3-3"/></svg></span>
+        <span class="install-body">
+          <strong id="home-install-title">Mentse le ikonként a készülékére</strong>
+          <span id="home-install-desc" class="muted small">Így külön alkalmazásként indul: nagyobb képernyő, nincs böngészősáv, és internet nélkül is működik.</span>
+        </span>
+        <button id="home-install-btn" class="btn primary small" type="button">Letöltés ikonként</button>
+        <button id="home-install-hide" class="icon-btn" type="button" aria-label="Most nem">✕</button>
       </div>
 
       <div class="mode-grid">
@@ -112,6 +133,7 @@
           <input id="opt-online" type="checkbox">
           <span>Online kiegészítés (útra illesztés, útszám — internetet használ)</span>
         </label>
+        <button id="opt-install" class="btn ghost small">⬇️ Mentés ikonként a készülékre</button>
         <button id="opt-hid" class="btn ghost small">🔗 Útszámkereső-híd beállítása</button>
         <button id="import-btn" class="btn ghost small">Mentés visszatöltése (JSON)</button>
         <input id="import-file" type="file" accept="application/json" hidden>
@@ -336,19 +358,20 @@
     <h3 class="section-head">2. Közös adatok</h3>
     <div id="kozut-form" class="kozut-fields"></div>
 
-    <h3 class="section-head">3. Úthálózati adat (NAP) — ezzel lesz magától az útszám</h3>
+    <h3 class="section-head">3. Úthálózati adat (NAP) — már be van építve</h3>
     <p class="hint">
-      A <a href="https://napportal.kozut.hu/" target="_blank" rel="noopener">Nemzeti
-      Adathozzáférési Pontról</a> (regisztráció után, ingyen) letölthető az országos
-      közúthálózat és a szelvényjelek adatcsomag. <b>Ha betölti, minden ponthoz magától
-      megjelenik az útszám és a km szelvény</b> — keresgélés nélkül, a készüléken,
-      hálózat nélkül is.
+      Az országos <b>szelvényjel-adat az alkalmazás része</b>: az első indításkor
+      magától települ, és magától frissül. Ezért <b>minden ponthoz magától megjelenik
+      az útszám és a km szelvény</b> — keresgélés nélkül, a készüléken, hálózat nélkül is.
+      Itt nincs teendő.
     </p>
     <p class="hint">
-      Formátum: <b>GeoJSON</b>, vagy <b>shapefile</b> — ilyenkor a <code>.shp</code> és a
-      <code>.dbf</code> fájlt <b>együtt</b> jelölje ki (ZIP-ben is jó). Elég az egyik
-      adatcsomag: a <i>szelvényjelek</i> kicsi és gyors, az <i>országos közúthálózat</i>
-      pontosabb, de nagyobb helyet foglal.
+      Saját adatot csak akkor kell betöltenie, ha a <i>teljes országos közúthálózatot</i>
+      (vonalas adat) is használni szeretné: az pontosabb, de sokkal nagyobb helyet foglal.
+      A csomagok a <a href="https://napportal.kozut.hu/" target="_blank" rel="noopener">Nemzeti
+      Adathozzáférési Pontról</a> tölthetők le (regisztráció után, ingyen). Formátum:
+      <b>GeoJSON</b>, vagy <b>shapefile</b> — ilyenkor a <code>.shp</code> és a
+      <code>.dbf</code> fájlt <b>együtt</b> jelölje ki (ZIP-ben is jó).
     </p>
     <div id="kozut-net" class="kozut-net"></div>
     <input id="kozut-net-file" type="file" hidden multiple accept=".geojson,.json,.zip,.shp,.dbf,application/geo+json,application/json,application/zip">
@@ -356,9 +379,10 @@
 
     <h3 class="section-head">4. Helyszínek (a jegyzékhez és a részletezőhöz)</h3>
     <p class="hint">
-      A település, az útszám és a km szelvény nem derül ki a GPS-ből.
-      Ha betöltötte az úthálózati adatot (3. pont), magától megjelenik.
-      Enélkül soronként három lépés a Magyar Közút
+      Az útszám, a km szelvény és a település a beépített országos adatból
+      magától kitöltődik. Ha egy ponthoz mégsem jön ki (például nem országos
+      közút, vagy pontatlan volt a GPS), beírhatja kézzel az elem adatlapján,
+      vagy kikeresheti a Magyar Közút
       <a href="https://utszamkereso.kozut.hu/" target="_blank" rel="noopener">útszámkeresőjével</a>:
     </p>
     <ol class="hint">

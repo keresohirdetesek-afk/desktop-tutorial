@@ -159,9 +159,126 @@ function applyDeviceClass() {
 
 }
 
+/* ------------------------------------------- telepítés (ikon, PWA) */
+
+// A böngésző egyszer ajánlja fel a telepítést; elkapjuk, hogy a saját
+// gombunkkal bármikor elő tudjuk hozni.
+let telepitoEsemeny = null;
+
+/** Már alkalmazásként fut? (telepített ikonról indítva) */
+function telepitve() {
+  try {
+    return window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || window.navigator.standalone === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function iosKeszulek() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua)
+    || (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+}
+
+/** A kezdőlapi ajánlat állapota: csak akkor látszik, ha van értelme. */
+function telepitesFrissit() {
+  const kartya = $('#home-install');
+  if (!kartya) return;
+  let elutasitva = false;
+  try { elutasitva = localStorage.getItem('telepitesRejtve') === '1'; } catch (_) {}
+  // az egyfájlos változat fájlból indul: ott nincs mit telepíteni
+  const fajlbol = location.protocol === 'file:';
+  kartya.hidden = telepitve() || elutasitva || fajlbol;
+  const optGomb = $('#opt-install');
+  if (optGomb) optGomb.hidden = telepitve() || fajlbol;
+  const cim = $('#home-install-title');
+  const leiras = $('#home-install-desc');
+  const gomb = $('#home-install-btn');
+  if (!cim || !leiras || !gomb) return;
+  if (iosKeszulek() && !telepitoEsemeny) {
+    cim.textContent = 'Tegye ki ikonként a kezdőlapra';
+    leiras.textContent = 'iPhone/iPad: a Safari alsó sávján a Megosztás ikon, '
+      + 'majd „Főképernyőhöz adás”. Megmutatom lépésenként.';
+    gomb.textContent = 'Hogyan?';
+  } else {
+    cim.textContent = 'Mentse le ikonként a készülékére';
+    leiras.textContent = 'Így külön alkalmazásként indul: nagyobb képernyő, '
+      + 'nincs böngészősáv, és internet nélkül is működik.';
+    gomb.textContent = 'Letöltés ikonként';
+  }
+}
+
+/** A telepítés gomb: ahol lehet, egy koppintás; ahol nem, leírás. */
+async function telepitesInditas() {
+  if (telepitoEsemeny) {
+    const esemeny = telepitoEsemeny;
+    telepitoEsemeny = null;
+    try {
+      esemeny.prompt();
+      const valasz = await esemeny.userChoice;
+      if (valasz && valasz.outcome === 'accepted') {
+        toast('Telepítés elindult — keresse az ikont a készüléken.');
+        try { localStorage.setItem('telepitesRejtve', '1'); } catch (_) {}
+      } else {
+        toast('Rendben, most nem telepítjük.');
+      }
+    } catch (_) {
+      toast('A böngésző most nem engedte a telepítést.', 'error');
+    }
+    telepitesFrissit();
+    return;
+  }
+
+  const ios = iosKeszulek();
+  const ua = navigator.userAgent || '';
+  const androidChrome = /Android/.test(ua) && /Chrome/.test(ua);
+  const firefox = /Firefox/.test(ua);
+  const szoveg = ios
+    ? 'iPhone / iPad (Safari):\n'
+      + '1. Alul a középső, nyíllal felfelé mutató Megosztás ikon.\n'
+      + '2. Lapozzon le a „Főképernyőhöz adás” sorig.\n'
+      + '3. Hozzáadás — az ikon megjelenik a kezdőlapon.\n\n'
+      + 'Ezután ugyanúgy indul, mint egy letöltött alkalmazás, és internet nélkül is működik.'
+    : androidChrome
+      ? 'Android (Chrome):\n'
+        + '1. Jobbra fent a három pont.\n'
+        + '2. „Alkalmazás telepítése” vagy „Hozzáadás a kezdőképernyőhöz”.\n\n'
+        + 'Ha nem látja, töltse újra az oldalt, és próbálja újra ezt a gombot.'
+      : firefox
+        ? 'Firefox:\n'
+          + 'Gépen a Firefox nem telepíti az oldalakat. Használja a címsorban a '
+          + 'könyvjelzőt (Ctrl+D), telefonon pedig a menüben a „Hozzáadás a '
+          + 'kezdőképernyőhöz” sort. Chrome vagy Edge alatt egy kattintás a telepítés.'
+        : 'Gépen (Chrome / Edge):\n'
+          + '1. A címsor jobb szélén a telepítés ikon (monitor letöltés nyíllal), '
+          + 'vagy a menüben: „Alkalmazás telepítése”.\n'
+          + '2. Telepítés — külön ablakban, saját ikonnal indul.\n\n'
+          + 'Ha nem látja az ikont, töltse újra az oldalt (a telepítéshez https kell).';
+  await modal({ title: 'Mentés ikonként', text: szoveg, okText: 'Értem', cancelText: 'Bezárás' });
+}
+
+function telepitesFigyeles() {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    telepitoEsemeny = e;
+    try { localStorage.removeItem('telepitesRejtve'); } catch (_) {}
+    telepitesFrissit();
+  });
+  window.addEventListener('appinstalled', () => {
+    telepitoEsemeny = null;
+    try { localStorage.setItem('telepitesRejtve', '1'); } catch (_) {}
+    telepitesFrissit();
+    toast('Az alkalmazás telepítve — indítsa az ikonról.');
+  });
+  telepitesFrissit();
+}
+
 /** A legutóbbi munkák a kezdőlapon — egy koppintás a folytatáshoz. */
 async function renderHome() {
   applyDeviceClass();
+  telepitesFrissit();
   const list = $('#home-list');
   if (!list) return;
   list.innerHTML = '';
@@ -771,12 +888,14 @@ async function roadStamp(lat, lon, acc = null) {
   let net = null;
   try { net = await roadNetwork(); } catch (_) { net = null; }
 
-  if (!net) {
-    // Nincs NAP-adat. Elsőként a Közút saját szolgáltatása jön (ha be van
-    // állítva a híd) — az a hiteles forrás; csak utána a nyílt térképadat.
-    const kozut = await lookupKozut(lat, lon);
-    if (kozut) return { ...kozut, acc: acc == null ? null : Math.round(acc) };
+  // A Közút saját szolgáltatása a leghitelesebb forrás, de csak akkor
+  // kérdezzük, ha a felhasználó beállította a hidat — enélkül azonnal
+  // null-lal tér vissza, hálózat nélkül. Ezért ez megy elsőként, és csak
+  // utána a (szintén pontos, de interpolált) országos NAP-adat.
+  const kozut = await lookupKozut(lat, lon);
+  if (kozut) return { ...kozut, acc: acc == null ? null : Math.round(acc) };
 
+  if (!net) {
     // Ha a felhasználó bekapcsolta az online kiegészítést, nyílt
     // térképadatból megpróbáljuk az útszámot (és a kilométerkövekből a
     // szelvényt) — becsült értékként, külön megjelölve.
@@ -2051,7 +2170,7 @@ async function openViewer(id) {
   if (item.heading != null) {
     const c = cardinal(item.heading);
     const src = { compass: 'iránytű', exif: 'a kép adatából', gps: 'haladási irány', manual: 'kézzel' }[item.headingSource];
-    rows.push(['Kameairány', `${c.name} (${c.short} ${c.deg}°)${src ? ` — ${src}` : ''}`]);
+    rows.push(['Kamerairány', `${c.name} (${c.short} ${c.deg}°)${src ? ` — ${src}` : ''}`]);
   }
   if (item.type === 'condition') {
     rows.push(['Kategória', categoryLabel(item.category)]);
@@ -3209,6 +3328,13 @@ function bind() {
   $('#home-edit').addEventListener('click', () => show('list'));
   $('#home-escort').addEventListener('click', escortFromHome);
   $('#home-all').addEventListener('click', () => show('list'));
+  $('#home-install-btn').addEventListener('click', telepitesInditas);
+  $('#home-install-hide').addEventListener('click', () => {
+    try { localStorage.setItem('telepitesRejtve', '1'); } catch (_) {}
+    telepitesFrissit();
+    toast('Elrejtve. A „Bejárások” fülön lent bármikor letöltheti ikonként.');
+  });
+  $('#opt-install').addEventListener('click', telepitesInditas);
   try {
     window.matchMedia('(min-width: 1000px) and (pointer: fine)')
       .addEventListener('change', applyDeviceClass);
@@ -3348,6 +3474,7 @@ async function init() {
   // az első rajzoláskor már a tábla látszódjon, ne egy üres karika
   preloadSigns().then(() => { if (state.session) drawTrack(); });
   applyDeviceClass();
+  telepitesFigyeles();
   await renderSessionList();
   show('home');
 

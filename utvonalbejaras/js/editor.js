@@ -542,7 +542,7 @@ export class PhotoEditor {
 
   async askHeading(value) {
     const res = await modal({
-      title: 'Kameairány',
+      title: 'Kamerairány',
       text: 'Merre nézett a kamera? Fokban (0 = észak, 90 = kelet), vagy égtájjal: É, ÉK, K, DK, D, DNy, Ny, ÉNy.',
       fields: [{
         name: 'heading',

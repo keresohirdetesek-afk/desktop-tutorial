@@ -273,7 +273,7 @@ export async function buildReport(session, points, items, opts = {}, progress = 
       it.road && it.road.palyakod ? ['Pályakód', it.road.palyakod] : null,
       it.road && it.road.mernokseg ? ['Mérnökség', it.road.mernokseg] : null,
       it.road && it.road.uzemelteto ? ['Üzemeltető', it.road.uzemelteto] : null,
-      it.heading != null ? ['Kameairány', `${cardinal(it.heading).name} (${formatHeading(it.heading)})`] : null,
+      it.heading != null ? ['Kamerairány', `${cardinal(it.heading).name} (${formatHeading(it.heading)})`] : null,
       it.type === 'condition' ? ['Kategória', categoryLabel(it.category)] : null,
       it.type === 'condition' ? ['Állapot', conditionLabel(it.condition)] : null,
       it.type === 'condition' ? ['Minősítés', severityLabel(it.severity)] : null,

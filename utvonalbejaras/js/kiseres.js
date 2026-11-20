@@ -398,7 +398,7 @@ export class EscortMode {
       body.appendChild(el('p', { class: 'escort-dims', text: '↔ ' + item.dims.join(' · ') }));
     }
     if (item.heading != null) {
-      body.appendChild(el('p', { class: 'escort-sub', text: '🧭 kameairány: ' + formatHeading(item.heading) }));
+      body.appendChild(el('p', { class: 'escort-sub', text: '🧭 kamerairány: ' + formatHeading(item.heading) }));
     }
 
     if (item.audio) {

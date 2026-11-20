@@ -1306,5 +1306,11 @@ export class TrackEditor {
       const sor = el('div', { class: 'section-sor' }, [row, torles]);
       list.appendChild(sor);
     });
+    // Az átnevezés/törlés gombsor csak kijelölt szakasznál van értelme —
+    // eddig soha nem jelent meg, így az átnevezés elérhetetlen volt.
+    const acts = $('#trackedit-drawn-actions', this.root);
+    if (acts) {
+      acts.hidden = !this.drawn.some((s) => s.id === this.selectedDrawn);
+    }
   }
 }

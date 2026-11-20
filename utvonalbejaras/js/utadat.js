@@ -23,7 +23,7 @@
 import { formatSzelveny } from './uthalozat.js';
 import { wgs84ToEov } from './eov.js';
 
-const OVERPASS_ALAP = 'https://osmOverpass-api.de/api/interpreter';
+const OVERPASS_ALAP = 'https://overpass-api.de/api/interpreter';
 const OSM_TIMEOUT_MS = 9000;
 const UT_TAVOLSAG = 80;      // ennél messzebbi utat nem veszünk a ponthoz
 const KO_SUGAR = 7000;       // ekkora körben keresünk kilométerkövet
@@ -181,7 +181,7 @@ export function szamKm(v) {
   return isFinite(n) ? n : null;
 }
 
-export const OVERPASS_HOST = 'osmOverpass-api.de';
+export const OVERPASS_HOST = 'overpass-api.de';
 
 
 /* ------------------------------------------- a Közút útszámkeresője

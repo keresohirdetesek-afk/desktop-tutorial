@@ -486,7 +486,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (min-width: 620px) { .modal-sheet { border-radius: 18px; } }
 
 .modal-title { margin: 0 0 12px; font-size: 17px; }
-.modal-text { color: var(--muted); margin: 0 0 14px; }
+/* pre-line: a több lépésből álló leírások sortörései megmaradnak */
+.modal-text { color: var(--muted); margin: 0 0 14px; white-space: pre-line; }
 .modal-form { display: flex; flex-direction: column; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field-label { font-size: 12.5px; color: var(--muted); }
@@ -1110,6 +1111,41 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .home-recent { margin-top: 20px; }
 .home-recent .section-title { margin: 0; }
 
+/* „Mentse le ikonként” — csak akkor látszik, ha még nincs telepítve */
+.install-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.install-card .install-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+}
+.install-card .install-icon svg { display: block; }
+.install-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.install-body strong { font-size: 14.5px; }
+.install-card .btn { flex: none; }
+.install-card .icon-btn { flex: none; font-size: 15px; color: var(--muted); }
+
+@media (max-width: 560px) {
+  .install-card { flex-wrap: wrap; }
+  .install-body { flex-basis: 100%; order: 2; }
+  .install-card .btn { order: 3; flex: 1; }
+  .install-card .icon-btn { order: 1; margin-left: auto; }
+}
+
 /* nagyobb kijelzőn két oszlop — a négy választás egy képernyőn */
 @media (min-width: 760px) {
   .mode-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -1340,7 +1376,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   <button id="back-btn" class="icon-btn" hidden aria-label="Vissza">‹</button>
   <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 512 512" width="26" height="26"><defs><pattern id="tb-stripes" width="64" height="64" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="64" height="64" fill="#111827"/><rect width="32" height="64" fill="#f59e0b"/></pattern></defs><path fill-rule="evenodd" fill="url(#tb-stripes)" d="M128 8h256a120 120 0 0 1 120 120v256a120 120 0 0 1-120 120H128A120 120 0 0 1 8 384V128A120 120 0 0 1 128 8z M140 40h232a100 100 0 0 1 100 100v232a100 100 0 0 1-100 100H140A100 100 0 0 1 40 372V140A100 100 0 0 1 140 40z"/><path d="M140 40h232a100 100 0 0 1 100 100v232a100 100 0 0 1-100 100H140A100 100 0 0 1 40 372V140A100 100 0 0 1 140 40z" fill="#1f2937"/><path d="M186 150v118a70 70 0 0 0 140 0V196" fill="none" stroke="#d1d5db" stroke-width="44" stroke-linecap="round"/><path d="M326 136l46 74h-92z" fill="#f59e0b"/></svg></span>
   <h1 id="topbar-title">Útvonalbejárás</h1>
-  <button id="topbar-action" class="icon-btn" hidden></button>
 </header>
 
 <main id="main">
@@ -1351,8 +1386,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <div class="home-hero">
         <p class="wordmark"><b>UTVONAL</b><span>bejaras.hu</span></p>
         <p class="szlogen">Tervezés. Biztonság. Engedélyezés.</p>
-        <h2>Mit szeretne most csinálni?</h2>
         <p>Útvonalbejárás túlméretes és túlsúlyos szállítmányhoz — tervezés, bejárás, kíséret.</p>
+      </div>
+
+      <div id="home-install" class="install-card" hidden>
+        <span class="install-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 7v7"/><path d="m9 11 3 3 3-3"/></svg></span>
+        <span class="install-body">
+          <strong id="home-install-title">Mentse le ikonként a készülékére</strong>
+          <span id="home-install-desc" class="muted small">Így külön alkalmazásként indul: nagyobb képernyő, nincs böngészősáv, és internet nélkül is működik.</span>
+        </span>
+        <button id="home-install-btn" class="btn primary small" type="button">Letöltés ikonként</button>
+        <button id="home-install-hide" class="icon-btn" type="button" aria-label="Most nem">✕</button>
       </div>
 
       <div class="mode-grid">
@@ -1433,6 +1477,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
           <input id="opt-online" type="checkbox">
           <span>Online kiegészítés (útra illesztés, útszám — internetet használ)</span>
         </label>
+        <button id="opt-install" class="btn ghost small">⬇️ Mentés ikonként a készülékre</button>
         <button id="opt-hid" class="btn ghost small">🔗 Útszámkereső-híd beállítása</button>
         <button id="import-btn" class="btn ghost small">Mentés visszatöltése (JSON)</button>
         <input id="import-file" type="file" accept="application/json" hidden>
@@ -1657,19 +1702,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
     <h3 class="section-head">2. Közös adatok</h3>
     <div id="kozut-form" class="kozut-fields"></div>
 
-    <h3 class="section-head">3. Úthálózati adat (NAP) — ezzel lesz magától az útszám</h3>
+    <h3 class="section-head">3. Úthálózati adat (NAP) — már be van építve</h3>
     <p class="hint">
-      A <a href="https://napportal.kozut.hu/" target="_blank" rel="noopener">Nemzeti
-      Adathozzáférési Pontról</a> (regisztráció után, ingyen) letölthető az országos
-      közúthálózat és a szelvényjelek adatcsomag. <b>Ha betölti, minden ponthoz magától
-      megjelenik az útszám és a km szelvény</b> — keresgélés nélkül, a készüléken,
-      hálózat nélkül is.
+      Az országos <b>szelvényjel-adat az alkalmazás része</b>: az első indításkor
+      magától települ, és magától frissül. Ezért <b>minden ponthoz magától megjelenik
+      az útszám és a km szelvény</b> — keresgélés nélkül, a készüléken, hálózat nélkül is.
+      Itt nincs teendő.
     </p>
     <p class="hint">
-      Formátum: <b>GeoJSON</b>, vagy <b>shapefile</b> — ilyenkor a <code>.shp</code> és a
-      <code>.dbf</code> fájlt <b>együtt</b> jelölje ki (ZIP-ben is jó). Elég az egyik
-      adatcsomag: a <i>szelvényjelek</i> kicsi és gyors, az <i>országos közúthálózat</i>
-      pontosabb, de nagyobb helyet foglal.
+      Saját adatot csak akkor kell betöltenie, ha a <i>teljes országos közúthálózatot</i>
+      (vonalas adat) is használni szeretné: az pontosabb, de sokkal nagyobb helyet foglal.
+      A csomagok a <a href="https://napportal.kozut.hu/" target="_blank" rel="noopener">Nemzeti
+      Adathozzáférési Pontról</a> tölthetők le (regisztráció után, ingyen). Formátum:
+      <b>GeoJSON</b>, vagy <b>shapefile</b> — ilyenkor a <code>.shp</code> és a
+      <code>.dbf</code> fájlt <b>együtt</b> jelölje ki (ZIP-ben is jó).
     </p>
     <div id="kozut-net" class="kozut-net"></div>
     <input id="kozut-net-file" type="file" hidden multiple accept=".geojson,.json,.zip,.shp,.dbf,application/geo+json,application/json,application/zip">
@@ -1677,9 +1723,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
     <h3 class="section-head">4. Helyszínek (a jegyzékhez és a részletezőhöz)</h3>
     <p class="hint">
-      A település, az útszám és a km szelvény nem derül ki a GPS-ből.
-      Ha betöltötte az úthálózati adatot (3. pont), magától megjelenik.
-      Enélkül soronként három lépés a Magyar Közút
+      Az útszám, a km szelvény és a település a beépített országos adatból
+      magától kitöltődik. Ha egy ponthoz mégsem jön ki (például nem országos
+      közút, vagy pontatlan volt a GPS), beírhatja kézzel az elem adatlapján,
+      vagy kikeresheti a Magyar Közút
       <a href="https://utszamkereso.kozut.hu/" target="_blank" rel="noopener">útszámkeresőjével</a>:
     </p>
     <ol class="hint">
@@ -5449,7 +5496,7 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
       it.road && it.road.palyakod ? ['Pályakód', it.road.palyakod] : null,
       it.road && it.road.mernokseg ? ['Mérnökség', it.road.mernokseg] : null,
       it.road && it.road.uzemelteto ? ['Üzemeltető', it.road.uzemelteto] : null,
-      it.heading != null ? ['Kameairány', `${cardinal(it.heading).name} (${formatHeading(it.heading)})`] : null,
+      it.heading != null ? ['Kamerairány', `${cardinal(it.heading).name} (${formatHeading(it.heading)})`] : null,
       it.type === 'condition' ? ['Kategória', categoryLabel(it.category)] : null,
       it.type === 'condition' ? ['Állapot', conditionLabel(it.condition)] : null,
       it.type === 'condition' ? ['Minősítés', severityLabel(it.severity)] : null,
@@ -7882,7 +7929,7 @@ async function beepitettAdat(progress = () => {}) {
 // eltároljuk, hogy egy bejárás ne küldjön ugyanarra a helyre többször.
 
 
-const OVERPASS_ALAP = 'https://osmOverpass-api.de/api/interpreter';
+const OVERPASS_ALAP = 'https://overpass-api.de/api/interpreter';
 const OSM_TIMEOUT_MS = 9000;
 const UT_TAVOLSAG = 80;      // ennél messzebbi utat nem veszünk a ponthoz
 const KO_SUGAR = 7000;       // ekkora körben keresünk kilométerkövet
@@ -8040,7 +8087,7 @@ function szamKm(v) {
   return isFinite(n) ? n : null;
 }
 
-const OVERPASS_HOST = 'osmOverpass-api.de';
+const OVERPASS_HOST = 'overpass-api.de';
 
 
 /* ------------------------------------------- a Közút útszámkeresője
@@ -9886,7 +9933,7 @@ class EscortMode {
       body.appendChild(el('p', { class: 'escort-dims', text: '↔ ' + item.dims.join(' · ') }));
     }
     if (item.heading != null) {
-      body.appendChild(el('p', { class: 'escort-sub', text: '🧭 kameairány: ' + formatHeading(item.heading) }));
+      body.appendChild(el('p', { class: 'escort-sub', text: '🧭 kamerairány: ' + formatHeading(item.heading) }));
     }
 
     if (item.audio) {
@@ -10501,7 +10548,7 @@ class PhotoEditor {
 
   async askHeading(value) {
     const res = await modal({
-      title: 'Kameairány',
+      title: 'Kamerairány',
       text: 'Merre nézett a kamera? Fokban (0 = észak, 90 = kelet), vagy égtájjal: É, ÉK, K, DK, D, DNy, Ny, ÉNy.',
       fields: [{
         name: 'heading',
@@ -12206,6 +12253,12 @@ class TrackEditor {
       const sor = el('div', { class: 'section-sor' }, [row, torles]);
       list.appendChild(sor);
     });
+    // Az átnevezés/törlés gombsor csak kijelölt szakasznál van értelme —
+    // eddig soha nem jelent meg, így az átnevezés elérhetetlen volt.
+    const acts = $('#trackedit-drawn-actions', this.root);
+    if (acts) {
+      acts.hidden = !this.drawn.some((s) => s.id === this.selectedDrawn);
+    }
   }
 }
 
@@ -12332,9 +12385,126 @@ function applyDeviceClass() {
 
 }
 
+/* ------------------------------------------- telepítés (ikon, PWA) */
+
+// A böngésző egyszer ajánlja fel a telepítést; elkapjuk, hogy a saját
+// gombunkkal bármikor elő tudjuk hozni.
+let telepitoEsemeny = null;
+
+/** Már alkalmazásként fut? (telepített ikonról indítva) */
+function telepitve() {
+  try {
+    return window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || window.navigator.standalone === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function iosKeszulek() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua)
+    || (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+}
+
+/** A kezdőlapi ajánlat állapota: csak akkor látszik, ha van értelme. */
+function telepitesFrissit() {
+  const kartya = $('#home-install');
+  if (!kartya) return;
+  let elutasitva = false;
+  try { elutasitva = localStorage.getItem('telepitesRejtve') === '1'; } catch (_) {}
+  // az egyfájlos változat fájlból indul: ott nincs mit telepíteni
+  const fajlbol = location.protocol === 'file:';
+  kartya.hidden = telepitve() || elutasitva || fajlbol;
+  const optGomb = $('#opt-install');
+  if (optGomb) optGomb.hidden = telepitve() || fajlbol;
+  const cim = $('#home-install-title');
+  const leiras = $('#home-install-desc');
+  const gomb = $('#home-install-btn');
+  if (!cim || !leiras || !gomb) return;
+  if (iosKeszulek() && !telepitoEsemeny) {
+    cim.textContent = 'Tegye ki ikonként a kezdőlapra';
+    leiras.textContent = 'iPhone/iPad: a Safari alsó sávján a Megosztás ikon, '
+      + 'majd „Főképernyőhöz adás”. Megmutatom lépésenként.';
+    gomb.textContent = 'Hogyan?';
+  } else {
+    cim.textContent = 'Mentse le ikonként a készülékére';
+    leiras.textContent = 'Így külön alkalmazásként indul: nagyobb képernyő, '
+      + 'nincs böngészősáv, és internet nélkül is működik.';
+    gomb.textContent = 'Letöltés ikonként';
+  }
+}
+
+/** A telepítés gomb: ahol lehet, egy koppintás; ahol nem, leírás. */
+async function telepitesInditas() {
+  if (telepitoEsemeny) {
+    const esemeny = telepitoEsemeny;
+    telepitoEsemeny = null;
+    try {
+      esemeny.prompt();
+      const valasz = await esemeny.userChoice;
+      if (valasz && valasz.outcome === 'accepted') {
+        toast('Telepítés elindult — keresse az ikont a készüléken.');
+        try { localStorage.setItem('telepitesRejtve', '1'); } catch (_) {}
+      } else {
+        toast('Rendben, most nem telepítjük.');
+      }
+    } catch (_) {
+      toast('A böngésző most nem engedte a telepítést.', 'error');
+    }
+    telepitesFrissit();
+    return;
+  }
+
+  const ios = iosKeszulek();
+  const ua = navigator.userAgent || '';
+  const androidChrome = /Android/.test(ua) && /Chrome/.test(ua);
+  const firefox = /Firefox/.test(ua);
+  const szoveg = ios
+    ? 'iPhone / iPad (Safari):\n'
+      + '1. Alul a középső, nyíllal felfelé mutató Megosztás ikon.\n'
+      + '2. Lapozzon le a „Főképernyőhöz adás” sorig.\n'
+      + '3. Hozzáadás — az ikon megjelenik a kezdőlapon.\n\n'
+      + 'Ezután ugyanúgy indul, mint egy letöltött alkalmazás, és internet nélkül is működik.'
+    : androidChrome
+      ? 'Android (Chrome):\n'
+        + '1. Jobbra fent a három pont.\n'
+        + '2. „Alkalmazás telepítése” vagy „Hozzáadás a kezdőképernyőhöz”.\n\n'
+        + 'Ha nem látja, töltse újra az oldalt, és próbálja újra ezt a gombot.'
+      : firefox
+        ? 'Firefox:\n'
+          + 'Gépen a Firefox nem telepíti az oldalakat. Használja a címsorban a '
+          + 'könyvjelzőt (Ctrl+D), telefonon pedig a menüben a „Hozzáadás a '
+          + 'kezdőképernyőhöz” sort. Chrome vagy Edge alatt egy kattintás a telepítés.'
+        : 'Gépen (Chrome / Edge):\n'
+          + '1. A címsor jobb szélén a telepítés ikon (monitor letöltés nyíllal), '
+          + 'vagy a menüben: „Alkalmazás telepítése”.\n'
+          + '2. Telepítés — külön ablakban, saját ikonnal indul.\n\n'
+          + 'Ha nem látja az ikont, töltse újra az oldalt (a telepítéshez https kell).';
+  await modal({ title: 'Mentés ikonként', text: szoveg, okText: 'Értem', cancelText: 'Bezárás' });
+}
+
+function telepitesFigyeles() {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    telepitoEsemeny = e;
+    try { localStorage.removeItem('telepitesRejtve'); } catch (_) {}
+    telepitesFrissit();
+  });
+  window.addEventListener('appinstalled', () => {
+    telepitoEsemeny = null;
+    try { localStorage.setItem('telepitesRejtve', '1'); } catch (_) {}
+    telepitesFrissit();
+    toast('Az alkalmazás telepítve — indítsa az ikonról.');
+  });
+  telepitesFrissit();
+}
+
 /** A legutóbbi munkák a kezdőlapon — egy koppintás a folytatáshoz. */
 async function renderHome() {
   applyDeviceClass();
+  telepitesFrissit();
   const list = $('#home-list');
   if (!list) return;
   list.innerHTML = '';
@@ -12944,12 +13114,14 @@ async function roadStamp(lat, lon, acc = null) {
   let net = null;
   try { net = await roadNetwork(); } catch (_) { net = null; }
 
-  if (!net) {
-    // Nincs NAP-adat. Elsőként a Közút saját szolgáltatása jön (ha be van
-    // állítva a híd) — az a hiteles forrás; csak utána a nyílt térképadat.
-    const kozut = await lookupKozut(lat, lon);
-    if (kozut) return { ...kozut, acc: acc == null ? null : Math.round(acc) };
+  // A Közút saját szolgáltatása a leghitelesebb forrás, de csak akkor
+  // kérdezzük, ha a felhasználó beállította a hidat — enélkül azonnal
+  // null-lal tér vissza, hálózat nélkül. Ezért ez megy elsőként, és csak
+  // utána a (szintén pontos, de interpolált) országos NAP-adat.
+  const kozut = await lookupKozut(lat, lon);
+  if (kozut) return { ...kozut, acc: acc == null ? null : Math.round(acc) };
 
+  if (!net) {
     // Ha a felhasználó bekapcsolta az online kiegészítést, nyílt
     // térképadatból megpróbáljuk az útszámot (és a kilométerkövekből a
     // szelvényt) — becsült értékként, külön megjelölve.
@@ -14224,7 +14396,7 @@ async function openViewer(id) {
   if (item.heading != null) {
     const c = cardinal(item.heading);
     const src = { compass: 'iránytű', exif: 'a kép adatából', gps: 'haladási irány', manual: 'kézzel' }[item.headingSource];
-    rows.push(['Kameairány', `${c.name} (${c.short} ${c.deg}°)${src ? ` — ${src}` : ''}`]);
+    rows.push(['Kamerairány', `${c.name} (${c.short} ${c.deg}°)${src ? ` — ${src}` : ''}`]);
   }
   if (item.type === 'condition') {
     rows.push(['Kategória', categoryLabel(item.category)]);
@@ -15382,6 +15554,13 @@ function bind() {
   $('#home-edit').addEventListener('click', () => show('list'));
   $('#home-escort').addEventListener('click', escortFromHome);
   $('#home-all').addEventListener('click', () => show('list'));
+  $('#home-install-btn').addEventListener('click', telepitesInditas);
+  $('#home-install-hide').addEventListener('click', () => {
+    try { localStorage.setItem('telepitesRejtve', '1'); } catch (_) {}
+    telepitesFrissit();
+    toast('Elrejtve. A „Bejárások” fülön lent bármikor letöltheti ikonként.');
+  });
+  $('#opt-install').addEventListener('click', telepitesInditas);
   try {
     window.matchMedia('(min-width: 1000px) and (pointer: fine)')
       .addEventListener('change', applyDeviceClass);
@@ -15521,6 +15700,7 @@ async function init() {
   // az első rajzoláskor már a tábla látszódjon, ne egy üres karika
   preloadSigns().then(() => { if (state.session) drawTrack(); });
   applyDeviceClass();
+  telepitesFigyeles();
   await renderSessionList();
   show('home');
 
