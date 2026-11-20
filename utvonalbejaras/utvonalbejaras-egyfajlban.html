@@ -553,6 +553,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
 .modal-actions .btn { min-width: 96px; }
+/* a törlés a bal szélre kerül, jó messze a mentéstől */
+.modal-actions .modal-extra { margin-right: auto; }
+@media (max-width: 420px) {
+  .modal-actions { flex-wrap: wrap; }
+  .modal-actions .modal-extra { margin-right: 0; order: 3; width: 100%; }
+}
 
 #toast {
   position: fixed;
@@ -1936,9 +1942,11 @@ function toast(message, kind = 'info') {
 
 /**
  * Modális űrlap. mezők: {name, label, type, value, placeholder, options, hint, rows}
- * Visszatérés: értékobjektum, vagy null ha megszakították.
+ * extra: {text, value, danger} — harmadik gomb (pl. törlés) az űrlap alján.
+ * Visszatérés: értékobjektum; null ha megszakították; az `extra.value`
+ * sztring, ha a külön műveletet választották.
  */
-function modal({ title, fields = [], okText = 'Mentés', cancelText = 'Mégse', text }) {
+function modal({ title, fields = [], okText = 'Mentés', cancelText = 'Mégse', text, extra = null }) {
   return new Promise((resolve) => {
     const inputs = {};
     const form = el('form', { class: 'modal-form' });
@@ -2008,6 +2016,16 @@ function modal({ title, fields = [], okText = 'Mentés', cancelText = 'Mégse', 
     }
 
     const actions = el('div', { class: 'modal-actions' });
+    // Külön művelet (pl. törlés): a mentés mellé, de attól elhúzva, hogy
+    // ne lehessen véletlenül eltalálni. A modál ekkor sztringgel tér vissza.
+    if (extra) {
+      const more = el('button', {
+        type: 'button', class: 'btn ' + (extra.danger === false ? 'ghost' : 'danger') + ' modal-extra',
+        text: extra.text || 'Törlés',
+      });
+      more.addEventListener('click', () => close(extra.value || 'extra'));
+      actions.appendChild(more);
+    }
     const cancel = el('button', { type: 'button', class: 'btn ghost', text: cancelText });
     const ok = el('button', { type: 'submit', class: 'btn primary', text: okText });
     actions.append(cancel, ok);
@@ -13607,8 +13625,14 @@ async function addSign() {
 }
 
 async function editSign(item) {
-  const res = await modal({ title: 'Jelzéskép szerkesztése', fields: signFields(item) });
+  const szakasz = !!(item.veg || item.nyitott);
+  const res = await modal({
+    title: 'Jelzéskép szerkesztése',
+    fields: signFields(item),
+    extra: { text: szakasz ? 'Szakasz törlése' : 'Jelzéskép törlése', value: 'torles' },
+  });
   if (!res) return;
+  if (res === 'torles') { await jelzesTorlese(item); return; }
   const vals = signValues(res);
   if (!vals.signs.length) {
     toast('Jelöljön ki legalább egy táblát.', 'error');
@@ -13624,6 +13648,62 @@ async function editSign(item) {
   escortRefresh();
   closeViewer();
   toast('Mentve.');
+}
+
+/**
+ * Jelzéskép törlése a szerkesztőből. Szakasznál megkérdezi, hogy az egész
+ * tábla menjen-e, vagy csak a szakasz — a tábla pontként megmaradhat.
+ */
+async function jelzesTorlese(item) {
+  const szakasz = !!(item.veg || item.nyitott);
+  if (szakasz) {
+    const mit = await choose({
+      title: 'Mit töröljünk?',
+      text: `„${item.title || 'Jelzéskép'}” — ${item.veg
+        ? `${formatDistance(hossza(item))} hosszú szakasz`
+        : 'szakasz, a vége még nincs lezárva'}.`,
+      options: [
+        {
+          value: 'mind', label: 'Az egész jelzésképet',
+          hint: 'A tábla és a szakasz is eltűnik a térképről, a listából és a riportból.',
+        },
+        {
+          value: 'veg', label: 'Csak a szakaszt — a tábla maradjon',
+          hint: 'A jelzéskép megmarad, de innentől csak erre az egy pontra szól.',
+        },
+      ],
+    });
+    if (!mit) return;
+    if (mit === 'veg') {
+      delete item.veg;
+      delete item.vegRoad;
+      item.nyitott = false;
+      await db.saveItem(item);
+      markUnsaved();
+      renderItems();
+      drawTrack();
+      escortRefresh();
+      if (!$('#viewer').hidden) openViewer(item.id);
+      toast('A szakasz törölve — a jelzéskép pontként megmaradt.');
+      return;
+    }
+  } else {
+    const ok = await modal({
+      title: 'Jelzéskép törlése?',
+      text: `„${item.title || 'Jelzéskép'}” véglegesen törlődik a térképről, a listából és a riportból.`,
+      okText: 'Törlés',
+    });
+    if (!ok) return;
+  }
+  await db.deleteItem(item.id);
+  state.items = state.items.filter((i) => i.id !== item.id);
+  markUnsaved();
+  closeViewer();
+  renderItems();
+  drawTrack();
+  escortRefresh();
+  if (trackEditor && !$('#trackedit').hidden) trackEditor.draw();
+  toast('Jelzéskép törölve.');
 }
 
 /** Videó csatolása egy meglévő bejegyzéshez (nem külön elemként). */

@@ -34,9 +34,11 @@ export function toast(message, kind = 'info') {
 
 /**
  * Modális űrlap. mezők: {name, label, type, value, placeholder, options, hint, rows}
- * Visszatérés: értékobjektum, vagy null ha megszakították.
+ * extra: {text, value, danger} — harmadik gomb (pl. törlés) az űrlap alján.
+ * Visszatérés: értékobjektum; null ha megszakították; az `extra.value`
+ * sztring, ha a külön műveletet választották.
  */
-export function modal({ title, fields = [], okText = 'Mentés', cancelText = 'Mégse', text }) {
+export function modal({ title, fields = [], okText = 'Mentés', cancelText = 'Mégse', text, extra = null }) {
   return new Promise((resolve) => {
     const inputs = {};
     const form = el('form', { class: 'modal-form' });
@@ -106,6 +108,16 @@ export function modal({ title, fields = [], okText = 'Mentés', cancelText = 'M�
     }
 
     const actions = el('div', { class: 'modal-actions' });
+    // Külön művelet (pl. törlés): a mentés mellé, de attól elhúzva, hogy
+    // ne lehessen véletlenül eltalálni. A modál ekkor sztringgel tér vissza.
+    if (extra) {
+      const more = el('button', {
+        type: 'button', class: 'btn ' + (extra.danger === false ? 'ghost' : 'danger') + ' modal-extra',
+        text: extra.text || 'Törlés',
+      });
+      more.addEventListener('click', () => close(extra.value || 'extra'));
+      actions.appendChild(more);
+    }
     const cancel = el('button', { type: 'button', class: 'btn ghost', text: cancelText });
     const ok = el('button', { type: 'submit', class: 'btn primary', text: okText });
     actions.append(cancel, ok);

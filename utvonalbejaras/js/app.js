@@ -1452,8 +1452,14 @@ async function addSign() {
 }
 
 async function editSign(item) {
-  const res = await modal({ title: 'Jelzéskép szerkesztése', fields: signFields(item) });
+  const szakasz = !!(item.veg || item.nyitott);
+  const res = await modal({
+    title: 'Jelzéskép szerkesztése',
+    fields: signFields(item),
+    extra: { text: szakasz ? 'Szakasz törlése' : 'Jelzéskép törlése', value: 'torles' },
+  });
   if (!res) return;
+  if (res === 'torles') { await jelzesTorlese(item); return; }
   const vals = signValues(res);
   if (!vals.signs.length) {
     toast('Jelöljön ki legalább egy táblát.', 'error');
@@ -1469,6 +1475,62 @@ async function editSign(item) {
   escortRefresh();
   closeViewer();
   toast('Mentve.');
+}
+
+/**
+ * Jelzéskép törlése a szerkesztőből. Szakasznál megkérdezi, hogy az egész
+ * tábla menjen-e, vagy csak a szakasz — a tábla pontként megmaradhat.
+ */
+async function jelzesTorlese(item) {
+  const szakasz = !!(item.veg || item.nyitott);
+  if (szakasz) {
+    const mit = await choose({
+      title: 'Mit töröljünk?',
+      text: `„${item.title || 'Jelzéskép'}” — ${item.veg
+        ? `${formatDistance(hossza(item))} hosszú szakasz`
+        : 'szakasz, a vége még nincs lezárva'}.`,
+      options: [
+        {
+          value: 'mind', label: 'Az egész jelzésképet',
+          hint: 'A tábla és a szakasz is eltűnik a térképről, a listából és a riportból.',
+        },
+        {
+          value: 'veg', label: 'Csak a szakaszt — a tábla maradjon',
+          hint: 'A jelzéskép megmarad, de innentől csak erre az egy pontra szól.',
+        },
+      ],
+    });
+    if (!mit) return;
+    if (mit === 'veg') {
+      delete item.veg;
+      delete item.vegRoad;
+      item.nyitott = false;
+      await db.saveItem(item);
+      markUnsaved();
+      renderItems();
+      drawTrack();
+      escortRefresh();
+      if (!$('#viewer').hidden) openViewer(item.id);
+      toast('A szakasz törölve — a jelzéskép pontként megmaradt.');
+      return;
+    }
+  } else {
+    const ok = await modal({
+      title: 'Jelzéskép törlése?',
+      text: `„${item.title || 'Jelzéskép'}” véglegesen törlődik a térképről, a listából és a riportból.`,
+      okText: 'Törlés',
+    });
+    if (!ok) return;
+  }
+  await db.deleteItem(item.id);
+  state.items = state.items.filter((i) => i.id !== item.id);
+  markUnsaved();
+  closeViewer();
+  renderItems();
+  drawTrack();
+  escortRefresh();
+  if (trackEditor && !$('#trackedit').hidden) trackEditor.draw();
+  toast('Jelzéskép törölve.');
 }
 
 /** Videó csatolása egy meglévő bejegyzéshez (nem külön elemként). */
