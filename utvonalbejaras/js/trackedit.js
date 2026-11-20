@@ -420,12 +420,16 @@ export class TrackEditor {
       return;
     }
 
+    // meglévő jelölésre koppintva azt nyitjuk meg (minden módban) — így a
+    // rossz helyre került jelzéskép is megnyitható és törölhető
+    const box = (this.hit.hitboxes || []).find((b) => Math.hypot(b.x - p.x, b.y - p.y) < b.r + 4);
+    if (box && this.onOpenItem && !(this.mode === 'jelzes' && this.jelzesA)) {
+      this.onOpenItem(box.id);
+      return;
+    }
+
     // jelzéskép módban két koppintás jelöli ki a szakaszt
     if (this.mode === 'jelzes') { this.jelzesKattintas(p); return; }
-
-    // meglévő jelölésre koppintva azt nyitjuk meg (minden módban)
-    const box = (this.hit.hitboxes || []).find((b) => Math.hypot(b.x - p.x, b.y - p.y) < b.r + 4);
-    if (box && this.onOpenItem) { this.onOpenItem(box.id); return; }
 
     // berajzolt szakaszra koppintva azt jelöljük ki
     // Folyamatban lévő kijelölésnél maradjunk ugyanazon a szakaszon: két
@@ -832,8 +836,10 @@ export class TrackEditor {
       toast(pt.fajta === 'rajzolt' || pt.fajta === 'nyomvonal'
         ? 'Kezdet az útvonalon. Most koppintson a szakasz végére.'
         : pt.utszam
-          ? `Kezdet: ${pt.utszam}. Most koppintson a szakasz végére.`
-          : 'Most koppintson a szakasz végére.');
+          ? `Nem az útvonalra koppintott — a(z) ${pt.utszam} útra illesztettem. `
+            + 'Most a szakasz vége jön.'
+          : 'Nem az útvonalra koppintott, és utat sem találtam itt. '
+            + 'Most a szakasz vége jön.');
       return;
     }
 
@@ -1282,7 +1288,23 @@ export class TrackEditor {
           el('span', { class: 'section-sub', text: `${formatDistance(trackLength(seg.pts))} · ${seg.pts.length} pont` }),
         ]),
       ]);
-      list.appendChild(row);
+      // törlés közvetlenül a listából: eddig előbb ki kellett jelölni a
+      // térképen, és csak utána jelent meg a törlés gomb
+      const torles = el('button', {
+        class: 'section-torles', type: 'button', title: 'Szakasz törlése',
+        'aria-label': 'Szakasz törlése',
+        onclick: async (e) => {
+          e.stopPropagation();
+          this.selectedDrawn = seg.id;
+          await this.deleteDrawn();
+        },
+      });
+      torles.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" '
+        + 'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+        + '<path d="M4 6.5h16"/><path d="M9 6.5V4h6v2.5"/>'
+        + '<path d="M6 6.5 7 20a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5l1-13.5"/></svg>';
+      const sor = el('div', { class: 'section-sor' }, [row, torles]);
+      list.appendChild(sor);
     });
   }
 }

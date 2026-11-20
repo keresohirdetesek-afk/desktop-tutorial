@@ -1299,3 +1299,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .viewer-canvas.mozgat { cursor: crosshair; border-color: var(--accent); }
 .viewer-map .hint { margin: 0; }
 @media (min-width: 900px) { .viewer-canvas { height: 380px; } }
+
+/* Berajzolt szakasz törlése közvetlenül a listából */
+.section-sor { display: flex; align-items: stretch; gap: 6px; }
+.section-sor .section-row { flex: 1; min-width: 0; }
+.section-torles {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+.section-torles:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
