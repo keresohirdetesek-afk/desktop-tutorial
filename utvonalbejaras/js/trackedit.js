@@ -51,8 +51,10 @@ export class TrackEditor {
    *   otthoni szerkesztéshez), és a kiválasztott koordinátával tér vissza.
    */
   open({ points, items = [], drawn = [], onApply, pick = null, onAddPoint = null,
+    onSignForRange = null,
     onOpenItem = null, resolvePlace = null, road = null }) {
-    this.onAddPoint = onAddPoint;       // új pont felvétele a térképről
+    this.onAddPoint = onAddPoint;               // új pont felvétele a térképről
+    this.onSignForRange = onSignForRange;       // jelzéskép a kijelölt szakaszra
     this.onOpenItem = onOpenItem;       // meglévő jelölésre koppintva
     this.resolvePlace = resolvePlace;   // „ugrás helyre” feloldása
     this.road = road;                   // úthálózat: illesztés és útkövetés
@@ -154,6 +156,8 @@ export class TrackEditor {
     });
     $('#trackedit-drawnsel-del', this.root).addEventListener('click', () => this.deleteDrawnRange());
     $('#trackedit-drawnsel-split', this.root).addEventListener('click', () => this.splitDrawn());
+    $('#trackedit-jelzes-szakasz', this.root).addEventListener('click', () => this.jelzesSzakaszra('nyomvonal'));
+    $('#trackedit-drawnsel-jelzes', this.root).addEventListener('click', () => this.jelzesSzakaszra('rajzolt'));
     $('#trackedit-drawnsel-clear', this.root).addEventListener('click', () => {
       this.drawnSel = null;
       this.draw();
@@ -741,6 +745,35 @@ export class TrackEditor {
     toast(`Megrajzolva: ${ki.reszek.length} szakasz, ${formatDistance(utonHossz)} az utakon.`);
   }
 
+  /**
+   * A kijelölt szakaszra jelzéskép. Gépen ez a természetes út: előbb a
+   * térképen kijelöljük, hol kell a tábla, és csak utána mondjuk meg, melyik.
+   */
+  async jelzesSzakaszra(honnan) {
+    if (!this.onSignForRange) return;
+    let a = null; let b = null;
+    if (honnan === 'rajzolt') {
+      const pts = this.drawnSelPts();
+      if (pts.length < 2) { toast('Jelöljön ki egy szakaszt a vonalon.', 'error'); return; }
+      a = pts[0];
+      b = pts[pts.length - 1];
+    } else {
+      const pts = this.selectedPoints();
+      if (pts.length < 2) { toast('Jelöljön ki egy szakaszt a nyomvonalon.', 'error'); return; }
+      a = pts[0];
+      b = pts[pts.length - 1];
+    }
+    const ok = await this.onSignForRange(
+      { lat: a.lat, lon: a.lon },
+      { lat: b.lat, lon: b.lon }
+    );
+    if (!ok) return;
+    this.sel = null;
+    this.drawnSel = null;
+    this.draw();
+    this.renderPanel();
+  }
+
   currentDrawn() {
     return this.drawn.find((s) => s.id === this.selectedDrawn) || null;
   }
@@ -952,6 +985,8 @@ export class TrackEditor {
     $('#trackedit-turnaround', this.root).hidden = mode !== 'select';
     $('#trackedit-selinfo', this.root).hidden = mode !== 'select' || !this.sel;
     $('#trackedit-drawnsel', this.root).hidden = mode !== 'select' || !this.drawnSel;
+    const jsz = $('#trackedit-jelzes-szakasz', this.root);
+    if (jsz) jsz.hidden = mode !== 'select' || !this.onSignForRange;
     // a berajzolt vonalon belüli kijelölés csak a kijelölő módban él
     if (mode !== 'select') this.drawnSel = null;
 
@@ -1039,7 +1074,8 @@ export class TrackEditor {
 
       const hasSel = !!this.sel;
       for (const id of ['#trackedit-reject', '#trackedit-accept', '#trackedit-delete',
-                        '#trackedit-clear-sel', '#trackedit-turnaround']) {
+                        '#trackedit-clear-sel', '#trackedit-turnaround',
+                        '#trackedit-jelzes-szakasz']) {
         $(id, this.root).disabled = !hasSel;
       }
       hint.hidden = false;

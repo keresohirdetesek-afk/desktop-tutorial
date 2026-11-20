@@ -614,6 +614,8 @@ async function openTrackEditor() {
     items: state.items,
     drawn: state.session.drawn || [],
     onAddPoint: (at) => addPointAt(at),
+    // a térképen kijelölt szakaszra jelzéskép — gépen ez a természetes út
+    onSignForRange: (a, b) => jelzesSzakaszra(a, b),
     // a szerkesztő nyitva marad az adatlap mögött
     onOpenItem: (id) => openViewer(id),
     resolvePlace: (text) => resolvePlace(text),
@@ -1324,6 +1326,56 @@ async function zarSzakasz(item, mod) {
 function hossza(item) {
   if (!item.veg || item.lat == null) return 0;
   return trackLength([{ lat: item.lat, lon: item.lon }, item.veg]);
+}
+
+/**
+ * Jelzéskép a térképen kijelölt szakaszra. A szerkesztőből hívjuk: ott
+ * előbb a szakaszt jelöli ki a felhasználó, és csak utána mondja meg,
+ * melyik táblát kell kitenni rá.
+ */
+async function jelzesSzakaszra(a, b) {
+  const res = await modal({
+    title: 'Jelzéskép a kijelölt szakaszra',
+    text: `A szakasz ${formatDistance(trackLength([a, b]))} hosszú. `
+      + 'Melyik táblát kell a kísérőautóra kitenni rajta?',
+    fields: signFields().filter((f) => f.name !== 'hataly'),
+    okText: 'Mentés',
+  });
+  if (!res) return false;
+  const vals = signValues(res);
+  if (!vals.signs.length) {
+    toast('Jelöljön ki legalább egy táblát.', 'error');
+    return false;
+  }
+  delete vals.hataly;
+
+  const item = {
+    id: db.uid(),
+    sessionId: state.session.id,
+    type: 'jelzes',
+    phase: capturePhase,
+    created: Date.now(),
+    lat: a.lat,
+    lon: a.lon,
+    acc: null,
+    posSource: 'manual',
+    veg: { lat: b.lat, lon: b.lon },
+    nyitott: false,
+    dims: [],
+    texts: [],
+    ops: [],
+    ...vals,
+  };
+  item.road = await roadStamp(a.lat, a.lon);
+  item.vegRoad = await roadStamp(b.lat, b.lon);
+  await db.saveItem(item);
+  state.items.push(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  escortRefresh();
+  toast(`Jelzéskép a szakaszra: ${signsLabel(item)} · ${formatDistance(hossza(item))}.`);
+  return true;
 }
 
 async function addSign() {
