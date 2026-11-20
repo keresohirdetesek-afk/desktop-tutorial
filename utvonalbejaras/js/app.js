@@ -38,7 +38,7 @@ import {
   licence, licencingConfigured, saveLicence, clearLicence, canCreateSession, reportLicence,
   documentAccess, useCredit, creditInfo,
 } from './licenc.js';
-import { $, $$, el, toast, modal, download, formatDateTime, formatTime } from './ui.js';
+import { $, $$, el, toast, modal, choose, download, formatDateTime, formatTime } from './ui.js';
 
 const state = {
   screen: 'list',
@@ -2784,6 +2784,22 @@ async function exportHTML() {
   }
 }
 
+/** Export-választó: ami ritkán kell, az ne foglaljon helyet a gombok közt. */
+async function exportValaszto() {
+  const mit = await choose({
+    title: 'Export',
+    text: 'Mit készítsek a bejárásból?',
+    options: [
+      { value: 'gpx', label: 'GPX', hint: 'Nyomvonal navigációs eszközökhöz, térképprogramokhoz' },
+      { value: 'geojson', label: 'GeoJSON', hint: 'Nyomvonal és pontok térinformatikai programokhoz' },
+      { value: 'maps', label: 'Útvonalterv a Google Mapsben', hint: 'Közelítő — a Maps maga tervezi újra az utat' },
+    ],
+  });
+  if (mit === 'gpx') exportGPX();
+  else if (mit === 'geojson') exportGeoJSON();
+  else if (mit === 'maps') openInMaps();
+}
+
 function exportGeoJSON() {
   const gj = toGeoJSON(state.session, state.points, state.items, { tolerance: 0 });
   download(
@@ -2929,13 +2945,11 @@ function bind() {
   $('#q').addEventListener('input', debounce(runSearch, 200));
 
   $('#edit-session').addEventListener('click', editSessionData);
-  $('#export-gpx').addEventListener('click', exportGPX);
-  $('#export-geojson').addEventListener('click', exportGeoJSON);
+  $('#export-more').addEventListener('click', exportValaszto);
   $('#export-html').addEventListener('click', exportHTML);
   $('#kozut-open').addEventListener('click', openKozut);
   $('#export-json').addEventListener('click', exportJSON);
   $('#open-track-map').addEventListener('click', openTrackOnMap);
-  $('#open-maps').addEventListener('click', openInMaps);
   $('#backup-status').addEventListener('click', exportJSON);
   $('#delete-session').addEventListener('click', deleteSession);
 

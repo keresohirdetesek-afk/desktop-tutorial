@@ -1282,6 +1282,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 @keyframes kiemel { 50% { outline-color: transparent; } }
 
+/* Választó lap: egy koppintás, nem legördülő + OK */
+.valaszto { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+.valaszto-gomb {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 12px 14px;
+}
+.valaszto-cim { font-weight: 650; }
+.valaszto-alcim { font-size: 12.5px; color: var(--muted); font-weight: 400; }
+
 </style>
 
 <header id="topbar">
@@ -1471,14 +1484,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <button id="backup-status" class="backup-status"></button>
 
       <div class="btn-grid">
+        <button id="export-html" class="btn primary small">📄 Riport (HTML)</button>
+        <button id="kozut-open" class="btn primary small">📋 Közút dokumentumok kitöltése</button>
+        <button id="export-json" class="btn ghost small">💾 Mentés</button>
+        <button id="export-more" class="btn ghost small">⤓ Export</button>
         <button id="edit-session" class="btn ghost small">Adatok szerkesztése</button>
         <button id="open-track-map" class="btn ghost small">🗺️ Pontos nyomvonal térképen</button>
-        <button id="export-gpx" class="btn ghost small">GPX export</button>
-        <button id="export-geojson" class="btn ghost small">GeoJSON export</button>
-        <button id="export-html" class="btn primary small">📄 Riport (HTML) a közút felé</button>
-        <button id="kozut-open" class="btn primary small">📋 Közút dokumentumok kitöltése</button>
-        <button id="export-json" class="btn ghost small">Teljes mentés (JSON)</button>
-        <button id="open-maps" class="btn ghost small">Útvonalterv Google Maps (közelítő)</button>
         <button id="delete-session" class="btn danger small">Bejárás törlése</button>
       </div>
     </div>
@@ -1989,6 +2000,52 @@ function modal({ title, fields = [], okText = 'Mentés', cancelText = 'Mégse', 
     const first = Object.values(inputs)[0];
     if (first) setTimeout(() => first.focus(), 50);
     else setTimeout(() => ok.focus(), 50);
+  });
+}
+
+/**
+ * Választó lap: cím és néhány gomb. Akkor jobb a legördülőnél, ha a
+ * választás maga a művelet — egy koppintás, nem három.
+ *
+ * @param {{title:string, text?:string, options:Array<{value:string,label:string,hint?:string}>,
+ *          cancelText?:string}} opts
+ * @returns {Promise<string|null>} a választott érték, vagy null
+ */
+function choose({ title, text, options = [], cancelText = 'Mégse' }) {
+  return new Promise((resolve) => {
+    const sheet = el('div', { class: 'modal-sheet' }, [
+      el('h2', { class: 'modal-title', text: title || '' }),
+      text ? el('p', { class: 'modal-text', text }) : null,
+    ].filter(Boolean));
+
+    const lista = el('div', { class: 'valaszto' });
+    const back = el('div', { class: 'modal-backdrop' }, [sheet]);
+    const close = (value) => {
+      back.remove();
+      document.removeEventListener('keydown', onKey);
+      resolve(value);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
+
+    for (const o of options) {
+      lista.appendChild(el('button', {
+        class: 'btn ghost valaszto-gomb', type: 'button',
+        onclick: () => close(o.value),
+      }, [
+        el('span', { class: 'valaszto-cim', text: o.label }),
+        o.hint ? el('span', { class: 'valaszto-alcim', text: o.hint }) : null,
+      ].filter(Boolean)));
+    }
+    sheet.appendChild(lista);
+
+    const megse = el('button', { class: 'btn ghost', type: 'button', text: cancelText });
+    megse.addEventListener('click', () => close(null));
+    sheet.appendChild(el('div', { class: 'modal-actions' }, [megse]));
+
+    back.addEventListener('mousedown', (e) => { if (e.target === back) close(null); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(back);
+    setTimeout(() => { const b = lista.querySelector('button'); if (b) b.focus(); }, 50);
   });
 }
 
@@ -14597,6 +14654,22 @@ async function exportHTML() {
   }
 }
 
+/** Export-választó: ami ritkán kell, az ne foglaljon helyet a gombok közt. */
+async function exportValaszto() {
+  const mit = await choose({
+    title: 'Export',
+    text: 'Mit készítsek a bejárásból?',
+    options: [
+      { value: 'gpx', label: 'GPX', hint: 'Nyomvonal navigációs eszközökhöz, térképprogramokhoz' },
+      { value: 'geojson', label: 'GeoJSON', hint: 'Nyomvonal és pontok térinformatikai programokhoz' },
+      { value: 'maps', label: 'Útvonalterv a Google Mapsben', hint: 'Közelítő — a Maps maga tervezi újra az utat' },
+    ],
+  });
+  if (mit === 'gpx') exportGPX();
+  else if (mit === 'geojson') exportGeoJSON();
+  else if (mit === 'maps') openInMaps();
+}
+
 function exportGeoJSON() {
   const gj = toGeoJSON(state.session, state.points, state.items, { tolerance: 0 });
   download(
@@ -14742,13 +14815,11 @@ function bind() {
   $('#q').addEventListener('input', debounce(runSearch, 200));
 
   $('#edit-session').addEventListener('click', editSessionData);
-  $('#export-gpx').addEventListener('click', exportGPX);
-  $('#export-geojson').addEventListener('click', exportGeoJSON);
+  $('#export-more').addEventListener('click', exportValaszto);
   $('#export-html').addEventListener('click', exportHTML);
   $('#kozut-open').addEventListener('click', openKozut);
   $('#export-json').addEventListener('click', exportJSON);
   $('#open-track-map').addEventListener('click', openTrackOnMap);
-  $('#open-maps').addEventListener('click', openInMaps);
   $('#backup-status').addEventListener('click', exportJSON);
   $('#delete-session').addEventListener('click', deleteSession);
 

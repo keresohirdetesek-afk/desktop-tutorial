@@ -141,6 +141,52 @@ export function modal({ title, fields = [], okText = 'Mentés', cancelText = 'M�
   });
 }
 
+/**
+ * Választó lap: cím és néhány gomb. Akkor jobb a legördülőnél, ha a
+ * választás maga a művelet — egy koppintás, nem három.
+ *
+ * @param {{title:string, text?:string, options:Array<{value:string,label:string,hint?:string}>,
+ *          cancelText?:string}} opts
+ * @returns {Promise<string|null>} a választott érték, vagy null
+ */
+export function choose({ title, text, options = [], cancelText = 'Mégse' }) {
+  return new Promise((resolve) => {
+    const sheet = el('div', { class: 'modal-sheet' }, [
+      el('h2', { class: 'modal-title', text: title || '' }),
+      text ? el('p', { class: 'modal-text', text }) : null,
+    ].filter(Boolean));
+
+    const lista = el('div', { class: 'valaszto' });
+    const back = el('div', { class: 'modal-backdrop' }, [sheet]);
+    const close = (value) => {
+      back.remove();
+      document.removeEventListener('keydown', onKey);
+      resolve(value);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
+
+    for (const o of options) {
+      lista.appendChild(el('button', {
+        class: 'btn ghost valaszto-gomb', type: 'button',
+        onclick: () => close(o.value),
+      }, [
+        el('span', { class: 'valaszto-cim', text: o.label }),
+        o.hint ? el('span', { class: 'valaszto-alcim', text: o.hint }) : null,
+      ].filter(Boolean)));
+    }
+    sheet.appendChild(lista);
+
+    const megse = el('button', { class: 'btn ghost', type: 'button', text: cancelText });
+    megse.addEventListener('click', () => close(null));
+    sheet.appendChild(el('div', { class: 'modal-actions' }, [megse]));
+
+    back.addEventListener('mousedown', (e) => { if (e.target === back) close(null); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(back);
+    setTimeout(() => { const b = lista.querySelector('button'); if (b) b.focus(); }, 50);
+  });
+}
+
 export async function confirmDialog(text, { title = 'Biztos benne?', okText = 'Igen', danger = true } = {}) {
   const res = await modal({ title, text, fields: [], okText, cancelText: 'Mégse' });
   if (res && danger) return true;

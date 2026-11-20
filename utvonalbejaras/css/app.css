@@ -1269,3 +1269,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
   animation: kiemel 1.1s ease-in-out 2;
 }
 @keyframes kiemel { 50% { outline-color: transparent; } }
+
+/* Választó lap: egy koppintás, nem legördülő + OK */
+.valaszto { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+.valaszto-gomb {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 12px 14px;
+}
+.valaszto-cim { font-weight: 650; }
+.valaszto-alcim { font-size: 12.5px; color: var(--muted); font-weight: 400; }
