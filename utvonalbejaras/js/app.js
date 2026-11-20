@@ -2027,6 +2027,8 @@ async function openViewer(id) {
   ].filter(Boolean));
   body.appendChild(roadBox);
   roadHintFeltolt(item);
+  const terkep = viewerTerkep(item);
+  if (terkep) body.appendChild(terkep);
 
   if (item.type === 'photo') {
     actions.appendChild(el('button', { class: 'btn primary small', onclick: async () => {
@@ -2101,9 +2103,101 @@ async function openViewer(id) {
   document.body.classList.add('modal-open');
 }
 
+/* ------------------------------------------- térkép az elem adatlapján
+
+Az adatlap alsó fele üresen állt, pedig a legtöbb kérdés térképes: hol is
+van ez pontosan, jó helyen van-e. Ezért ide kerül egy kis térkép —
+nagyítható, mozgatható, és a pont helye innen is javítható.            */
+
+let viewerView = null;
+let viewerHit = null;
+let viewerMozgat = false;
+
+function viewerTerkep(item) {
+  if (item.lat == null) return null;
+  viewerMozgat = false;
+
+  const canvas = el('canvas', { id: 'viewer-canvas', class: 'viewer-canvas' });
+  const zoom = el('div', { class: 'map-zoom' }, [
+    el('button', { class: 'map-zoom-btn', type: 'button', text: '＋', title: 'Nagyítás',
+      onclick: () => viewerView && viewerView.zoomBy(1.6) }),
+    el('button', { class: 'map-zoom-btn', type: 'button', text: '－', title: 'Kicsinyítés',
+      onclick: () => viewerView && viewerView.zoomBy(1 / 1.6) }),
+    el('button', { class: 'map-zoom-btn', type: 'button', text: '⤢', title: 'Teljes nézet',
+      onclick: () => viewerView && viewerView.reset() }),
+  ]);
+
+  const allapot = el('p', { class: 'hint', text: 'Nagyítható, mozgatható. A pont áthelyezéséhez '
+    + 'kapcsolja be a mozgatást.' });
+  const mozgatGomb = el('button', { class: 'btn ghost tiny', type: 'button' },
+    ikonos('hely', 'Pont mozgatása'));
+  mozgatGomb.addEventListener('click', () => {
+    viewerMozgat = !viewerMozgat;
+    mozgatGomb.classList.toggle('active', viewerMozgat);
+    mozgatGomb.innerHTML = '';
+    mozgatGomb.append(...ikonos('hely', viewerMozgat ? 'Mozgatás vége' : 'Pont mozgatása'));
+    allapot.textContent = viewerMozgat
+      ? 'Koppintson a térképen oda, ahová a pont kerüljön.'
+      : 'Nagyítható, mozgatható. A pont áthelyezéséhez kapcsolja be a mozgatást.';
+    canvas.classList.toggle('mozgat', viewerMozgat);
+  });
+
+  const blokk = el('div', { class: 'viewer-map' }, [
+    el('div', { class: 'viewer-map-head' }, [mozgatGomb]),
+    el('div', { class: 'viewer-map-wrap' }, [canvas, zoom]),
+    allapot,
+  ]);
+
+  // a vászon csak akkor méretezhető, ha már a lapon van
+  setTimeout(() => {
+    if (!document.body.contains(canvas)) return;
+    viewerView = new MapView(canvas, {
+      draw: () => viewerRajz(item),
+      onTap: (pt) => viewerTap(item, pt),
+    });
+    viewerRajz(item);
+    onTileLoad(() => { if (document.body.contains(canvas)) viewerRajz(item); });
+  }, 30);
+
+  return blokk;
+}
+
+function viewerRajz(item) {
+  const canvas = $('#viewer-canvas');
+  if (!canvas || !canvas.clientWidth) return;
+  viewerHit = renderTrack(canvas, state.points, state.items, {
+    drawn: (state.session && state.session.drawn) || [],
+    view: viewerView ? viewerView.view : null,
+    // a nyitott elem kiemelve, hogy a többi jelölés közül kiváljon
+    here: { lat: item.lat, lon: item.lon, color: '#f59e0b' },
+  });
+}
+
+async function viewerTap(item, p) {
+  if (!viewerMozgat || !viewerHit || !viewerHit.unproject) return false;
+  const at = viewerHit.unproject(p.x, p.y);
+  item.lat = at.lat;
+  item.lon = at.lon;
+  item.acc = null;
+  item.posSource = 'manual';
+  item.posAt = Date.now();
+  if (!item.road || item.road.forras !== 'kezi') item.road = await roadStamp(at.lat, at.lon);
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  escortRefresh();
+  toast(item.road ? `Áthelyezve. ${roadLabel(item.road)}` : 'A pont áthelyezve.');
+  openViewer(item.id);        // frissített adatlap, a térképpel együtt
+  return true;
+}
+
 function closeViewer() {
   $('#viewer').hidden = true;
   viewerItem = null;
+  viewerView = null;
+  viewerHit = null;
+  viewerMozgat = false;
   // ha a térképszerkesztő nyitva van alatta, az marad a nyitott felület
   const szerkeszto = $('#trackedit') && !$('#trackedit').hidden;
   if (!szerkeszto) document.body.classList.remove('modal-open');

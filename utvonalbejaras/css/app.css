@@ -1282,3 +1282,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .valaszto-cim { font-weight: 650; }
 .valaszto-alcim { font-size: 12.5px; color: var(--muted); font-weight: 400; }
+
+/* Térkép az elem adatlapján — a lap alsó fele eddig üresen állt */
+.viewer-map { display: flex; flex-direction: column; gap: 8px; }
+.viewer-map-head { display: flex; gap: 8px; align-items: center; }
+.viewer-map-wrap { position: relative; }
+.viewer-canvas {
+  width: 100%;
+  height: 300px;
+  display: block;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--map-bg);
+  touch-action: pan-y;
+}
+.viewer-canvas.mozgat { cursor: crosshair; border-color: var(--accent); }
+.viewer-map .hint { margin: 0; }
+@media (min-width: 900px) { .viewer-canvas { height: 380px; } }
