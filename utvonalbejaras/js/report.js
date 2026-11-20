@@ -346,11 +346,21 @@ export async function buildReport(session, points, items, opts = {}, progress = 
 
   // A kísérőautó jelzésképei: ezt a szállítás napján a kísérő is használja,
   // ezért a sorrend az útvonal menti sorrend, és a tábla képe is látszik.
+  /** A tábla érvényessége: pont vagy szakasz, a végének szelvényével. */
+  const hatalyCell = (i) => {
+    if (!i.veg || i.lat == null) return i.nyitott ? 'szakasz (vége nincs lezárva)' : 'pont';
+    const h = formatDistance(trackLength([{ lat: i.lat, lon: i.lon }, i.veg]));
+    const vege = i.vegRoad && (i.vegRoad.utszam || i.vegRoad.szelveny)
+      ? ` → ${[i.vegRoad.utszam, i.vegRoad.szelveny].filter(Boolean).join(' ')}`
+      : '';
+    return `szakasz, ${h}${vege}`;
+  };
+
   const escortSignTable = escortSigns.length ? `
 <h2>A kísérőautó jelzésképei (${escortSigns.length})</h2>
 <p class="muted">Az útvonal mentén, a bejárás sorrendjében: hol melyik táblát kell kitenni a kísérőautóra.</p>
 <table class="grid signs">
-  <thead><tr><th>Jel a térképen</th><th>Jelzéskép</th><th>Mit kell kitenni</th><th>Miért</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Jelzéskép</th><th>Mit kell kitenni</th><th>Miért</th><th>Hatály</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
   <tbody>${escortSigns.map((s2) => {
     const idx = ordered.indexOf(s2) + 1;
     const pics = itemSigns(s2).map((id) => signSvg(id, { size: 54, text: s2.signText })).join('');
@@ -358,6 +368,7 @@ export async function buildReport(session, points, items, opts = {}, progress = 
       + `<td class="signcell">${pics}</td>`
       + `<td>${rEsc(signsLabel(s2))}${s2.note ? `<br><span class="muted">${rEsc(s2.note)}</span>` : ''}</td>`
       + `<td>${rEsc(s2.reason || '—')}</td>`
+      + `<td>${rEsc(hatalyCell(s2))}</td>`
       + `<td>${rEsc(roadCell(s2))}</td>`
       + `<td>${rEsc(formatCoord(s2.lat, s2.lon))}</td></tr>`;
   }).join('')}</tbody>

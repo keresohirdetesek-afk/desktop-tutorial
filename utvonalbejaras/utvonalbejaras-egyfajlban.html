@@ -3675,6 +3675,33 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
       }
     }
   }
+  // A jelzésképek hatálya szakasz is lehet: „innentől eddig előzni tilos”.
+  // A sávot a bejárt nyomvonalon rajzoljuk végig, ha a két vég ráesik —
+  // különben egyenessel kötjük össze, hogy akkor is látszódjon a hatály.
+  const nyomvonalSzakasz = (a, b) => {
+    if (!coords.length) return [a, b];
+    const kozeli = (p) => {
+      let bi = -1; let bd = Infinity;
+      for (let i = 0; i < coords.length; i++) {
+        const d = metersBetween(p.lat, p.lon, coords[i].lat, coords[i].lon);
+        if (d < bd) { bd = d; bi = i; }
+      }
+      return bd < 80 ? bi : -1;
+    };
+    const i = kozeli(a); const j = kozeli(b);
+    if (i < 0 || j < 0) return [a, b];
+    const [tol, ig] = i <= j ? [i, j] : [j, i];
+    const resz = coords.slice(tol, ig + 1);
+    return resz.length >= 2 ? resz : [a, b];
+  };
+
+  for (const m of markerPts) {
+    if (m.type !== 'jelzes' || !m.veg || m.veg.lat == null || m.lat == null) continue;
+    drawPoly(nyomvonalSzakasz(m, m.veg), {
+      color: '#f59e0b', width: lineW * 2.4, alpha: 0.5,
+    });
+  }
+
   if (draft) {
     drawPoly(draft.pts, { color: drawColor, width: lineW, dash: [2, lineW * 1.6], vertices: true });
   }
@@ -3718,6 +3745,11 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
     }
     pin(ctx, p, MARKER_SZIN[m.type] || MARKER_SZIN.photo);
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 14 });
+    // a szakasz vége: kisebb karika, hogy lássuk, meddig tart a hatály
+    if (m.veg && m.veg.lat != null) {
+      const v = project(m.veg.lat, m.veg.lon);
+      dot(ctx, v, 5, MARKER_SZIN[m.type] || MARKER_SZIN.photo, '#ffffff');
+    }
   });
 
   // alaptérkép fölött sötét, fehér hátterű jelölés kell a világos csempékhez
@@ -4291,7 +4323,15 @@ const severityLabel = (id) => byId(SEVERITIES, id);
 
 function describeItem(i) {
   const parts = [];
-  if (i.type === 'jelzes') parts.push(signsLabel(i));
+  if (i.type === 'jelzes') {
+    parts.push(signsLabel(i));
+    // a tábla hatálya szakasz is lehet — ez a jegyzékbe is kell
+    if (i.veg && i.lat != null) {
+      parts.push('szakaszon: ' + formatDistance(trackLength([{ lat: i.lat, lon: i.lon }, i.veg])));
+    } else if (i.nyitott) {
+      parts.push('szakasz — a vége nincs lezárva');
+    }
+  }
   if (i.road && (i.road.utszam || i.road.szelveny)) {
     parts.push([i.road.utszam, i.road.szelveny].filter(Boolean).join(' '));
   }
@@ -5412,11 +5452,21 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
 
   // A kísérőautó jelzésképei: ezt a szállítás napján a kísérő is használja,
   // ezért a sorrend az útvonal menti sorrend, és a tábla képe is látszik.
+  /** A tábla érvényessége: pont vagy szakasz, a végének szelvényével. */
+  const hatalyCell = (i) => {
+    if (!i.veg || i.lat == null) return i.nyitott ? 'szakasz (vége nincs lezárva)' : 'pont';
+    const h = formatDistance(trackLength([{ lat: i.lat, lon: i.lon }, i.veg]));
+    const vege = i.vegRoad && (i.vegRoad.utszam || i.vegRoad.szelveny)
+      ? ` → ${[i.vegRoad.utszam, i.vegRoad.szelveny].filter(Boolean).join(' ')}`
+      : '';
+    return `szakasz, ${h}${vege}`;
+  };
+
   const escortSignTable = escortSigns.length ? `
 <h2>A kísérőautó jelzésképei (${escortSigns.length})</h2>
 <p class="muted">Az útvonal mentén, a bejárás sorrendjében: hol melyik táblát kell kitenni a kísérőautóra.</p>
 <table class="grid signs">
-  <thead><tr><th>Jel a térképen</th><th>Jelzéskép</th><th>Mit kell kitenni</th><th>Miért</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
+  <thead><tr><th>Jel a térképen</th><th>Jelzéskép</th><th>Mit kell kitenni</th><th>Miért</th><th>Hatály</th><th>Útszám, szelvény</th><th>Pozíció</th></tr></thead>
   <tbody>${escortSigns.map((s2) => {
     const idx = ordered.indexOf(s2) + 1;
     const pics = itemSigns(s2).map((id) => signSvg(id, { size: 54, text: s2.signText })).join('');
@@ -5424,6 +5474,7 @@ async function buildReport(session, points, items, opts = {}, progress = () => {
       + `<td class="signcell">${pics}</td>`
       + `<td>${rEsc(signsLabel(s2))}${s2.note ? `<br><span class="muted">${rEsc(s2.note)}</span>` : ''}</td>`
       + `<td>${rEsc(s2.reason || '—')}</td>`
+      + `<td>${rEsc(hatalyCell(s2))}</td>`
       + `<td>${rEsc(roadCell(s2))}</td>`
       + `<td>${rEsc(formatCoord(s2.lat, s2.lon))}</td></tr>`;
   }).join('')}</tbody>
@@ -13094,6 +13145,18 @@ const signFields = (v = {}) => [
     placeholder: 'csak az „Egyéb” lapkához',
   },
   { name: 'reason', label: 'Miért kell', value: v.reason || '', placeholder: 'pl. szűk híd, iskola, útszűkület' },
+  {
+    name: 'hataly',
+    label: 'Meddig tart?',
+    type: 'select',
+    value: v.veg ? 'megvan' : (v.nyitott ? 'nyitott' : 'pont'),
+    options: [
+      { value: 'pont', label: 'Csak ez a pont' },
+      { value: 'nyitott', label: 'Szakasz — a végét majd a helyszínen zárom le' },
+      { value: 'terkep', label: 'Szakasz — a végét most jelölöm ki a térképen' },
+    ].concat(v.veg ? [{ value: 'megvan', label: 'Szakasz — a vége már meg van adva' }] : []),
+    hint: 'A tábla érvényessége. Szakasznál a térképen sáv jelzi, meddig tart.',
+  },
   { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2, value: v.note || '' },
 ];
 
@@ -13102,6 +13165,7 @@ function signValues(res) {
   const ids = String(res.signs || '').split(',').filter((id) => signById(id));
   const text = res.signText.trim();
   return {
+    hataly: res.hataly || 'pont',
     signs: ids,
     signText: text,
     reason: res.reason.trim(),
@@ -13110,6 +13174,77 @@ function signValues(res) {
       ? ids.map((id) => (signById(id).szoveges ? signName(id, text) : signById(id).nev)).join(' + ')
       : 'Jelzéskép',
   };
+}
+
+/**
+ * A jelzéskép hatálya: pont vagy szakasz. A szakasz végét vagy most jelöli
+ * ki a térképen, vagy a helyszínen zárja le („nyitott”).
+ */
+async function szakaszHataly(item, mod) {
+  if (mod === 'megvan') return true;
+  if (mod === 'pont') {
+    delete item.veg;
+    delete item.vegRoad;
+    item.nyitott = false;
+    return true;
+  }
+  if (mod === 'nyitott') {
+    delete item.veg;
+    delete item.vegRoad;
+    item.nyitott = true;
+    return true;
+  }
+  if (mod === 'terkep') {
+    const picked = await pickOnMap(item);
+    if (!picked) {
+      // nem jelölt ki semmit: maradjon nyitott, ne vesszen el a szándék
+      item.nyitott = true;
+      return false;
+    }
+    item.veg = { lat: picked.lat, lon: picked.lon };
+    item.vegRoad = await roadStamp(picked.lat, picked.lon);
+    item.nyitott = false;
+    return true;
+  }
+  return true;
+}
+
+/** A nyitott szakasz lezárása: a mostani helyzettel vagy a térképen. */
+async function zarSzakasz(item, mod) {
+  let veg = null;
+  if (mod === 'gps') {
+    const p = await positionNow();
+    if (p.lat == null) { toast('Nem sikerült helyadatot mérni.', 'error'); return; }
+    veg = { lat: p.lat, lon: p.lon };
+  } else if (mod === 'terkep') {
+    const picked = await pickOnMap(item);
+    if (!picked) return;
+    veg = { lat: picked.lat, lon: picked.lon };
+  } else if (mod === 'torles') {
+    delete item.veg;
+    delete item.vegRoad;
+    item.nyitott = false;
+  }
+  if (veg) {
+    item.veg = veg;
+    item.vegRoad = await roadStamp(veg.lat, veg.lon);
+    item.nyitott = false;
+  }
+  await db.saveItem(item);
+  markUnsaved();
+  renderItems();
+  drawTrack();
+  escortRefresh();
+  openViewer(item.id);
+  toast(item.veg
+    ? `Szakasz lezárva: ${formatDistance(hossza(item))}.`
+    : 'A jelzéskép innentől egyetlen pontra szól.');
+}
+
+/** A jelzéskép szakaszának hossza. */
+function hossza(item) {
+  if (!item.veg || item.lat == null) return 0;
+  return trackLength([{ lat: item.lat, lon: item.lon }, item.veg]);
 }
 
 async function addSign() {
@@ -13143,13 +13278,19 @@ async function addSign() {
     ops: [],
     ...vals,
   };
+  await szakaszHataly(item, vals.hataly);
+  delete item.hataly;
   await db.saveItem(item);
   state.items.push(item);
   markUnsaved();
   renderItems();
   drawTrack();
   escortRefresh();
-  toast(`Jelzéskép rögzítve: ${signsLabel(item)}.`);
+  toast(item.veg
+    ? `Jelzéskép rögzítve szakaszra: ${signsLabel(item)} · ${formatDistance(hossza(item))}.`
+    : item.nyitott
+      ? `Jelzéskép rögzítve. A szakasz végét a helyszínen zárja le az adatlapján.`
+      : `Jelzéskép rögzítve: ${signsLabel(item)}.`);
 }
 
 async function editSign(item) {
@@ -13161,6 +13302,8 @@ async function editSign(item) {
     return;
   }
   Object.assign(item, vals);
+  await szakaszHataly(item, vals.hataly);
+  delete item.hataly;
   await db.saveItem(item);
   markUnsaved();
   renderItems();
@@ -13338,7 +13481,11 @@ function itemCard(item, extraSub) {
   if (item.type === 'audio' && item.audioDuration) sub.push(formatDuration(item.audioDuration));
   if (item.type === 'video' && item.videoDuration) sub.push(formatDuration(item.videoDuration));
   if (item.type === 'condition') sub.push(categoryLabel(item.category));
-  if (item.type === 'jelzes') sub.push('kísérőautó jelzésképe');
+  if (item.type === 'jelzes') {
+    sub.push(item.veg
+      ? `szakasz · ${formatDistance(hossza(item))}`
+      : item.nyitott ? 'szakasz — a vége nincs lezárva' : 'kísérőautó jelzésképe');
+  }
   // a közút útszámban és szelvényben gondolkodik — az áll elöl, ha tudjuk
   if (item.road) sub.push('🛣️ ' + roadLabel(item.road));
   if (item.lat != null) sub.push(formatCoord(item.lat, item.lon));
@@ -13654,6 +13801,14 @@ async function openViewer(id) {
     [item.importedAt ? 'Felvétel ideje' : 'Idő', formatDateTime(item.created)],
     ['Pozíció', formatCoord(item.lat, item.lon) + positionNote(item)],
   ];
+  if (item.type === 'jelzes') {
+    rows.push(['Hatály', item.veg
+      ? `szakasz · ${formatDistance(hossza(item))}`
+        + (item.vegRoad ? ` — a vége: ${roadLabel(item.vegRoad)}` : '')
+      : item.nyitott
+        ? 'szakasz — a vége még nincs lezárva'
+        : 'csak ez a pont']);
+  }
   if (item.road) {
     rows.push(['Útszám, szelvény', roadLabel(item.road)
       + (item.road.telepules ? ` · ${item.road.telepules}` : '')
@@ -13766,6 +13921,18 @@ async function openViewer(id) {
     actions.appendChild(el('button', {
       class: 'btn primary small', onclick: () => editSign(item),
     }, ikonos('jelzes', 'Jelzéskép szerkesztése')));
+    if (item.veg) {
+      actions.appendChild(el('button', {
+        class: 'btn ghost small', onclick: () => zarSzakasz(item, 'torles'),
+      }, ikonos('hely', 'Szakasz vége törlése')));
+    } else {
+      actions.appendChild(el('button', {
+        class: 'btn ghost small', onclick: () => zarSzakasz(item, 'gps'),
+      }, ikonos('hely', 'A szakasz itt ér véget')));
+      actions.appendChild(el('button', {
+        class: 'btn ghost small', onclick: () => zarSzakasz(item, 'terkep'),
+      }, ikonos('terkep', 'Vége kijelölése a térképen')));
+    }
   }
   if (!item.photo && !item.flat && item.type !== 'video') {
     actions.appendChild(el('button', {

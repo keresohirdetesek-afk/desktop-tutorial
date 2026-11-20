@@ -638,6 +638,33 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
       }
     }
   }
+  // A jelzésképek hatálya szakasz is lehet: „innentől eddig előzni tilos”.
+  // A sávot a bejárt nyomvonalon rajzoljuk végig, ha a két vég ráesik —
+  // különben egyenessel kötjük össze, hogy akkor is látszódjon a hatály.
+  const nyomvonalSzakasz = (a, b) => {
+    if (!coords.length) return [a, b];
+    const kozeli = (p) => {
+      let bi = -1; let bd = Infinity;
+      for (let i = 0; i < coords.length; i++) {
+        const d = metersBetween(p.lat, p.lon, coords[i].lat, coords[i].lon);
+        if (d < bd) { bd = d; bi = i; }
+      }
+      return bd < 80 ? bi : -1;
+    };
+    const i = kozeli(a); const j = kozeli(b);
+    if (i < 0 || j < 0) return [a, b];
+    const [tol, ig] = i <= j ? [i, j] : [j, i];
+    const resz = coords.slice(tol, ig + 1);
+    return resz.length >= 2 ? resz : [a, b];
+  };
+
+  for (const m of markerPts) {
+    if (m.type !== 'jelzes' || !m.veg || m.veg.lat == null || m.lat == null) continue;
+    drawPoly(nyomvonalSzakasz(m, m.veg), {
+      color: '#f59e0b', width: lineW * 2.4, alpha: 0.5,
+    });
+  }
+
   if (draft) {
     drawPoly(draft.pts, { color: drawColor, width: lineW, dash: [2, lineW * 1.6], vertices: true });
   }
@@ -681,6 +708,11 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     }
     pin(ctx, p, MARKER_SZIN[m.type] || MARKER_SZIN.photo);
     hitboxes.push({ id: m.id, x: p.x, y: p.y, r: 14 });
+    // a szakasz vége: kisebb karika, hogy lássuk, meddig tart a hatály
+    if (m.veg && m.veg.lat != null) {
+      const v = project(m.veg.lat, m.veg.lon);
+      dot(ctx, v, 5, MARKER_SZIN[m.type] || MARKER_SZIN.photo, '#ffffff');
+    }
   });
 
   // alaptérkép fölött sötét, fehér hátterű jelölés kell a világos csempékhez
@@ -1254,7 +1286,15 @@ export const severityLabel = (id) => byId(SEVERITIES, id);
 
 export function describeItem(i) {
   const parts = [];
-  if (i.type === 'jelzes') parts.push(signsLabel(i));
+  if (i.type === 'jelzes') {
+    parts.push(signsLabel(i));
+    // a tábla hatálya szakasz is lehet — ez a jegyzékbe is kell
+    if (i.veg && i.lat != null) {
+      parts.push('szakaszon: ' + formatDistance(trackLength([{ lat: i.lat, lon: i.lon }, i.veg])));
+    } else if (i.nyitott) {
+      parts.push('szakasz — a vége nincs lezárva');
+    }
+  }
   if (i.road && (i.road.utszam || i.road.szelveny)) {
     parts.push([i.road.utszam, i.road.szelveny].filter(Boolean).join(' '));
   }
