@@ -752,38 +752,82 @@ export class TrackEditor {
    * Jelzéskép mód: az első koppintás a szakasz eleje, a második a vége.
    * Mindkettő az útra illesztve, és a kettő közötti vonal az utat követi.
    */
+  /**
+   * Hová esik a koppintás: a berajzolt útvonalra, a bejárt nyomvonalra,
+   * vagy egyikre sem. A jelzéskép hatályát elsősorban a már meglévő
+   * útvonalhoz igazítjuk — az a tényleges út, amin a szállítmány megy.
+   */
+  jelzesPont(p) {
+    const nd = this.hit.nearestDrawn(p.x, p.y);
+    const nt = this.hit.nearest(p.x, p.y);
+    const hatar = 34;
+    if (nd && nd.distance < hatar && (nt.index < 0 || nd.distance <= nt.distance)) {
+      return { lat: nd.point.lat, lon: nd.point.lon, fajta: 'rajzolt', id: nd.id, index: nd.index };
+    }
+    if (nt.index >= 0 && nt.distance < hatar) {
+      const q = this.points[nt.index];
+      return { lat: q.lat, lon: q.lon, fajta: 'nyomvonal', index: nt.index };
+    }
+    return null;
+  }
+
+  /** A két vég közötti vonal — lehetőleg a meglévő útvonal mentén. */
+  async jelzesVonal(a, b) {
+    if (a.fajta === 'rajzolt' && b.fajta === 'rajzolt' && a.id === b.id) {
+      const seg = this.drawn.find((x) => x.id === a.id);
+      if (seg && seg.pts.length > 1) {
+        const [i, j] = a.index <= b.index ? [a.index, b.index] : [b.index, a.index];
+        const resz = seg.pts.slice(i, j + 1).map((q) => ({ lat: q.lat, lon: q.lon }));
+        if (resz.length > 1) return a.index <= b.index ? resz : resz.reverse();
+      }
+    }
+    if (a.fajta === 'nyomvonal' && b.fajta === 'nyomvonal') {
+      const [i, j] = a.index <= b.index ? [a.index, b.index] : [b.index, a.index];
+      const resz = this.points.slice(i, j + 1).map((q) => ({ lat: q.lat, lon: q.lon }));
+      if (resz.length > 1) return a.index <= b.index ? resz : resz.reverse();
+    }
+    // nincs közös útvonal: az úthálózatból próbáljuk, ha egy útszámra esnek
+    if (this.road && this.road.szakaszVonal) {
+      try {
+        const r = await this.road.szakaszVonal(a, b);
+        if (r && r.pts && r.pts.length > 1) return r.pts;
+      } catch (_) { /* marad az egyenes */ }
+    }
+    return null;
+  }
+
   async jelzesKattintas(p) {
     if (!this.onSignForRange || !this.hit || !this.hit.unproject) return;
-    const at = this.hit.unproject(p.x, p.y);
-    let pt = { lat: at.lat, lon: at.lon };
-    if (this.road && this.road.snap) {
-      try {
-        const h = await this.road.snap(pt);
-        if (h && h.lat != null) pt = { lat: h.lat, lon: h.lon, utszam: h.utszam };
-      } catch (_) { /* illesztés nélkül is megy */ }
+    let pt = this.jelzesPont(p);
+    if (!pt) {
+      const at = this.hit.unproject(p.x, p.y);
+      pt = { lat: at.lat, lon: at.lon, fajta: null };
+      if (this.road && this.road.snap) {
+        try {
+          const h = await this.road.snap(pt);
+          if (h && h.lat != null) pt = { lat: h.lat, lon: h.lon, utszam: h.utszam, fajta: 'ut' };
+        } catch (_) { /* illesztés nélkül is megy */ }
+      }
     }
 
     if (!this.jelzesA) {
       this.jelzesA = pt;
       this.draw();
       this.renderPanel();
-      toast(pt.utszam
-        ? `Kezdet: ${pt.utszam}. Most koppintson a szakasz végére.`
-        : 'Most koppintson a szakasz végére.');
+      toast(pt.fajta === 'rajzolt' || pt.fajta === 'nyomvonal'
+        ? 'Kezdet az útvonalon. Most koppintson a szakasz végére.'
+        : pt.utszam
+          ? `Kezdet: ${pt.utszam}. Most koppintson a szakasz végére.`
+          : 'Most koppintson a szakasz végére.');
       return;
     }
 
     const a = this.jelzesA;
     this.jelzesA = null;
-    let vonal = null;
-    if (this.road && this.road.szakaszVonal) {
-      try {
-        const r = await this.road.szakaszVonal(a, pt);
-        if (r && r.pts && r.pts.length > 1) vonal = r.pts;
-      } catch (_) { /* marad az egyenes */ }
-    }
+    const vonal = await this.jelzesVonal(a, pt);
     if (!vonal) {
-      toast('A két vég nem ugyanarra az útszámra esik — egyenessel kötöm össze.');
+      toast('A két vég nem egy útvonalra esik — egyenessel kötöm össze. '
+        + 'Koppintson magára a vonalra, ha az utat kövesse.');
     }
     await this.onSignForRange({ lat: a.lat, lon: a.lon }, { lat: pt.lat, lon: pt.lon }, vonal);
     this.draw();
@@ -1158,8 +1202,8 @@ export class TrackEditor {
       hint.hidden = false;
       hint.textContent = this.jelzesA
         ? `${Tap} a szakasz végére. A vonal az utat fogja követni.`
-        : `${Tap} oda, ahol a jelzéskép hatálya kezdődik, majd oda, ahol véget ér. `
-          + 'Mindkét pont az útra illesztve kerül a helyére.';
+        : `${Tap} magára az útvonalra ott, ahol a jelzéskép hatálya kezdődik, `
+          + 'majd ott, ahol véget ér. A sáv a megrajzolt útvonalat fogja követni.';
       badge.hidden = false;
       badge.innerHTML = '🚧 Jelzéskép<span class="sub">'
         + (this.jelzesA ? ' · most a vége' : ' · a szakasz eleje') + '</span>';
