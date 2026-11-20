@@ -615,7 +615,7 @@ async function openTrackEditor() {
     drawn: state.session.drawn || [],
     onAddPoint: (at) => addPointAt(at),
     // a térképen kijelölt szakaszra jelzéskép — gépen ez a természetes út
-    onSignForRange: (a, b) => jelzesSzakaszra(a, b),
+    onSignForRange: (a, b, vonal) => jelzesSzakaszra(a, b, vonal),
     // a szerkesztő nyitva marad az adatlap mögött
     onOpenItem: (id) => openViewer(id),
     resolvePlace: (text) => resolvePlace(text),
@@ -654,6 +654,29 @@ async function openTrackEditor() {
        * A Közút által kijelölt útvonal (útszám + szelvénytartomány lista)
        * kirajzolása a betöltött úthálózatból.
        */
+      /**
+       * Két pont közötti útszakasz a hálózatból. Ha mindkét vég ugyanarra
+       * az útszámra esik, a köztük lévő szelvénytartományt adjuk vissza —
+       * így a jelzéskép hatálya az utat követi, nem egyenes.
+       */
+      szakaszVonal: async (a, b) => {
+        const net = await roadNetwork();
+        if (!net) return null;
+        const ha = lookupRoad(net, a.lat, a.lon, 250);
+        const hb = lookupRoad(net, b.lat, b.lon, 250);
+        if (!ha || !hb || !ha.utszam || ha.utszam !== hb.utszam) return null;
+        if (!isFinite(ha.meters) || !isFinite(hb.meters)) return null;
+        const tol = Math.min(ha.meters, hb.meters) / 1000;
+        const ig = Math.max(ha.meters, hb.meters) / 1000;
+        const r = utvonalSzelvenyekbol(net, [{ ut: ha.utszam, tol, ig }]);
+        let kozep = r.pts;
+        if (ha.meters > hb.meters) kozep = kozep.slice().reverse();
+        return {
+          pts: [{ lat: ha.lat, lon: ha.lon }].concat(kozep, [{ lat: hb.lat, lon: hb.lon }]),
+          kezdet: ha,
+          veg: hb,
+        };
+      },
       kijelolt: async (szoveg) => {
         const net = await roadNetwork();
         if (!net) return null;
@@ -1324,6 +1347,7 @@ async function zarSzakasz(item, mod) {
 
 /** A jelzéskép szakaszának hossza. */
 function hossza(item) {
+  if (item.vonal && item.vonal.length > 1) return trackLength(item.vonal);
   if (!item.veg || item.lat == null) return 0;
   return trackLength([{ lat: item.lat, lon: item.lon }, item.veg]);
 }
@@ -1333,10 +1357,11 @@ function hossza(item) {
  * előbb a szakaszt jelöli ki a felhasználó, és csak utána mondja meg,
  * melyik táblát kell kitenni rá.
  */
-async function jelzesSzakaszra(a, b) {
+async function jelzesSzakaszra(a, b, vonal = null) {
   const res = await modal({
     title: 'Jelzéskép a kijelölt szakaszra',
-    text: `A szakasz ${formatDistance(trackLength([a, b]))} hosszú. `
+    text: `A szakasz ${formatDistance(trackLength(vonal && vonal.length > 1 ? vonal : [a, b]))} hosszú`
+      + `${vonal ? ', az útra illesztve' : ''}. `
       + 'Melyik táblát kell a kísérőautóra kitenni rajta?',
     fields: signFields().filter((f) => f.name !== 'hataly'),
     okText: 'Mentés',
@@ -1360,6 +1385,8 @@ async function jelzesSzakaszra(a, b) {
     acc: null,
     posSource: 'manual',
     veg: { lat: b.lat, lon: b.lon },
+    // az útra illesztett vonal, ha a két vég ugyanarra az útszámra esett
+    vonal: vonal && vonal.length > 1 ? vonal.map((q) => ({ lat: q.lat, lon: q.lon })) : null,
     nyitott: false,
     dims: [],
     texts: [],

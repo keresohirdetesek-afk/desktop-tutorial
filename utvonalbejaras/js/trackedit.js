@@ -420,6 +420,9 @@ export class TrackEditor {
       return;
     }
 
+    // jelzéskép módban két koppintás jelöli ki a szakaszt
+    if (this.mode === 'jelzes') { this.jelzesKattintas(p); return; }
+
     // meglévő jelölésre koppintva azt nyitjuk meg (minden módban)
     const box = (this.hit.hitboxes || []).find((b) => Math.hypot(b.x - p.x, b.y - p.y) < b.r + 4);
     if (box && this.onOpenItem) { this.onOpenItem(box.id); return; }
@@ -746,6 +749,48 @@ export class TrackEditor {
   }
 
   /**
+   * Jelzéskép mód: az első koppintás a szakasz eleje, a második a vége.
+   * Mindkettő az útra illesztve, és a kettő közötti vonal az utat követi.
+   */
+  async jelzesKattintas(p) {
+    if (!this.onSignForRange || !this.hit || !this.hit.unproject) return;
+    const at = this.hit.unproject(p.x, p.y);
+    let pt = { lat: at.lat, lon: at.lon };
+    if (this.road && this.road.snap) {
+      try {
+        const h = await this.road.snap(pt);
+        if (h && h.lat != null) pt = { lat: h.lat, lon: h.lon, utszam: h.utszam };
+      } catch (_) { /* illesztés nélkül is megy */ }
+    }
+
+    if (!this.jelzesA) {
+      this.jelzesA = pt;
+      this.draw();
+      this.renderPanel();
+      toast(pt.utszam
+        ? `Kezdet: ${pt.utszam}. Most koppintson a szakasz végére.`
+        : 'Most koppintson a szakasz végére.');
+      return;
+    }
+
+    const a = this.jelzesA;
+    this.jelzesA = null;
+    let vonal = null;
+    if (this.road && this.road.szakaszVonal) {
+      try {
+        const r = await this.road.szakaszVonal(a, pt);
+        if (r && r.pts && r.pts.length > 1) vonal = r.pts;
+      } catch (_) { /* marad az egyenes */ }
+    }
+    if (!vonal) {
+      toast('A két vég nem ugyanarra az útszámra esik — egyenessel kötöm össze.');
+    }
+    await this.onSignForRange({ lat: a.lat, lon: a.lon }, { lat: pt.lat, lon: pt.lon }, vonal);
+    this.draw();
+    this.renderPanel();
+  }
+
+  /**
    * A kijelölt szakaszra jelzéskép. Gépen ez a természetes út: előbb a
    * térképen kijelöljük, hol kell a tábla, és csak utána mondjuk meg, melyik.
    */
@@ -933,13 +978,18 @@ export class TrackEditor {
       ? this.draft.pts[this.draft.pts.length - 1]
       : null;
     const opts = {
-      here: this.picked ? { ...this.picked, color: '#ffd60a' } : null,
+      here: this.jelzesA
+        ? { lat: this.jelzesA.lat, lon: this.jelzesA.lon, color: '#f59e0b' }
+        : (this.picked ? { ...this.picked, color: '#ffd60a' } : null),
       view: this.view,
       selection: this.sel,
       drawn: this.drawn,
       draft: this.draft,
       // egérrel: halvány vonal az utolsó ponttól a kurzorig
-      ghost: this.mode === 'draw' && last && this.hoverPt ? { from: last, to: this.hoverPt } : null,
+      ghost: this.mode === 'draw' && last && this.hoverPt
+        ? { from: last, to: this.hoverPt }
+        : (this.mode === 'jelzes' && this.jelzesA && this.hoverPt
+          ? { from: this.jelzesA, to: this.hoverPt } : null),
       selectedDrawn: this.selectedDrawn,
       drawnSel: this.drawnSel,
       lineWidth: 5,
@@ -989,6 +1039,7 @@ export class TrackEditor {
     if (jsz) jsz.hidden = mode !== 'select' || !this.onSignForRange;
     // a berajzolt vonalon belüli kijelölés csak a kijelölő módban él
     if (mode !== 'select') this.drawnSel = null;
+    if (mode !== 'jelzes') this.jelzesA = null;
 
     const hint = $('#trackedit-hint', this.root);
     const keys = $('#trackedit-keys', this.root);
@@ -1100,6 +1151,18 @@ export class TrackEditor {
       from.max = to.max = String(max);
       from.value = String(this.sel.from);
       to.value = String(this.sel.to);
+      return;
+    }
+
+    if (mode === 'jelzes') {
+      hint.hidden = false;
+      hint.textContent = this.jelzesA
+        ? `${Tap} a szakasz végére. A vonal az utat fogja követni.`
+        : `${Tap} oda, ahol a jelzéskép hatálya kezdődik, majd oda, ahol véget ér. `
+          + 'Mindkét pont az útra illesztve kerül a helyére.';
+      badge.hidden = false;
+      badge.innerHTML = '🚧 Jelzéskép<span class="sub">'
+        + (this.jelzesA ? ' · most a vége' : ' · a szakasz eleje') + '</span>';
       return;
     }
 

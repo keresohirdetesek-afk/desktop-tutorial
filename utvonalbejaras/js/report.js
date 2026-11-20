@@ -349,7 +349,9 @@ export async function buildReport(session, points, items, opts = {}, progress = 
   /** A tábla érvényessége: pont vagy szakasz, a végének szelvényével. */
   const hatalyCell = (i) => {
     if (!i.veg || i.lat == null) return i.nyitott ? 'szakasz (vége nincs lezárva)' : 'pont';
-    const h = formatDistance(trackLength([{ lat: i.lat, lon: i.lon }, i.veg]));
+    const h = formatDistance(i.vonal && i.vonal.length > 1
+      ? trackLength(i.vonal)
+      : trackLength([{ lat: i.lat, lon: i.lon }, i.veg]));
     const vege = i.vegRoad && (i.vegRoad.utszam || i.vegRoad.szelveny)
       ? ` → ${[i.vegRoad.utszam, i.vegRoad.szelveny].filter(Boolean).join(' ')}`
       : '';

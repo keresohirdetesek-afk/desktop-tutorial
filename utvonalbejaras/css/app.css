@@ -705,8 +705,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Módválasztó: egy helyen látszik, mit csinál most a koppintás */
 .modebar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 12px;

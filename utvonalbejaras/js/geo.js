@@ -659,10 +659,15 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   };
 
   for (const m of markerPts) {
-    if (m.type !== 'jelzes' || !m.veg || m.veg.lat == null || m.lat == null) continue;
-    drawPoly(nyomvonalSzakasz(m, m.veg), {
-      color: '#f59e0b', width: lineW * 2.4, alpha: 0.5,
-    });
+    if (m.type !== 'jelzes' || m.lat == null) continue;
+    // ha az útra illesztve rögzítették, a tárolt vonalat rajzoljuk —
+    // az követi az utat, nem vág át a kanyarokon
+    const vonal = Array.isArray(m.vonal) && m.vonal.length > 1
+      ? m.vonal
+      : (m.veg && m.veg.lat != null ? nyomvonalSzakasz(m, m.veg) : null);
+    if (!vonal) continue;
+    drawPoly(vonal, { color: '#f59e0b', width: lineW * 3, alpha: 0.45 });
+    drawPoly(vonal, { color: '#b45309', width: Math.max(1.5, lineW * 0.8), alpha: 0.9 });
   }
 
   if (draft) {
@@ -1290,7 +1295,10 @@ export function describeItem(i) {
     parts.push(signsLabel(i));
     // a tábla hatálya szakasz is lehet — ez a jegyzékbe is kell
     if (i.veg && i.lat != null) {
-      parts.push('szakaszon: ' + formatDistance(trackLength([{ lat: i.lat, lon: i.lon }, i.veg])));
+      parts.push('szakaszon: ' + formatDistance(
+        i.vonal && i.vonal.length > 1
+          ? trackLength(i.vonal)
+          : trackLength([{ lat: i.lat, lon: i.lon }, i.veg])));
     } else if (i.nyitott) {
       parts.push('szakasz — a vége nincs lezárva');
     }
