@@ -66,18 +66,19 @@ public class MainActivity extends Activity {
         root.setPadding(dp(20), dp(24), dp(20), dp(32));
 
         root.addView(text("Imou hőmérő widget", 24, true));
-        root.addView(text("1. Az open.imoulife.com oldalon regisztrálj (ugyanazzal a fiókkal, "
-                + "mint az Imou Life appban), hozz létre egy alkalmazást, és másold ide "
-                + "az AppId-t és az AppSecret-et.", 14, false));
+        root.addView(text("1. Az open.imoulife.com oldalon jelentkezz be (ugyanazzal a fiókkal, "
+                + "mint az Imou Life appban) → Console → My App → Create App. Az ott látható "
+                + "AppId-t és AppSecret-et másold ide. FIGYELEM: ide NEM az e-mail címed és a "
+                + "jelszavad kell!", 14, false));
 
         appId = new EditText(this);
-        appId.setHint("AppId");
+        appId.setHint("AppId (pl. lc1a2b3c4d…)");
         appId.setSingleLine();
         appId.setText(store.appId());
         root.addView(appId);
 
         appSecret = new EditText(this);
-        appSecret.setHint("AppSecret");
+        appSecret.setHint("AppSecret (hosszú kód, nem a jelszó)");
         appSecret.setSingleLine();
         appSecret.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         appSecret.setText(store.appSecret());
@@ -156,6 +157,12 @@ public class MainActivity extends Activity {
             status.setText("Add meg az AppId-t és az AppSecret-et.");
             return;
         }
+        if (store.appId().contains("@")) {
+            status.setText("Az AppId mezőbe az e-mail címed került. Ide az open.imoulife.com "
+                    + "oldalon (Console → My App) kapott AppId kell, a másik mezőbe pedig az "
+                    + "AppSecret – nem a jelszavad.");
+            return;
+        }
         searchBtn.setEnabled(false);
         status.setText("Keresés…");
         List<Sensor> saved = store.sensors();
@@ -183,7 +190,8 @@ public class MainActivity extends Activity {
                         + "és adhatsz nekik nevet:";
             } catch (ImouApi.ApiException e) {
                 if ("SN1001".equals(e.code) || "SN1004".equals(e.code)) {
-                    msg = "Hibás AppId vagy AppSecret (" + e.code + ").";
+                    msg = "Hibás AppId vagy AppSecret (" + e.code + "). Az open.imoulife.com → Console → "
+                            + "My App oldalról másold be őket, ne az e-mail címet és a jelszót.";
                 } else {
                     msg = "Hiba: " + e.getMessage() + "\nPróbálj másik régiót.";
                 }
