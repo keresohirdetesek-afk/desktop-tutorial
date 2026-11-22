@@ -1,0 +1,80 @@
+# Az Imou hőmérő widget (imou-widget/) Android APK-jának fordítása.
+#
+# Minden változás után a GitHub lefordítja az appot, és kiteszi a repó
+# Releases oldalára „imou-widget” néven. Onnan a telefonon közvetlenül
+# letölthető és telepíthető.
+#
+# OPCIONÁLIS: saját aláíró kulcs, hogy az új verzió a régi fölé települjön
+# (különben frissítéskor előbb törölni kell a régi appot). Ehhez a repó
+# Settings → Secrets and variables → Actions oldalán két titok kell:
+#   WIDGET_KEYSTORE           a keystore fájl base64-ben (alias: widget)
+#   WIDGET_KEYSTORE_PASSWORD  a jelszava
+
+name: Imou widget APK
+
+on:
+  push:
+    paths:
+      - 'imou-widget/**'
+      - '.github/workflows/imou-widget-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: imou-widget-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: imou-widget
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Aláíró kulcs (ha van)
+        env:
+          KS: ${{ secrets.WIDGET_KEYSTORE }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/widget.jks"
+            echo "WIDGET_KEYSTORE_FILE=$RUNNER_TEMP/widget.jks" >> "$GITHUB_ENV"
+          else
+            echo "::notice::Nincs WIDGET_KEYSTORE titok, debug aláírással készül."
+          fi
+
+      - name: Fordítás
+        env:
+          WIDGET_KEYSTORE_PASSWORD: ${{ secrets.WIDGET_KEYSTORE_PASSWORD }}
+        run: |
+          gradle --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk ../imou-homero.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imou-homero-apk
+          path: imou-homero.apk
+
+      - name: Kiadás a Releases oldalra
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: imou-widget
+          name: Imou hőmérő widget
+          body: |
+            Android widget, ami a kezdőképernyőn mutatja az Imou hőmérők
+            hőmérsékletét és páratartalmát. Töltsd le az `imou-homero.apk`
+            fájlt a telefonon, és telepítsd.
+          files: imou-homero.apk
+          make_latest: false

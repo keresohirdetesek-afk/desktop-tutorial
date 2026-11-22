@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'hu.homerseklet.widget'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'hu.homerseklet.widget'
+        minSdk 29
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    // Ha a GitHubon be van állítva a WIDGET_KEYSTORE titok, azzal írjuk alá,
+    // így a frissítés a régi app fölé települ. Ha nincs, debug aláírás lesz.
+    def ks = System.getenv('WIDGET_KEYSTORE_FILE')
+    signingConfigs {
+        if (ks) {
+            sajat {
+                storeFile file(ks)
+                storePassword System.getenv('WIDGET_KEYSTORE_PASSWORD')
+                keyAlias 'widget'
+                keyPassword System.getenv('WIDGET_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig ks ? signingConfigs.sajat : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
