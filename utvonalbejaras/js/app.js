@@ -559,6 +559,55 @@ function renderMeta() {
   }
 }
 
+/* --------------------------------------------- élő helyzet (hol vagyok) */
+
+/** A pálya megnevezése a NAP pályakódjából (0 = egypályás út). */
+function palyaNev(pk) {
+  const n = Number(pk);
+  return n === 1 ? '1. pálya' : n === 2 ? '2. pálya' : '';
+}
+
+/** Utcakép-hivatkozás egy pontra (a böngésző térképszolgáltatása nyitja). */
+function utcakepUrl(lat, lon) {
+  return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat.toFixed(6)},${lon.toFixed(6)}`;
+}
+
+/**
+ * A bejárás képernyő tetején futó sáv: melyik úton, melyik szelvénynél
+ * vagyunk most. A beépített országos adatból megy, hálózat nélkül is.
+ */
+function updateLiveRoad() {
+  const sav = $('#live-road');
+  if (!sav) return;
+  const p = recorder && recorder.current;
+  if (!p || p.lat == null) { sav.hidden = true; return; }
+  sav.hidden = false;
+
+  const hit = roadNet ? lookupRoad(roadNet, p.lat, p.lon, 150) : null;
+  const ut = $('#live-ut');
+  const szelv = $('#live-szelv');
+  const meta = $('#live-meta');
+
+  if (!hit) {
+    ut.textContent = '—';
+    ut.classList.add('halvany');
+    szelv.textContent = roadNet ? 'Nincs országos közút 150 m-en belül' : 'Országos adat még nincs kész';
+    meta.textContent = p.acc != null ? `GPS ±${p.acc} m` : '';
+    return;
+  }
+  ut.textContent = hit.utszam;
+  ut.classList.remove('halvany');
+  szelv.textContent = hit.szelveny || '—';
+  const reszek = [];
+  const palya = palyaNev(hit.palyakod);
+  if (palya) reszek.push(palya);
+  if (hit.telepules) reszek.push(hit.telepules);
+  // csak akkor érdekes, ha érezhetően az út mellett vagyunk
+  if (hit.distance != null && hit.distance >= 10) reszek.push(`az úttól ${hit.distance} m`);
+  if (p.acc != null) reszek.push(`GPS ±${p.acc} m`);
+  meta.textContent = reszek.join(' · ');
+}
+
 function updateStats() {
   // a „táv” a hivatalos útvonal hossza: az elvetett szakaszok nem számítanak bele
   const len = lengthByStatus(state.points);
@@ -569,6 +618,7 @@ function updateStats() {
   $('#st-time').textContent = formatDuration(elapsed);
   const last = recorder && recorder.current;
   $('#st-acc').textContent = last && last.acc != null ? '±' + last.acc + ' m' : '—';
+  updateLiveRoad();
 
   const secs = rejectedSections(state.points);
   const summary = $('#reject-summary');
@@ -2281,6 +2331,14 @@ async function openViewer(id) {
       onclick: () => attachPhotoTo(item.id),
     }, ikonos('foto', 'Fotó csatolása')));
   }
+  // Utcakép: tervezéskor egy kattintással megnézhető a helyszín — kanyar,
+  // híd, szűkület —, anélkül hogy ki kellene menni oda.
+  if (item.lat != null && item.lon != null) {
+    actions.appendChild(el('button', {
+      class: 'btn ghost small',
+      onclick: () => window.open(utcakepUrl(item.lat, item.lon), '_blank', 'noopener'),
+    }, ikonos('terkep', 'Utcakép')));
+  }
   if (item.video) {
     actions.appendChild(el('button', {
       class: 'btn ghost small',
@@ -3328,6 +3386,11 @@ function bind() {
   $('#home-edit').addEventListener('click', () => show('list'));
   $('#home-escort').addEventListener('click', escortFromHome);
   $('#home-all').addEventListener('click', () => show('list'));
+  $('#live-utcakep').addEventListener('click', () => {
+    const p = recorder && recorder.current;
+    if (!p || p.lat == null) { toast('Nincs friss GPS-pozíció.', 'error'); return; }
+    window.open(utcakepUrl(p.lat, p.lon), '_blank', 'noopener');
+  });
   $('#home-install-btn').addEventListener('click', telepitesInditas);
   $('#home-install-hide').addEventListener('click', () => {
     try { localStorage.setItem('telepitesRejtve', '1'); } catch (_) {}

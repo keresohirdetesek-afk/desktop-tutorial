@@ -160,6 +160,16 @@
         <div><span class="stat-val" id="st-points">0</span><span class="stat-lbl">Pont</span></div>
         <div><span class="stat-val" id="st-acc">—</span><span class="stat-lbl">GPS</span></div>
       </div>
+      <!-- élő helyzet: melyik úton, melyik szelvénynél vagyunk most -->
+      <div id="live-road" class="live-road" hidden>
+        <span id="live-ut" class="live-ut">—</span>
+        <span class="live-kozep">
+          <span id="live-szelv" class="live-szelv">—</span>
+          <span id="live-meta" class="live-meta"></span>
+        </span>
+        <button id="live-utcakep" class="btn ghost tiny" type="button" title="Utcakép ezen a ponton">👁 Utcakép</button>
+      </div>
+
       <div class="track-actions">
         <button id="rec-toggle" class="btn rec">● Nyomvonal rögzítése</button>
         <button id="rec-mark" class="btn ghost small" disabled>Pont jelölése</button>

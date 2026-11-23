@@ -267,15 +267,22 @@ export async function buildNetwork(file, fields, progress = () => {}) {
   let sample = (features.find((f) => f.properties) || {}).properties || {};
   let map = Object.assign(guessFields(sample), fields || {});
 
+  // pályakód: osztott pályás (autópálya) szakaszon ebből derül ki, melyik
+  // pályán vagyunk. 0 = egypályás út, 1 és 2 = a két pálya.
+  const pkMezoKeres = (s) => Object.keys(s || {})
+    .find((k) => /^(pkod|palyakod|palya_kod)$/i.test(k));
+  let pkMezo = pkMezoKeres(sample);
+
   // pontréteg (szelvénykövek) → vonalakká fűzzük
   const pontDb = features.filter((f) => f.geometry && f.geometry.type === 'Point').length;
   if (pontDb > features.length / 2 && map.utszam && map.kmKezd) {
-    const pkodMezo = Object.keys(sample).find((k) => /^(pkod|palyakod|palya_kod)$/i.test(k));
+    const pkodMezo = pkMezo;
     progress(`Szelvénykövek összefűzése… (${pontDb} kő)`);
     features = szelvenykovekbolVonalak(features, map, pkodMezo);
     if (!features.length) throw new Error('a pontrétegből nem állt össze útvonal');
     sample = features[0].properties || {};
     map = Object.assign({}, map, { kmKezd: '__kmKezd', kmVeg: '__kmVeg' });
+    pkMezo = pkMezoKeres(sample);
     szelvenykoves = true;
   }
 
@@ -303,6 +310,7 @@ export async function buildNetwork(file, fields, progress = () => {}) {
   // melyik forrásvonalból származik a szakasz — ebből derül ki, hogy
   // osztott pályánál melyik oldalon vagyunk, és hol szakad meg a vonal
   const segLine = []; let lineIdx = -1;
+  const segPk = [];
   let skipped = 0;
 
   features.forEach((f, n) => {
@@ -322,6 +330,8 @@ export async function buildNetwork(file, fields, progress = () => {}) {
 
     const kmFrom = map.kmKezd ? szelvenyMeters(props[map.kmKezd]) : null;
     const kmTo = map.kmVeg ? szelvenyMeters(props[map.kmVeg]) : null;
+    const pkSzam = pkMezo ? Number(String(props[pkMezo]).replace(',', '.')) : 0;
+    const pk = isFinite(pkSzam) && pkSzam >= 0 && pkSzam < 100 ? Math.round(pkSzam) : 0;
 
     // település (ha van ilyen mező): ide is lehet majd ugrani a térképen
     let pi = -1;
@@ -348,6 +358,7 @@ export async function buildNetwork(file, fields, progress = () => {}) {
         segRoad.push(ri);
         segLine.push(lineIdx);
         segPlace.push(pi);
+        segPk.push(pk);
         segLen.push(d);
         // a szakasz elejéhez tartozó szelvény (ha van mihez viszonyítani)
         segKm.push(kmFrom == null ? null
@@ -403,6 +414,7 @@ export async function buildNetwork(file, fields, progress = () => {}) {
     bLon: Float64Array.from(bLon),
     segRoad: Int32Array.from(segRoad),
     segLine: Int32Array.from(segLine),
+    segPk: Uint8Array.from(segPk),
     segKm: Float64Array.from(segKm.map((v) => (v == null ? NaN : v))),
     segLen: Float64Array.from(segLen),
     cells,
@@ -453,6 +465,8 @@ export function lookupRoad(net, lat, lon, maxDistance = 120) {
     utszam: net.roads[net.segRoad[best]],
     szelveny: formatSzelveny(meters),
     meters,
+    // osztott pályás szakaszon melyik pálya (0 = egypályás út)
+    palyakod: net.segPk ? net.segPk[best] : 0,
     // a szakaszhoz tartozó település, ha az adat tartalmazza
     telepules: (net.places && net.segPlace && net.places[net.segPlace[best]]) || '',
     distance: Math.round(bestD),

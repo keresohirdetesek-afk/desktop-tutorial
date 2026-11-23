@@ -15,6 +15,11 @@ import * as db from './db.js';
 
 const FAJL = 'adatok/szelvenyjelek.json';
 
+// A feldolgozó változata. Ha itt emelünk, a készüléken lévő adat egyszer
+// újraépül — akkor is, ha maga a NAP-állomány nem változott. (2: pályakód
+// is bekerül a hálózatba, ebből látszik az osztott pályán, melyik pálya.)
+const EPITO = 2;
+
 /** A tömör, oszlopos alakból a feldolgozó által várt pontréteg. */
 function geoJsonBol(adat) {
   const features = [];
@@ -37,6 +42,7 @@ function frissitendo(meglevo, adat) {
   if (!meglevo) return true;
   // kézzel betöltött állományt nem írunk felül
   if (!meglevo.beepitett) return false;
+  if (Number(meglevo.epito || 1) !== EPITO) return true;
   return String(meglevo.beepitettKeszult || '') !== String(adat.keszult || '');
 }
 
@@ -85,6 +91,7 @@ export async function beepitettAdat(progress = () => {}) {
   );
   net.name = `NAP szelvényjelek (${adat.keszult})`;
   net.beepitett = true;
+  net.epito = EPITO;
   net.beepitettKeszult = adat.keszult;
   net.forrasSzoveg = adat.forras;
   net.licenc = adat.licenc;

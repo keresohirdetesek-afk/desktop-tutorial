@@ -1108,6 +1108,36 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .mode-card.edit { --tint: var(--info); }
 .mode-card.escort { --tint: var(--danger); }
 
+/* ====================================== élő helyzet a bejárás képernyőn */
+/* Egyetlen sáv: melyik úton, melyik szelvénynél vagyunk most. */
+.live-road {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.live-ut {
+  flex: none;
+  min-width: 58px;
+  padding: 4px 8px;
+  border-radius: 9px;
+  text-align: center;
+  font-size: 19px;
+  font-weight: 760;
+  letter-spacing: -.02em;
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+.live-ut.halvany { color: var(--muted); background: var(--surface-2); }
+.live-kozep { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.live-szelv { font-size: 15.5px; font-weight: 650; }
+.live-meta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-road .btn { flex: none; }
+
 .home-recent { margin-top: 20px; }
 .home-recent .section-title { margin: 0; }
 
@@ -1504,6 +1534,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
         <div><span class="stat-val" id="st-points">0</span><span class="stat-lbl">Pont</span></div>
         <div><span class="stat-val" id="st-acc">—</span><span class="stat-lbl">GPS</span></div>
       </div>
+      <!-- élő helyzet: melyik úton, melyik szelvénynél vagyunk most -->
+      <div id="live-road" class="live-road" hidden>
+        <span id="live-ut" class="live-ut">—</span>
+        <span class="live-kozep">
+          <span id="live-szelv" class="live-szelv">—</span>
+          <span id="live-meta" class="live-meta"></span>
+        </span>
+        <button id="live-utcakep" class="btn ghost tiny" type="button" title="Utcakép ezen a ponton">👁 Utcakép</button>
+      </div>
+
       <div class="track-actions">
         <button id="rec-toggle" class="btn rec">● Nyomvonal rögzítése</button>
         <button id="rec-mark" class="btn ghost small" disabled>Pont jelölése</button>
@@ -7348,15 +7388,22 @@ async function buildNetwork(file, fields, progress = () => {}) {
   let sample = (features.find((f) => f.properties) || {}).properties || {};
   let map = Object.assign(guessFields(sample), fields || {});
 
+  // pályakód: osztott pályás (autópálya) szakaszon ebből derül ki, melyik
+  // pályán vagyunk. 0 = egypályás út, 1 és 2 = a két pálya.
+  const pkMezoKeres = (s) => Object.keys(s || {})
+    .find((k) => /^(pkod|palyakod|palya_kod)$/i.test(k));
+  let pkMezo = pkMezoKeres(sample);
+
   // pontréteg (szelvénykövek) → vonalakká fűzzük
   const pontDb = features.filter((f) => f.geometry && f.geometry.type === 'Point').length;
   if (pontDb > features.length / 2 && map.utszam && map.kmKezd) {
-    const pkodMezo = Object.keys(sample).find((k) => /^(pkod|palyakod|palya_kod)$/i.test(k));
+    const pkodMezo = pkMezo;
     progress(`Szelvénykövek összefűzése… (${pontDb} kő)`);
     features = szelvenykovekbolVonalak(features, map, pkodMezo);
     if (!features.length) throw new Error('a pontrétegből nem állt össze útvonal');
     sample = features[0].properties || {};
     map = Object.assign({}, map, { kmKezd: '__kmKezd', kmVeg: '__kmVeg' });
+    pkMezo = pkMezoKeres(sample);
     szelvenykoves = true;
   }
 
@@ -7384,6 +7431,7 @@ async function buildNetwork(file, fields, progress = () => {}) {
   // melyik forrásvonalból származik a szakasz — ebből derül ki, hogy
   // osztott pályánál melyik oldalon vagyunk, és hol szakad meg a vonal
   const segLine = []; let lineIdx = -1;
+  const segPk = [];
   let skipped = 0;
 
   features.forEach((f, n) => {
@@ -7403,6 +7451,8 @@ async function buildNetwork(file, fields, progress = () => {}) {
 
     const kmFrom = map.kmKezd ? szelvenyMeters(props[map.kmKezd]) : null;
     const kmTo = map.kmVeg ? szelvenyMeters(props[map.kmVeg]) : null;
+    const pkSzam = pkMezo ? Number(String(props[pkMezo]).replace(',', '.')) : 0;
+    const pk = isFinite(pkSzam) && pkSzam >= 0 && pkSzam < 100 ? Math.round(pkSzam) : 0;
 
     // település (ha van ilyen mező): ide is lehet majd ugrani a térképen
     let pi = -1;
@@ -7429,6 +7479,7 @@ async function buildNetwork(file, fields, progress = () => {}) {
         segRoad.push(ri);
         segLine.push(lineIdx);
         segPlace.push(pi);
+        segPk.push(pk);
         segLen.push(d);
         // a szakasz elejéhez tartozó szelvény (ha van mihez viszonyítani)
         segKm.push(kmFrom == null ? null
@@ -7484,6 +7535,7 @@ async function buildNetwork(file, fields, progress = () => {}) {
     bLon: Float64Array.from(bLon),
     segRoad: Int32Array.from(segRoad),
     segLine: Int32Array.from(segLine),
+    segPk: Uint8Array.from(segPk),
     segKm: Float64Array.from(segKm.map((v) => (v == null ? NaN : v))),
     segLen: Float64Array.from(segLen),
     cells,
@@ -7534,6 +7586,8 @@ function lookupRoad(net, lat, lon, maxDistance = 120) {
     utszam: net.roads[net.segRoad[best]],
     szelveny: formatSzelveny(meters),
     meters,
+    // osztott pályás szakaszon melyik pálya (0 = egypályás út)
+    palyakod: net.segPk ? net.segPk[best] : 0,
     // a szakaszhoz tartozó település, ha az adat tartalmazza
     telepules: (net.places && net.segPlace && net.places[net.segPlace[best]]) || '',
     distance: Math.round(bestD),
@@ -7828,6 +7882,11 @@ function utvonalSzelvenyekbol(net, szakaszok) {
 
 const FAJL = 'adatok/szelvenyjelek.json';
 
+// A feldolgozó változata. Ha itt emelünk, a készüléken lévő adat egyszer
+// újraépül — akkor is, ha maga a NAP-állomány nem változott. (2: pályakód
+// is bekerül a hálózatba, ebből látszik az osztott pályán, melyik pálya.)
+const EPITO = 2;
+
 /** A tömör, oszlopos alakból a feldolgozó által várt pontréteg. */
 function geoJsonBol(adat) {
   const features = [];
@@ -7850,6 +7909,7 @@ function frissitendo(meglevo, adat) {
   if (!meglevo) return true;
   // kézzel betöltött állományt nem írunk felül
   if (!meglevo.beepitett) return false;
+  if (Number(meglevo.epito || 1) !== EPITO) return true;
   return String(meglevo.beepitettKeszult || '') !== String(adat.keszult || '');
 }
 
@@ -7898,6 +7958,7 @@ async function beepitettAdat(progress = () => {}) {
   );
   net.name = `NAP szelvényjelek (${adat.keszult})`;
   net.beepitett = true;
+  net.epito = EPITO;
   net.beepitettKeszult = adat.keszult;
   net.forrasSzoveg = adat.forras;
   net.licenc = adat.licenc;
@@ -12785,6 +12846,55 @@ function renderMeta() {
   }
 }
 
+/* --------------------------------------------- élő helyzet (hol vagyok) */
+
+/** A pálya megnevezése a NAP pályakódjából (0 = egypályás út). */
+function palyaNev(pk) {
+  const n = Number(pk);
+  return n === 1 ? '1. pálya' : n === 2 ? '2. pálya' : '';
+}
+
+/** Utcakép-hivatkozás egy pontra (a böngésző térképszolgáltatása nyitja). */
+function utcakepUrl(lat, lon) {
+  return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat.toFixed(6)},${lon.toFixed(6)}`;
+}
+
+/**
+ * A bejárás képernyő tetején futó sáv: melyik úton, melyik szelvénynél
+ * vagyunk most. A beépített országos adatból megy, hálózat nélkül is.
+ */
+function updateLiveRoad() {
+  const sav = $('#live-road');
+  if (!sav) return;
+  const p = recorder && recorder.current;
+  if (!p || p.lat == null) { sav.hidden = true; return; }
+  sav.hidden = false;
+
+  const hit = roadNet ? lookupRoad(roadNet, p.lat, p.lon, 150) : null;
+  const ut = $('#live-ut');
+  const szelv = $('#live-szelv');
+  const meta = $('#live-meta');
+
+  if (!hit) {
+    ut.textContent = '—';
+    ut.classList.add('halvany');
+    szelv.textContent = roadNet ? 'Nincs országos közút 150 m-en belül' : 'Országos adat még nincs kész';
+    meta.textContent = p.acc != null ? `GPS ±${p.acc} m` : '';
+    return;
+  }
+  ut.textContent = hit.utszam;
+  ut.classList.remove('halvany');
+  szelv.textContent = hit.szelveny || '—';
+  const reszek = [];
+  const palya = palyaNev(hit.palyakod);
+  if (palya) reszek.push(palya);
+  if (hit.telepules) reszek.push(hit.telepules);
+  // csak akkor érdekes, ha érezhetően az út mellett vagyunk
+  if (hit.distance != null && hit.distance >= 10) reszek.push(`az úttól ${hit.distance} m`);
+  if (p.acc != null) reszek.push(`GPS ±${p.acc} m`);
+  meta.textContent = reszek.join(' · ');
+}
+
 function updateStats() {
   // a „táv” a hivatalos útvonal hossza: az elvetett szakaszok nem számítanak bele
   const len = lengthByStatus(state.points);
@@ -12795,6 +12905,7 @@ function updateStats() {
   $('#st-time').textContent = formatDuration(elapsed);
   const last = recorder && recorder.current;
   $('#st-acc').textContent = last && last.acc != null ? '±' + last.acc + ' m' : '—';
+  updateLiveRoad();
 
   const secs = rejectedSections(state.points);
   const summary = $('#reject-summary');
@@ -14507,6 +14618,14 @@ async function openViewer(id) {
       onclick: () => attachPhotoTo(item.id),
     }, ikonos('foto', 'Fotó csatolása')));
   }
+  // Utcakép: tervezéskor egy kattintással megnézhető a helyszín — kanyar,
+  // híd, szűkület —, anélkül hogy ki kellene menni oda.
+  if (item.lat != null && item.lon != null) {
+    actions.appendChild(el('button', {
+      class: 'btn ghost small',
+      onclick: () => window.open(utcakepUrl(item.lat, item.lon), '_blank', 'noopener'),
+    }, ikonos('terkep', 'Utcakép')));
+  }
   if (item.video) {
     actions.appendChild(el('button', {
       class: 'btn ghost small',
@@ -15554,6 +15673,11 @@ function bind() {
   $('#home-edit').addEventListener('click', () => show('list'));
   $('#home-escort').addEventListener('click', escortFromHome);
   $('#home-all').addEventListener('click', () => show('list'));
+  $('#live-utcakep').addEventListener('click', () => {
+    const p = recorder && recorder.current;
+    if (!p || p.lat == null) { toast('Nincs friss GPS-pozíció.', 'error'); return; }
+    window.open(utcakepUrl(p.lat, p.lon), '_blank', 'noopener');
+  });
   $('#home-install-btn').addEventListener('click', telepitesInditas);
   $('#home-install-hide').addEventListener('click', () => {
     try { localStorage.setItem('telepitesRejtve', '1'); } catch (_) {}
