@@ -25,9 +25,7 @@ import {
 } from './uthalozat.js';
 import { eovToWgs84, formatEov } from './eov.js';
 import { onlineRouting, setOnlineRouting, snapOnline, routeOnline } from './utvonalterv.js';
-import {
-  lookupOsm, lookupKozut, kozutHid, setKozutHid, probaHid, hidUjraprobal,
-} from './utadat.js';
+import { lookupOsm } from './utadat.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO, keresoUrl } from './kozut.js';
@@ -1405,13 +1403,6 @@ async function roadStamp(lat, lon, acc = null) {
   if (lat == null || lon == null) return null;
   let net = null;
   try { net = await roadNetwork(); } catch (_) { net = null; }
-
-  // A Közút saját szolgáltatása a leghitelesebb forrás, de csak akkor
-  // kérdezzük, ha a felhasználó beállította a hidat — enélkül azonnal
-  // null-lal tér vissza, hálózat nélkül. Ezért ez megy elsőként, és csak
-  // utána a (szintén pontos, de interpolált) országos NAP-adat.
-  const kozut = await lookupKozut(lat, lon);
-  if (kozut) return { ...kozut, acc: acc == null ? null : Math.round(acc) };
 
   if (!net) {
     // Ha a felhasználó bekapcsolta az online kiegészítést, nyílt
@@ -3205,53 +3196,6 @@ async function alkalmazKereso(item, data) {
   toast(`Átvéve a keresőből: ${roadLabel(item.road)}.`);
 }
 
-/**
- * Az útszámkereső-híd címe. A Közút végpontját a böngésző nem hívhatja
- * közvetlenül egy másik címen futó oldalról, ezért a saját tárhelyre kell
- * egy pici továbbító fájl (kiszolgalo/kozut-hid.php a repóban).
- */
-async function editHid() {
-  const res = await modal({
-    title: 'Útszámkereső-híd',
-    text: 'Ha a saját tárhelyére felmásolta a továbbító fájlt (kiszolgalo/kozut-hid.php), '
-      + 'írja be ide a címét — ettől kezdve minden rögzített pont magától megkapja a '
-      + 'Közút szerinti útszámot és km szelvényt. Üresen hagyva nincs lekérdezés.',
-    fields: [
-      {
-        name: 'url', label: 'A továbbító fájl címe', value: kozutHid(),
-        placeholder: 'https://sajat-domain.hu/kozut-hid.php',
-        hint: 'A koordináta EOV-ban megy át, más adat nem.',
-      },
-    ],
-    okText: 'Mentés',
-  });
-  if (!res) return;
-  const url = res.url.trim();
-  setKozutHid(url);
-  hidUjraprobal();          // új cím: adjunk neki új esélyt
-  if (!url) { toast('A híd kikapcsolva.'); return; }
-
-  // azonnal kipróbáljuk egy ismert ponton, hogy ne később derüljön ki a baj
-  toast('Próba…');
-  const proba = await probaHid(url);
-  if (proba.ok) {
-    toast(proba.uzenet);
-    return;
-  }
-  // a hibát nem elég egy villanó üzenetben megmutatni: ez beállítási gond
-  await modal({
-    title: 'A híd nem működik',
-    text: proba.uzenet
-      + '\n\nRészletek: nyissa meg a híd címét a böngészőben a végére írt &diag=1 '
-      + 'paraméterrel — ott soronként látszik, mit próbált, és mit kapott vissza.'
-      + '\n\nA továbbító fájl (kiszolgalo/kozut-hid.php) olyan tárhelyre kell, ami '
-      + 'futtatja a PHP-t; a GitHub Pages erre nem alkalmas. A cím addig is mentve '
-      + 'maradt; üresen hagyva kikapcsolható.',
-    okText: 'Értem',
-    cancelText: 'Cím törlése',
-  }) || setKozutHid('');
-}
-
 async function editItemNote(item) {
   const res = await modal({
     title: 'Megjegyzés szerkesztése',
@@ -3926,15 +3870,6 @@ function bind() {
   // a keresőből visszatérve felajánljuk a vágólapon lévő találatot
   window.addEventListener('focus', () => { keresoVisszateres(); });
   document.addEventListener('visibilitychange', () => { keresoVisszateres(); });
-
-  const hid = $('#opt-hid');
-  if (hid) {
-    const syncHid = () => {
-      hid.textContent = kozutHid() ? '🔗 Útszámkereső-híd: bekapcsolva' : '🔗 Útszámkereső-híd beállítása';
-    };
-    syncHid();
-    hid.addEventListener('click', async () => { await editHid(); syncHid(); });
-  }
 
   const onl = $('#opt-online');
   if (onl) {

@@ -66,9 +66,6 @@ jobs:
           rm -rf _site/eszkozok
           # a nyers NAP-csomag csak a frissítéshez kell, a kiadásba ne menjen
           rm -rf _site/nap-nyers
-          # a kiszolgalo/ mappa PHP-t tartalmaz, amit a Pages nem futtat —
-          # az a saját tárhelyre való, nem ide
-          rm -rf _site/kiszolgalo
           rm -f _site/build-single.mjs _site/README.md
           # a másik alkalmazás a korábbi útvonalán
           if [ -d atlagsebesseg ]; then

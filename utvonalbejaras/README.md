@@ -432,44 +432,12 @@ pontra, és kiírja, hány helyszínt pótolt. A hely utólagos javításakor
 > az adatlap ezt is kiírja — ilyenkor a szomszédos út is lehet a
 > „legközelebbi”, érdemes ránézni.
 
-**A Közút útszámkeresőjéből, automatikusan (útszámkereső-híd).** Az
-[útszámkereső](https://utszamkereso.kozut.hu/) oldala mögött van egy
-JSON-végpont, ami koordinátára megadja a **hiteles** útszámot és szelvényt.
-A böngésző viszont nem engedi, hogy egy másik címen futó oldal közvetlenül
-hívja (a válasz nem engedélyezi az idegen eredetet), ezért kell egy pici
-továbbító fájl a saját tárhelyre:
-
-1. Másold fel a repóból a `utvonalbejaras/kiszolgalo/kozut-hid.php` fájlt a
-   tárhelyedre, pl. `public_html/kozut-hid.php`. **Olyan helyre kell, ami
-   futtatja a PHP-t** — a GitHub Pages nem ilyen: ott a fájl csak szövegként
-   jelenne meg, és a híd nem működne. A cPanel-es tárhely jó.
-   (A `.github/workflows/kiadas-utszam-hid.yml` munkafolyamat fel is tölti
-   magától, ha az FTP-titkok be vannak állítva — ugyanazok, mint az
-   átlagsebesség kiadásánál.)
-2. Az appban: kezdőképernyő → **🔗 Útszámkereső-híd beállítása** → írd be a
-   fájl címét (`https://sajat-domain.hu/kozut-hid.php`). Mentés után az app
-   rögtön ki is próbálja egy ismert ponton, és kiírja, mit kapott.
-
-Ettől kezdve **minden rögzített pont magától megkapja a Közút szerinti
-útszámot és km szelvényt** — ugyanazt, amit az útszámkereső is mutat. A
-forrásjelölés *„a Közút útszámkeresőjéből”*, és ez nem becsült érték.
-
-A továbbító fájl csak ezt az egyetlen, nyilvános végpontot éri el, a
-koordinátán kívül semmit nem továbbít, nem naplóz, a válaszokat 30 napig
-gyorsítótárazza, és percenként korlátozza a kérések számát — hogy a Közút
-szolgáltatását se terhelje feleslegesen.
-
-A pontos kérésformát a szolgáltatás nem teszi közzé, és változhat is, ezért
-a híd **több változatot végigpróbál** (EOV és WGS84 végpont, POST és GET),
-és a bevált változatot megjegyzi. Ha valami mégsem megy, a cím végére írt
-`&diag=1` kiírja soronként, mit próbált és mit kapott vissza:
-
-```
-https://sajat-domain.hu/kozut-hid.php?lat=47.376131&lon=18.190796&diag=1
-```
-
-Ebből derül ki az is, ha a tárhely nem enged kimenő kapcsolatot (ilyenkor a
-`curl_hiba` mező nem üres), vagy ha nincs bekapcsolva a `curl` bővítmény.
+**A Közút útszámkeresőjéből, kézzel.** Ha egy ponthoz a beépített adatból
+nem jön ki az útszám (például nem országos közút), az adatlapon a
+*🔎 Útszám és szelvény keresése* gomb a vágólapra teszi a koordinátát és
+megnyitja az [útszámkeresőt](https://utszamkereso.kozut.hu/); a találati
+panelt kimásolva a *📋 Beillesztés a keresőből* gomb kiszedi belőle az
+útszámot és a szelvényt.
 
 **Online kiegészítéssel, NAP nélkül is.** Ha nincs betöltve a NAP-állomány,
 de bekapcsolta az *Online kiegészítést*, az app nyílt térképadatból (OSM)
