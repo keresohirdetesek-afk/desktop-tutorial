@@ -562,7 +562,10 @@
           <span class="mode-icon">👆</span><span class="mode-label">Nézegetés</span>
         </button>
         <button class="mode" type="button" data-mode="draw" role="tab">
-          <span class="mode-icon">✏️</span><span class="mode-label">Útvonal rajzolása</span>
+          <span class="mode-icon">✏️</span><span class="mode-label">Útvonal tervezése</span>
+        </button>
+        <button class="mode" type="button" data-mode="kozut" role="tab">
+          <span class="mode-icon">📋</span><span class="mode-label">Közút útvonala</span>
         </button>
         <button class="mode" type="button" data-mode="add" role="tab">
           <span class="mode-icon">📍</span><span class="mode-label">Pont felvétele</span>
@@ -584,7 +587,6 @@
         <button id="trackedit-draw-undo" class="btn ghost small">↶ Vissza</button>
         <button id="trackedit-draw-cancel" class="btn ghost small">Eldobás</button>
         <button id="trackedit-roadsnap" class="btn ghost small" hidden>🛣️ Úthoz illesztés</button>
-        <button id="trackedit-kijelolt" class="btn ghost small block">📋 A Közút által kijelölt útvonal beolvasása</button>
       </div>
 
       <!-- szakasz kijelölése -->
@@ -620,11 +622,11 @@
       <div class="legend">
         <span class="legend-item"><i class="swatch-line ok"></i>Érvényes: <strong id="te-ok">0 m</strong></span>
         <span class="legend-item"><i class="swatch-line rejected"></i>Elvetett: <strong id="te-rejected">0 m</strong></span>
-        <span class="legend-item" id="te-drawn-item" hidden><i class="swatch-line drawn"></i>Rajzolt: <strong id="te-drawn">0 m</strong></span>
+        <span class="legend-item" id="te-drawn-item" hidden><i class="swatch-line drawn"></i>Tervezett: <strong id="te-drawn">0 m</strong></span>
       </div>
 
       <div id="trackedit-drawn-wrap" hidden>
-        <h3 class="section-title">Berajzolt szakaszok</h3>
+        <h3 class="section-title">Tervezett szakaszok</h3>
         <div id="trackedit-drawn-list" class="sections"></div>
         <div class="editor-row" id="trackedit-drawn-actions" hidden>
           <button id="trackedit-drawn-rename" class="btn ghost tiny">Átnevezés</button>

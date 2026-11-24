@@ -725,8 +725,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Módválasztó: egy helyen látszik, mit csinál most a koppintás */
 .modebar {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -2074,7 +2074,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
           <span class="mode-icon">👆</span><span class="mode-label">Nézegetés</span>
         </button>
         <button class="mode" type="button" data-mode="draw" role="tab">
-          <span class="mode-icon">✏️</span><span class="mode-label">Útvonal rajzolása</span>
+          <span class="mode-icon">✏️</span><span class="mode-label">Útvonal tervezése</span>
+        </button>
+        <button class="mode" type="button" data-mode="kozut" role="tab">
+          <span class="mode-icon">📋</span><span class="mode-label">Közút útvonala</span>
         </button>
         <button class="mode" type="button" data-mode="add" role="tab">
           <span class="mode-icon">📍</span><span class="mode-label">Pont felvétele</span>
@@ -2096,7 +2099,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
         <button id="trackedit-draw-undo" class="btn ghost small">↶ Vissza</button>
         <button id="trackedit-draw-cancel" class="btn ghost small">Eldobás</button>
         <button id="trackedit-roadsnap" class="btn ghost small" hidden>🛣️ Úthoz illesztés</button>
-        <button id="trackedit-kijelolt" class="btn ghost small block">📋 A Közút által kijelölt útvonal beolvasása</button>
       </div>
 
       <!-- szakasz kijelölése -->
@@ -2132,11 +2134,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
       <div class="legend">
         <span class="legend-item"><i class="swatch-line ok"></i>Érvényes: <strong id="te-ok">0 m</strong></span>
         <span class="legend-item"><i class="swatch-line rejected"></i>Elvetett: <strong id="te-rejected">0 m</strong></span>
-        <span class="legend-item" id="te-drawn-item" hidden><i class="swatch-line drawn"></i>Rajzolt: <strong id="te-drawn">0 m</strong></span>
+        <span class="legend-item" id="te-drawn-item" hidden><i class="swatch-line drawn"></i>Tervezett: <strong id="te-drawn">0 m</strong></span>
       </div>
 
       <div id="trackedit-drawn-wrap" hidden>
-        <h3 class="section-title">Berajzolt szakaszok</h3>
+        <h3 class="section-title">Tervezett szakaszok</h3>
         <div id="trackedit-drawn-list" class="sections"></div>
         <div class="editor-row" id="trackedit-drawn-actions" hidden>
           <button id="trackedit-drawn-rename" class="btn ghost tiny">Átnevezés</button>
@@ -4273,7 +4275,7 @@ function toGeoJSON(session, points, items = [], opts = {}) {
 
   (session.drawn || []).forEach((seg, i) => {
     line(seg.pts, {
-      nev: seg.name || `Berajzolt szakasz ${i + 1}`,
+      nev: seg.name || `Tervezett szakasz ${i + 1}`,
       megjegyzes: seg.note || '',
       tipus: 'berajzolt',
       stroke: '#2ea043',
@@ -4574,7 +4576,7 @@ ${seg.map(trkpt).join('\n')}
     .filter((seg) => (seg.pts || []).length > 1)
     .map(
       (seg) => `  <trk>
-    <name>Berajzolt szakasz${seg.name ? ' — ' + esc(seg.name) : ''}</name>
+    <name>Tervezett szakasz${seg.name ? ' — ' + esc(seg.name) : ''}</name>
     <desc>${esc(seg.note || 'Térképen kézzel megadott útvonalszakasz')} (${Math.round(trackLength(seg.pts))} m)</desc>
     <type>drawn</type>
     <trkseg>
@@ -11389,7 +11391,12 @@ class TrackEditor {
 
     // módválasztó: egyetlen helyen dől el, mit csinál a koppintás
     for (const b of this.root.querySelectorAll('#trackedit-modes .mode')) {
-      b.addEventListener('click', () => this.setMode(b.dataset.mode));
+      b.addEventListener('click', () => {
+        // a Közút útvonala nem „mód”, hanem egyetlen művelet: beolvas és
+        // megrajzol, utána marad az eddigi mód
+        if (b.dataset.mode === 'kozut') { this.kijeloltUtvonal(); return; }
+        this.setMode(b.dataset.mode);
+      });
     }
 
     // asztali gépen billentyűkkel is: Esc kilép, Enter kész, Ctrl+Z vissza
@@ -11413,7 +11420,6 @@ class TrackEditor {
 
     $('#trackedit-roadsnap', this.root).addEventListener('click', () => this.toggleRoadSnap());
     $('#trackedit-goto', this.root).addEventListener('click', () => this.gotoPlace());
-    $('#trackedit-kijelolt', this.root).addEventListener('click', () => this.kijeloltUtvonal());
     $('#trackedit-draw-undo', this.root).addEventListener('click', () => this.undoVertex());
     $('#trackedit-draw-done', this.root).addEventListener('click', () => this.finishDraw());
     $('#trackedit-draw-cancel', this.root).addEventListener('click', () => {
@@ -11559,8 +11565,8 @@ class TrackEditor {
     if (body) body.className = 'm-' + mode;
     if (!quiet && mode === 'draw' && this.draft && !this.draft.pts.length) {
       toast(this.roadSnap
-        ? 'Rajzolás: elég a szakasz elejére és végére kattintani — a vonal az utat követi.'
-        : 'Rajzolás: kattintson sorban a pontokra.');
+        ? 'Tervezés: elég a szakasz elejére és végére kattintani — a vonal az utat követi.'
+        : 'Tervezés: kattintson sorban a pontokra.');
     }
     this.draw();
     this.renderPanel();
@@ -11928,7 +11934,7 @@ class TrackEditor {
       return;
     }
     const res = await modal({
-      title: 'Berajzolt szakasz mentése',
+      title: 'Tervezett szakasz mentése',
       text: `${pts.length} pont · ${formatDistance(trackLength(pts))}`,
       fields: [
         { name: 'name', label: 'Megnevezés', placeholder: 'pl. kerülő a Fő utcán át' },
@@ -11960,7 +11966,11 @@ class TrackEditor {
    * úthálózat alapján kirajzolható a tényleges nyomvonal.
    */
   async kijeloltUtvonal() {
-    if (!this.road || !this.road.kijelolt) return;
+    if (!this.road || !this.road.kijelolt) {
+      toast('Ehhez az országos úthálózati adat kell — töltse újra az oldalt, '
+        + 'és próbálja újra.', 'error');
+      return;
+    }
     const res = await modal({
       title: 'A Közút által kijelölt útvonal',
       text: 'Másolja ide az engedélyben szereplő szakaszlistát, soronként egyet:\n'
@@ -12160,7 +12170,7 @@ class TrackEditor {
     const seg = this.currentDrawn();
     if (!seg) return;
     const res = await modal({
-      title: 'Berajzolt szakasz',
+      title: 'Tervezett szakasz',
       fields: [
         { name: 'name', label: 'Megnevezés', value: seg.name || '' },
         { name: 'note', label: 'Megjegyzés', type: 'textarea', rows: 2, value: seg.note || '' },
@@ -12179,7 +12189,7 @@ class TrackEditor {
     const seg = this.currentDrawn();
     if (!seg) return;
     const ok = await modal({
-      title: 'Berajzolt szakasz törlése?',
+      title: 'Tervezett szakasz törlése?',
       text: `${seg.name || 'Névtelen szakasz'} — ${formatDistance(trackLength(seg.pts))}`,
       okText: 'Törlés',
     });
@@ -12416,12 +12426,10 @@ class TrackEditor {
           ? `${Tap} a szakasz elejére, majd a végére — a vonal magától az utat követi.`
           : `${Tap} sorban a szakasz pontjaira. Ha az utat kövesse magától: „🛣️ Úthoz illesztés bekapcsolása”.`;
       badge.hidden = false;
-      badge.innerHTML = `✏️ Útvonal rajzolása<span class="sub">${
+      badge.innerHTML = `✏️ Útvonal tervezése<span class="sub">${
         n ? ` · ${n} pont · ${hossz}` : (snapReady && this.roadSnap ? ' · úthoz illesztve' : '')
       }</span>`;
-      const kij = $('#trackedit-kijelolt', this.root);
-    if (kij) kij.hidden = !(this.road && this.road.kijelolt);
-    $('#trackedit-draw-done', this.root).disabled = n < 2;
+      $('#trackedit-draw-done', this.root).disabled = n < 2;
       $('#trackedit-draw-undo', this.root).disabled = n === 0;
       $('#trackedit-draw-cancel', this.root).disabled = n === 0;
       return;
@@ -12552,7 +12560,7 @@ class TrackEditor {
       }, [
         el('span', { class: 'section-idx', text: String(i + 1) }),
         el('span', { class: 'section-body' }, [
-          el('span', { class: 'section-reason', text: seg.name || 'Berajzolt szakasz' }),
+          el('span', { class: 'section-reason', text: seg.name || 'Tervezett szakasz' }),
           el('span', { class: 'section-sub', text: `${formatDistance(trackLength(seg.pts))} · ${seg.pts.length} pont` }),
         ]),
       ]);
@@ -13014,7 +13022,8 @@ async function newSession(mod) {
   });
   await openSession(s.id);
   if (mod === 'terv') {
-    toast('Rajzolja meg az útvonalat a térképen. A „Rajz” módban koppintva adhat hozzá pontokat.');
+    toast('Tervezze meg az útvonalat a térképen: az „Útvonal tervezése” módban koppintva '
+      + 'adhat hozzá pontokat, vagy a „Közút útvonala” gombbal olvassa be a szakaszlistát.');
     await openTrackEditor();
     return;
   }
@@ -13081,7 +13090,7 @@ function renderMeta() {
   ];
   const drawn = s.drawn || [];
   if (drawn.length) {
-    rows.push(['Berajzolt szakasz', `${drawn.length} db · ${formatDistance(drawnLength(drawn))}`]);
+    rows.push(['Tervezett szakasz', `${drawn.length} db · ${formatDistance(drawnLength(drawn))}`]);
     drawn.forEach((seg, i) => {
       rows.push([`↳ ${i + 1}.`, `${seg.name || 'névtelen'}${seg.note ? ' — ' + seg.note : ''}`]);
     });

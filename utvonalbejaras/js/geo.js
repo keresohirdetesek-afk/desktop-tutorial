@@ -909,7 +909,7 @@ export function toGeoJSON(session, points, items = [], opts = {}) {
 
   (session.drawn || []).forEach((seg, i) => {
     line(seg.pts, {
-      nev: seg.name || `Berajzolt szakasz ${i + 1}`,
+      nev: seg.name || `Tervezett szakasz ${i + 1}`,
       megjegyzes: seg.note || '',
       tipus: 'berajzolt',
       stroke: '#2ea043',
@@ -1210,7 +1210,7 @@ ${seg.map(trkpt).join('\n')}
     .filter((seg) => (seg.pts || []).length > 1)
     .map(
       (seg) => `  <trk>
-    <name>Berajzolt szakasz${seg.name ? ' — ' + esc(seg.name) : ''}</name>
+    <name>Tervezett szakasz${seg.name ? ' — ' + esc(seg.name) : ''}</name>
     <desc>${esc(seg.note || 'Térképen kézzel megadott útvonalszakasz')} (${Math.round(trackLength(seg.pts))} m)</desc>
     <type>drawn</type>
     <trkseg>

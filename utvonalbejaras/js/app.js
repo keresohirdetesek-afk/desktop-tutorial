@@ -469,7 +469,8 @@ async function newSession(mod) {
   });
   await openSession(s.id);
   if (mod === 'terv') {
-    toast('Rajzolja meg az útvonalat a térképen. A „Rajz” módban koppintva adhat hozzá pontokat.');
+    toast('Tervezze meg az útvonalat a térképen: az „Útvonal tervezése” módban koppintva '
+      + 'adhat hozzá pontokat, vagy a „Közút útvonala” gombbal olvassa be a szakaszlistát.');
     await openTrackEditor();
     return;
   }
@@ -536,7 +537,7 @@ function renderMeta() {
   ];
   const drawn = s.drawn || [];
   if (drawn.length) {
-    rows.push(['Berajzolt szakasz', `${drawn.length} db · ${formatDistance(drawnLength(drawn))}`]);
+    rows.push(['Tervezett szakasz', `${drawn.length} db · ${formatDistance(drawnLength(drawn))}`]);
     drawn.forEach((seg, i) => {
       rows.push([`↳ ${i + 1}.`, `${seg.name || 'névtelen'}${seg.note ? ' — ' + seg.note : ''}`]);
     });
