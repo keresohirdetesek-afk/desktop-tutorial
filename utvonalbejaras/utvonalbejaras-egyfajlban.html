@@ -1108,6 +1108,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .mode-card.edit { --tint: var(--info); }
 .mode-card.escort { --tint: var(--danger); }
 
+/* figyelmeztető sáv a lap tetején (nem biztonságos kapcsolat) */
+.https-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--accent-ink);
+  background: var(--warn);
+}
+.https-bar .btn { background: rgba(255, 255, 255, .85); border-color: rgba(0, 0, 0, .18); color: #111827; }
+.https-bar .icon-btn { margin-left: auto; color: var(--accent-ink); font-size: 14px; }
+
 /* ====================================== élő helyzet a bejárás képernyőn */
 /* Egyetlen sáv: melyik úton, melyik szelvénynél vagyunk most. */
 .live-road {
@@ -1401,6 +1414,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .section-torles:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 
 </style>
+
+<!-- Nem biztonságos kapcsolat: csak felajánljuk a váltást, nem kényszerítjük.
+     (Az automatikus átirányítás ellehetetlenítette az oldalt ott, ahol a
+     tanúsítvány még nem volt kész — ezért csak kattintásra váltunk.) -->
+<div id="https-bar" class="https-bar" hidden>
+  <span>A kapcsolat nem biztonságos.</span>
+  <button id="https-switch" class="btn tiny" type="button">Váltás https-re</button>
+  <button id="https-hide" class="icon-btn" type="button" aria-label="Bezárás">✕</button>
+</div>
 
 <header id="topbar">
   <button id="back-btn" class="icon-btn" hidden aria-label="Vissza">‹</button>
@@ -12846,6 +12868,32 @@ function renderMeta() {
   }
 }
 
+/* ------------------------------------------------ biztonságos kapcsolat */
+
+/**
+ * Ha az oldal http-n jött be, felajánljuk a váltást — de nem kényszerítjük.
+ * A kényszerített átirányítás ott, ahol a tanúsítvány még nem kész, teljesen
+ * elérhetetlenné teszi az alkalmazást, és onnan már nincs visszaút.
+ */
+function httpsSav() {
+  const sav = $('#https-bar');
+  if (!sav) return;
+  const h = location.hostname;
+  const helyi = h === 'localhost' || h === '127.0.0.1' || h === '[::1]'
+    || /^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(h);
+  let elrejtve = false;
+  try { elrejtve = sessionStorage.getItem('httpsSavRejtve') === '1'; } catch (_) {}
+  sav.hidden = location.protocol !== 'http:' || helyi || elrejtve;
+  if (sav.hidden) return;
+  $('#https-switch').onclick = () => {
+    location.href = 'https://' + location.host + location.pathname + location.search + location.hash;
+  };
+  $('#https-hide').onclick = () => {
+    try { sessionStorage.setItem('httpsSavRejtve', '1'); } catch (_) {}
+    sav.hidden = true;
+  };
+}
+
 /* --------------------------------------------- élő helyzet (hol vagyok) */
 
 /** A pálya megnevezése a NAP pályakódjából (0 = egypályás út). */
@@ -15824,6 +15872,7 @@ async function init() {
   // az első rajzoláskor már a tábla látszódjon, ne egy üres karika
   preloadSigns().then(() => { if (state.session) drawTrack(); });
   applyDeviceClass();
+  httpsSav();
   telepitesFigyeles();
   await renderSessionList();
   show('home');

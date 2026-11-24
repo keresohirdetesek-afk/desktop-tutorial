@@ -1096,6 +1096,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .mode-card.edit { --tint: var(--info); }
 .mode-card.escort { --tint: var(--danger); }
 
+/* figyelmeztető sáv a lap tetején (nem biztonságos kapcsolat) */
+.https-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--accent-ink);
+  background: var(--warn);
+}
+.https-bar .btn { background: rgba(255, 255, 255, .85); border-color: rgba(0, 0, 0, .18); color: #111827; }
+.https-bar .icon-btn { margin-left: auto; color: var(--accent-ink); font-size: 14px; }
+
 /* ====================================== élő helyzet a bejárás képernyőn */
 /* Egyetlen sáv: melyik úton, melyik szelvénynél vagyunk most. */
 .live-road {

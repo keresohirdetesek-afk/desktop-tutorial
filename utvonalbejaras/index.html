@@ -13,20 +13,17 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="css/app.css">
-<script>
-  // Mindig biztonságos kapcsolat: ha valaki http-vel nyitja meg, átvisszük
-  // https-re. A helyi fejlesztés (localhost, fájlból megnyitott egyfájlos
-  // változat) érintetlen marad.
-  (function () {
-    var h = location.hostname;
-    if (location.protocol === 'http:' && h !== 'localhost' && h !== '127.0.0.1' && h !== '[::1]'
-        && !/^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(h)) {
-      location.replace('https://' + location.host + location.pathname + location.search + location.hash);
-    }
-  })();
-</script>
 </head>
 <body>
+
+<!-- Nem biztonságos kapcsolat: csak felajánljuk a váltást, nem kényszerítjük.
+     (Az automatikus átirányítás ellehetetlenítette az oldalt ott, ahol a
+     tanúsítvány még nem volt kész — ezért csak kattintásra váltunk.) -->
+<div id="https-bar" class="https-bar" hidden>
+  <span>A kapcsolat nem biztonságos.</span>
+  <button id="https-switch" class="btn tiny" type="button">Váltás https-re</button>
+  <button id="https-hide" class="icon-btn" type="button" aria-label="Bezárás">✕</button>
+</div>
 
 <header id="topbar">
   <button id="back-btn" class="icon-btn" hidden aria-label="Vissza">‹</button>

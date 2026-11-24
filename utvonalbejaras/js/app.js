@@ -559,6 +559,32 @@ function renderMeta() {
   }
 }
 
+/* ------------------------------------------------ biztonságos kapcsolat */
+
+/**
+ * Ha az oldal http-n jött be, felajánljuk a váltást — de nem kényszerítjük.
+ * A kényszerített átirányítás ott, ahol a tanúsítvány még nem kész, teljesen
+ * elérhetetlenné teszi az alkalmazást, és onnan már nincs visszaút.
+ */
+function httpsSav() {
+  const sav = $('#https-bar');
+  if (!sav) return;
+  const h = location.hostname;
+  const helyi = h === 'localhost' || h === '127.0.0.1' || h === '[::1]'
+    || /^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(h);
+  let elrejtve = false;
+  try { elrejtve = sessionStorage.getItem('httpsSavRejtve') === '1'; } catch (_) {}
+  sav.hidden = location.protocol !== 'http:' || helyi || elrejtve;
+  if (sav.hidden) return;
+  $('#https-switch').onclick = () => {
+    location.href = 'https://' + location.host + location.pathname + location.search + location.hash;
+  };
+  $('#https-hide').onclick = () => {
+    try { sessionStorage.setItem('httpsSavRejtve', '1'); } catch (_) {}
+    sav.hidden = true;
+  };
+}
+
 /* --------------------------------------------- élő helyzet (hol vagyok) */
 
 /** A pálya megnevezése a NAP pályakódjából (0 = egypályás út). */
@@ -3537,6 +3563,7 @@ async function init() {
   // az első rajzoláskor már a tábla látszódjon, ne egy üres karika
   preloadSigns().then(() => { if (state.session) drawTrack(); });
   applyDeviceClass();
+  httpsSav();
   telepitesFigyeles();
   await renderSessionList();
   show('home');
