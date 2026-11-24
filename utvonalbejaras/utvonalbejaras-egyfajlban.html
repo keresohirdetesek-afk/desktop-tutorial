@@ -13551,7 +13551,34 @@ async function akadalyokEllenorzes() {
  * A kényszerített átirányítás ott, ahol a tanúsítvány még nem kész, teljesen
  * elérhetetlenné teszi az alkalmazást, és onnan már nincs visszaút.
  */
+// Az éles cím, amire érvényes tanúsítvány van. A www nélküli alak is ide
+// vezet: a GitHub Pages ezt a nevet tartja nyilván az oldalhoz.
+const KANONIKUS_HOST = 'www.utvonalbejaras.hu';
+const ELES_HOSTOK = [KANONIKUS_HOST, 'utvonalbejaras.hu'];
+
+/**
+ * Ha az éles oldal http-n jött be, egyszer átvisszük https-re a kanonikus
+ * névre. Csak egyszer, és csak ezen a két néven: ha a https valamiért nem
+ * jönne össze, a visszalépés után már nem próbálja újra, hanem a sárga sáv
+ * kínálja fel kézzel. (A korábbi, feltétel nélküli átirányítás ott, ahol a
+ * tanúsítvány még nem volt kész, teljesen elérhetetlenné tette az oldalt.)
+ *
+ * @returns {boolean} igaz, ha épp elnavigálunk
+ */
+function httpsAtiranyitas() {
+  if (location.protocol !== 'http:') return false;
+  if (!ELES_HOSTOK.includes(location.hostname)) return false;
+  let probalt = false;
+  try { probalt = sessionStorage.getItem('httpsProbalt') === '1'; } catch (_) {}
+  if (probalt) return false;
+  try { sessionStorage.setItem('httpsProbalt', '1'); } catch (_) {}
+  location.replace('https://' + KANONIKUS_HOST
+    + location.pathname + location.search + location.hash);
+  return true;
+}
+
 function httpsSav() {
+  if (httpsAtiranyitas()) return;        // épp megyünk át https-re
   const sav = $('#https-bar');
   if (!sav) return;
   const h = location.hostname;
@@ -13561,8 +13588,9 @@ function httpsSav() {
   try { elrejtve = sessionStorage.getItem('httpsSavRejtve') === '1'; } catch (_) {}
   sav.hidden = location.protocol !== 'http:' || helyi || elrejtve;
   if (sav.hidden) return;
+  const cel = ELES_HOSTOK.includes(h) ? KANONIKUS_HOST : location.host;
   $('#https-switch').onclick = () => {
-    location.href = 'https://' + location.host + location.pathname + location.search + location.hash;
+    location.href = 'https://' + cel + location.pathname + location.search + location.hash;
   };
   $('#https-hide').onclick = () => {
     try { sessionStorage.setItem('httpsSavRejtve', '1'); } catch (_) {}
