@@ -1,4 +1,4 @@
-# Az országos szelvényadat frissítése.
+# Az országos NAP-adatok frissítése (szelvényjelek + szakaszos rétegek).
 #
 # A NAP (napportal.kozut.hu) statikus adatcsomagjai hetente frissülnek. Az
 # app a `utvonalbejaras/adatok/szelvenyjelek.json` állományból dolgozik —
@@ -125,17 +125,21 @@ jobs:
           fi
           cd ..
           node utvonalbejaras/eszkozok/nap-szelvenyek.mjs "munka/$BE"
+          # A többi NAP-réteg (hidak, korlátozások, burkolat, sávszám,
+          # lakott területi szakaszok, kezelő) egy másik állományba kerül.
+          # Ha ezek nincsenek a csomagban, a meglévő adat marad.
+          node utvonalbejaras/eszkozok/nap-szakaszadatok.mjs munka
 
       - name: Commit, ha változott
         if: steps.forras.outputs.mod != 'nincs'
         run: |
           set -euo pipefail
-          if git diff --quiet -- utvonalbejaras/adatok/szelvenyjelek.json; then
+          if git diff --quiet -- utvonalbejaras/adatok/; then
             echo "Nem változott az adat."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add utvonalbejaras/adatok/szelvenyjelek.json
-          git commit -m "NAP szelvényadat frissítése ($(date +%Y-%m-%d))"
+          git add utvonalbejaras/adatok/
+          git commit -m "NAP adatok frissítése ($(date +%Y-%m-%d))"
           git push

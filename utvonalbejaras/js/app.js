@@ -32,6 +32,10 @@ import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO, keresoUrl } from './kozut.js';
 import { beepitettAdat } from './orszagos.js';
+import {
+  szakaszAdat, szakaszInfo, utkozesek, szelvenySzoveg, szakaszAdatKeszult,
+  hidakSzakaszon, korlatozasokSzakaszon, teherbirasTonna,
+} from './szakaszadat.js';
 import { ikonos, ikonEl } from './ikonok.js';
 import { EscortMode } from './kiseres.js';
 import {
@@ -119,6 +123,7 @@ function show(screen) {
     home: 'Útvonalbejárás',
     list: 'Bejárások',
     session: state.session ? state.session.name : 'Bejárás',
+    helyzet: 'Hol vagyok',
     search: 'Keresés',
   };
   $('#topbar-title').textContent = titles[screen] || 'Útvonalbejárás';
@@ -130,6 +135,8 @@ function show(screen) {
   if (screen === 'search') runSearch();
   if (screen === 'list') renderSessionList();
   if (screen === 'home') renderHome();
+  // a „Hol vagyok” képernyő csak akkor méri a helyzetet, amíg látszik
+  if (screen === 'helyzet') helyzetIndit(); else helyzetLeallit();
 }
 
 /* ------------------------------------------------- kezdőképernyő */
@@ -557,6 +564,441 @@ function renderMeta() {
       ])
     );
   }
+}
+
+/* ------------------------------------- „Hol vagyok” élő képernyő */
+
+let helyzetWatch = null;
+let helyzetUtolso = null;      // a legutóbbi mérés
+let helyzetIrany = 0;          // +1: nő a szelvény, −1: csökken, 0: nem tudjuk
+let helyzetIranyElozo = null;  // az előző szelvényérték (ebből jön az irány)
+let helyzetUtKulcs = null;     // melyik úton/pályán mértünk utoljára
+
+function helyzetIndit() {
+  if (helyzetWatch != null || !navigator.geolocation) {
+    if (!navigator.geolocation) {
+      $('#hz-szelv').textContent = 'Ez a böngésző nem tud helymeghatározást.';
+    }
+    return;
+  }
+  szakaszAdat().catch(() => {});
+  roadNetwork().catch(() => {});
+  $('#hz-szelv').textContent = 'Helymeghatározás indul…';
+  helyzetWatch = navigator.geolocation.watchPosition(
+    (pos) => helyzetFrissit({
+      lat: pos.coords.latitude,
+      lon: pos.coords.longitude,
+      acc: pos.coords.accuracy == null ? null : Math.round(pos.coords.accuracy),
+      speed: pos.coords.speed,
+    }),
+    (err) => {
+      $('#hz-szelv').textContent = err && err.code === 1
+        ? 'Nincs engedély a helymeghatározáshoz.'
+        : 'Nem sikerült helyadatot mérni.';
+    },
+    { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }
+  );
+}
+
+function helyzetLeallit() {
+  if (helyzetWatch != null) {
+    navigator.geolocation.clearWatch(helyzetWatch);
+    helyzetWatch = null;
+  }
+}
+
+/** „Összsúly korlátozása (tonna)” → „Összsúly korlátozása” — a mértékegység
+    a kiírt érték mellett amúgy is ott van. */
+const korlNevTiszta = (nev) => String(nev || '')
+  .replace(/\s*\((tonna|dm|m|km\/ó|km\/h)\)\s*$/i, '').trim();
+
+/** Egy adatkártya a rácsba. */
+function hzKartya(cimke, ertek, baj = false) {
+  return el('div', { class: 'hz-kartya' + (baj ? ' baj' : '') }, [
+    el('span', { class: 'hz-kartya-ertek', text: ertek }),
+    el('span', { class: 'hz-kartya-cimke', text: cimke }),
+  ]);
+}
+
+const szamErtek = (v) => {
+  if (v == null || v === '') return null;
+  const n = Number(String(v).replace(',', '.').replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/** A képernyő feltöltése egy friss méréssel. */
+function helyzetFrissit(p) {
+  const hit = roadNet ? lookupRoad(roadNet, p.lat, p.lon, 150) : null;
+  const ut = $('#hz-ut');
+  const szelv = $('#hz-szelv');
+  const meta = $('#hz-meta');
+  const racs = $('#hz-racs');
+  const korlLista = $('#hz-korlatok');
+  helyzetUtolso = { ...p, meters: hit ? hit.meters : null, utszam: hit ? hit.utszam : null };
+
+  if (!hit) {
+    ut.textContent = '—';
+    ut.classList.add('halvany');
+    szelv.textContent = roadNet
+      ? 'Nincs országos közút 150 m-en belül'
+      : 'Az országos adat még töltődik…';
+    meta.textContent = p.acc != null ? `GPS ±${p.acc} m` : '';
+    racs.innerHTML = '';
+    korlLista.innerHTML = '';
+    $('#hz-elottunk').innerHTML = '';
+    $('#hz-mogottunk').innerHTML = '';
+    $('#hz-mogottunk-cim').hidden = true;
+    $('#hz-riaszt').hidden = true;
+    return;
+  }
+
+  // Haladási irány: nő vagy csökken a szelvény? Az útszám vagy a pálya
+  // váltásakor újrakezdjük, álló helyzetben pedig megtartjuk a legutóbbit.
+  const utKulcs = hit.utszam + '|' + (hit.palyakod || 0);
+  if (utKulcs !== helyzetUtKulcs) {
+    helyzetUtKulcs = utKulcs;
+    helyzetIranyElozo = null;
+    helyzetIrany = 0;
+  }
+  if (hit.meters != null) {
+    if (helyzetIranyElozo != null) {
+      const d = hit.meters - helyzetIranyElozo;
+      // 25 m fölötti elmozdulás már nem a GPS szórása
+      if (Math.abs(d) > 25) {
+        helyzetIrany = d > 0 ? 1 : -1;
+        helyzetIranyElozo = hit.meters;
+      }
+    } else {
+      helyzetIranyElozo = hit.meters;
+    }
+  }
+
+  ut.textContent = hit.utszam;
+  ut.classList.remove('halvany');
+  szelv.textContent = hit.szelveny || '—';
+  const metaReszek = [];
+  const palya = palyaNev(hit.palyakod);
+  if (palya) metaReszek.push(palya);
+  if (hit.telepules) metaReszek.push(hit.telepules);
+  if (helyzetIrany) metaReszek.push(helyzetIrany > 0 ? '↑ növekvő szelvény' : '↓ csökkenő szelvény');
+  else metaReszek.push('az irány induláskor derül ki');
+  if (p.speed != null && p.speed > 0.5) metaReszek.push(`${Math.round(p.speed * 3.6)} km/h`);
+  if (p.acc != null) metaReszek.push(`GPS ±${p.acc} m`);
+  meta.textContent = metaReszek.join(' · ');
+
+  const jarmu = (state.session && state.session.vehicle) || {};
+  const miSzelesseg = szamErtek(jarmu.width);
+  const miMagassag = Math.min(
+    szamErtek(jarmu.height) || Infinity,
+    szamErtek(jarmu.csokkHeight) || Infinity
+  );
+  const miTomeg = szamErtek(jarmu.weight);
+
+  // --- szakaszadatok
+  const info = szakaszInfo(hit.utszam, hit.palyakod || 0, hit.meters) || {};
+  racs.innerHTML = '';
+  if (info.burkolatSzelesseg) {
+    const szuk = miSzelesseg && miSzelesseg > info.burkolatSzelesseg - 0.5;
+    racs.appendChild(hzKartya('burkolat szélessége',
+      String(info.burkolatSzelesseg).replace('.', ',') + ' m', szuk));
+  }
+  if (info.savszam) racs.appendChild(hzKartya('forgalmi sáv', String(info.savszam)));
+  if (info.belterulet != null) {
+    racs.appendChild(hzKartya('fekvés', info.belterulet ? 'belterület' : 'külterület'));
+  }
+  if (info.kategoria) racs.appendChild(hzKartya('kategória', info.kategoria));
+  if (info.kezelo) racs.appendChild(hzKartya('kezelő', info.kezelo));
+  if (info.utNev) racs.appendChild(hzKartya('út megnevezése', info.utNev));
+
+  // --- korlátozások ezen a ponton
+  korlLista.innerHTML = '';
+  const korlatok = korlatozasokSzakaszon(hit.utszam, hit.palyakod || 0,
+    hit.meters - 100, hit.meters + 100);
+  if (!korlatok.length) {
+    korlLista.appendChild(el('p', { class: 'hint', text: 'Itt nincs tehergépjármű-korlátozás az adatban.' }));
+  }
+  for (const k of korlatok) {
+    for (const x of k.korlatozasok) {
+      const tulsulyos = x.ertek != null && miTomeg && x.fajta !== 'tengely' && miTomeg > x.ertek;
+      korlLista.appendChild(el('div', { class: 'hz-sor' + (tulsulyos ? ' baj' : '') }, [
+        el('span', { class: 'hz-sor-fo',
+          text: korlNevTiszta(x.nev) + (x.ertek != null ? ` — ${x.ertek} t` : '') }),
+        el('span', { class: 'hz-sor-alc',
+          text: [`${szelvenySzoveg(k.tol)} – ${szelvenySzoveg(k.ig)}`, x.kiegeszites].filter(Boolean).join(' · ') }),
+      ]));
+    }
+  }
+
+  // --- akadályok: előttünk, mögöttünk (a haladási irány szerint)
+  const elottunkLista = $('#hz-elottunk');
+  const mogottunkLista = $('#hz-mogottunk');
+  const riaszt = $('#hz-riaszt');
+  elottunkLista.innerHTML = '';
+  mogottunkLista.innerHTML = '';
+
+  const SUGAR = 6000;             // ennyire előre nézünk (méter)
+  const akadalyok = [];
+
+  for (const h of hidakSzakaszon(hit.utszam, hit.palyakod || 0,
+    hit.meters - SUGAR, hit.meters + SUGAR)) {
+    const bajok = [];
+    for (const k of h.korlatozasok) {
+      if (k.ertek == null) continue;
+      if ((k.fajta === 'alattMagassag' || k.fajta === 'kapu' || k.fajta === 'magassag')
+        && Number.isFinite(miMagassag) && miMagassag > k.ertek) {
+        bajok.push(`${korlNevTiszta(k.nev)}: ${String(k.ertek).replace('.', ',')} m`);
+      }
+      if (k.fajta === 'szelesseg' && miSzelesseg && miSzelesseg > k.ertek) {
+        bajok.push(`${korlNevTiszta(k.nev)}: ${String(k.ertek).replace('.', ',')} m`);
+      }
+      if (k.fajta === 'tomeg' && miTomeg && miTomeg > k.ertek) {
+        bajok.push(`${korlNevTiszta(k.nev)}: ${k.ertek} t`);
+      }
+    }
+    const tb = teherbirasTonna(h.teherbiras);
+    const tbBaj = !h.felettunk && miTomeg && tb && miTomeg > tb;
+    const reszletek = h.korlatozasok
+      .filter((k) => !/nincs korlátozás/i.test(k.nev))
+      .map((k) => korlNevTiszta(k.nev)
+        + (k.ertek != null ? `: ${String(k.ertek).replace('.', ',')}` : ''));
+    if (h.teherbiras) reszletek.push('teherbírás: ' + h.teherbiras);
+    akadalyok.push({
+      meter: h.meter,
+      cim: h.nev || 'híd ' + h.hidszam,
+      alcim: [szelvenySzoveg(h.meter), h.felettunk ? 'felettünk átvezető híd' : null,
+        reszletek.join(' · ')].filter(Boolean).join(' · '),
+      baj: bajok.length ? bajok[0] : null,
+      figyelem: !bajok.length && tbBaj,
+    });
+  }
+
+  for (const k of korlatozasokSzakaszon(hit.utszam, hit.palyakod || 0,
+    hit.meters - SUGAR, hit.meters + SUGAR)) {
+    for (const x of k.korlatozasok) {
+      const baj = x.ertek != null && x.fajta !== 'tengely' && miTomeg && miTomeg > x.ertek;
+      akadalyok.push({
+        // a szakasz ahhoz a végéhez tartozik, amelyikkel találkozunk
+        meter: helyzetIrany < 0 ? k.ig : k.tol,
+        cim: korlNevTiszta(x.nev) + (x.ertek != null ? ` — ${x.ertek} t` : ''),
+        alcim: [`${szelvenySzoveg(k.tol)} – ${szelvenySzoveg(k.ig)}`, x.kiegeszites]
+          .filter(Boolean).join(' · '),
+        baj: baj ? `${korlNevTiszta(x.nev)}: ${x.ertek} t` : null,
+        figyelem: !baj && x.fajta === 'tilalom',
+      });
+    }
+  }
+
+  // előttünk / mögöttünk a szelvény irányából
+  for (const a of akadalyok) {
+    const d = a.meter - hit.meters;
+    a.tavolsag = Math.abs(d);
+    a.elottunk = helyzetIrany === 0 ? null : (helyzetIrany > 0 ? d >= -60 : d <= 60);
+  }
+  const rendez = (arr) => arr.sort((x, y) => x.tavolsag - y.tavolsag);
+  const elottunk = rendez(akadalyok.filter((a) => a.elottunk !== false)).slice(0, 8);
+  const mogottunk = rendez(akadalyok.filter((a) => a.elottunk === false)).slice(0, 3);
+
+  const sorElem = (a) => el('div', {
+    class: 'hz-sor' + (a.baj ? ' baj' : a.figyelem ? ' figyelem' : ''),
+  }, [
+    el('span', { class: 'hz-sor-fo',
+      text: `${a.tavolsag < 60 ? 'itt'
+        : formatDistance(a.tavolsag) + (a.elottunk === false ? ' mögöttünk' : ' múlva')} · ${a.cim}` }),
+    el('span', { class: 'hz-sor-alc', text: a.baj ? `⛔ ${a.baj} — nem fér el` : a.alcim }),
+  ]);
+
+  $('#hz-elottunk-cim').textContent = helyzetIrany === 0
+    ? 'A közelben (még nem tudom, merre haladunk)'
+    : `Előttünk — ${helyzetIrany > 0 ? 'növekvő' : 'csökkenő'} szelvény irányában`;
+  if (!elottunk.length) {
+    elottunkLista.appendChild(el('p', { class: 'hint',
+      text: `${Math.round(SUGAR / 1000)} km-en belül nincs híd vagy korlátozás az adatban.` }));
+  }
+  for (const a of elottunk) elottunkLista.appendChild(sorElem(a));
+
+  $('#hz-mogottunk-cim').hidden = mogottunk.length === 0;
+  for (const a of mogottunk) {
+    const sor = sorElem(a);
+    sor.classList.add('halvany');
+    mogottunkLista.appendChild(sor);
+  }
+
+  // riasztás: a legközelebbi olyan akadály előttünk, ami nem fér el
+  const elsoBaj = elottunk.find((a) => a.baj);
+  riaszt.hidden = !elsoBaj;
+  if (elsoBaj) {
+    riaszt.innerHTML = '';
+    riaszt.appendChild(el('span', { class: 'hz-riaszt-fo',
+      text: `⛔ ${elsoBaj.tavolsag < 60 ? 'Itt' : formatDistance(elsoBaj.tavolsag) + ' múlva'}: ${elsoBaj.baj}` }));
+    riaszt.appendChild(el('span', { class: 'hz-riaszt-alc', text: elsoBaj.cim }));
+  }
+
+  const jarmuSor = $('#hz-jarmu');
+  const meret = [
+    jarmu.width ? `Sz ${jarmu.width} m` : null,
+    jarmu.height ? `M ${jarmu.height} m` : null,
+    jarmu.weight ? `${jarmu.weight} t` : null,
+  ].filter(Boolean).join(' · ');
+  jarmuSor.textContent = meret
+    ? `A megnyitott bejárás szerelvénye: ${meret} — ehhez mérem a korlátozásokat.`
+    : 'Nyisson meg egy bejárást a szerelvény adataival, és a korlátozásokat ahhoz mérem.';
+}
+
+/* ------------------------------------------- akadályok az útvonalon */
+
+/** Egy vonal pontjai kb. `lepes` méterenként (a sok ezer pont felesleges). */
+function mintavetel(pts, lepes = 40) {
+  const ki = [];
+  let gyult = lepes;
+  for (let i = 0; i < pts.length; i++) {
+    if (i === 0 || i === pts.length - 1) { ki.push(pts[i]); gyult = 0; continue; }
+    gyult += trackLength([pts[i - 1], pts[i]]);
+    if (gyult >= lepes) { ki.push(pts[i]); gyult = 0; }
+  }
+  return ki;
+}
+
+/**
+ * Az útvonal szakaszokra bontva: melyik úton, melyik pályán, melyik
+ * szelvénytől meddig megyünk. Ebből tudjuk megkérdezni a hidakat és a
+ * korlátozásokat.
+ */
+function utvonalSzakaszok() {
+  if (!roadNet) return [];
+  const vonalak = [];
+  for (const d of (state.session && state.session.drawn) || []) {
+    if (d.pts && d.pts.length > 1) vonalak.push(d.pts);
+  }
+  const nyom = (state.points || []).filter((p) => p.status !== 'rejected' && p.status !== 'gap');
+  if (nyom.length > 1) vonalak.push(nyom);
+
+  const szakaszok = [];
+  for (const vonal of vonalak) {
+    let akt = null;
+    for (const p of mintavetel(vonal, 40)) {
+      const hit = lookupRoad(roadNet, p.lat, p.lon, 70);
+      if (!hit || hit.meters == null) { akt = null; continue; }
+      const kulcs = hit.utszam + '|' + (hit.palyakod || 0);
+      if (akt && akt.kulcs === kulcs) {
+        akt.tol = Math.min(akt.tol, hit.meters);
+        akt.ig = Math.max(akt.ig, hit.meters);
+      } else {
+        akt = {
+          kulcs,
+          utszam: hit.utszam,
+          palyakod: hit.palyakod || 0,
+          tol: hit.meters,
+          ig: hit.meters,
+        };
+        szakaszok.push(akt);
+      }
+    }
+  }
+  // ugyanaz az út többször is sorra kerülhet — vonjuk össze
+  const egyben = new Map();
+  for (const sz of szakaszok) {
+    const e = egyben.get(sz.kulcs);
+    if (e) { e.tol = Math.min(e.tol, sz.tol); e.ig = Math.max(e.ig, sz.ig); }
+    else egyben.set(sz.kulcs, { ...sz });
+  }
+  return [...egyben.values()];
+}
+
+/** Az „Elfér a szerelvény?” ablak feltöltése. */
+function akadalyokMegjelenit(eredmeny, szakaszok) {
+  const body = $('#akadalyok-body');
+  const actions = $('#akadalyok-actions');
+  body.innerHTML = '';
+  actions.innerHTML = '';
+
+  const v = (state.session && state.session.vehicle) || {};
+  const utkozes = eredmeny.talalatok.filter((t) => t.sulyossag === 'utkozes');
+  const hidak = eredmeny.talalatok.filter((t) => t.mi === 'hidteherbiras');
+  const figyelem = eredmeny.talalatok.filter((t) => t.sulyossag !== 'utkozes' && t.mi !== 'hidteherbiras');
+
+  body.appendChild(el('div', {
+    class: 'akadaly-osszegzo ' + (utkozes.length ? 'baj' : hidak.length ? 'figyelem' : 'rendben'),
+  }, [
+    el('strong', {
+      text: utkozes.length
+        ? `${utkozes.length} helyen nem fér el`
+        : hidak.length
+          ? `${hidak.length} hídnál egyedi elbírálás kell`
+          : 'Nem találtam akadályt az útvonalon',
+    }),
+    el('span', {
+      class: 'muted small',
+      text: `${szakaszok.length} útszakasz ellenőrizve`
+        + (utkozes.length && hidak.length ? ` · ${hidak.length} híd egyedi elbírálással` : '')
+        + (figyelem.length ? ` · ${figyelem.length} figyelmeztetés` : '')
+        + (szakaszAdatKeszult() ? ` · adat: ${szakaszAdatKeszult()}` : ''),
+    }),
+  ]));
+
+  const meret = [
+    v.width ? `Sz ${v.width} m` : null,
+    v.height ? `M ${v.height} m` : null,
+    v.csokkHeight ? `(csökk. ${v.csokkHeight} m)` : null,
+    v.weight ? `${v.weight} t` : null,
+    v.axleLoad ? `tengely ${v.axleLoad} t` : null,
+  ].filter(Boolean).join(' · ');
+  body.appendChild(el('p', { class: 'hint', text: meret ? 'A szerelvény: ' + meret : '' }));
+
+  if (eredmeny.hiany.length) {
+    body.appendChild(el('p', { class: 'hint warn-text' }, [
+      el('span', { text: `Nincs megadva: ${eredmeny.hiany.join(', ')} — ezekre nem tudtam ellenőrizni. ` }),
+      el('button', {
+        class: 'btn ghost tiny', type: 'button',
+        onclick: () => { zarAkadalyok(); editSession(); },
+      }, ikonos('ceruza', 'Adatok megadása')),
+    ]));
+  }
+
+  if (!szakaszok.length) {
+    body.appendChild(el('p', { class: 'hint',
+      text: 'Nincs mit ellenőrizni: rajzoljon útvonalat, vagy rögzítsen nyomvonalat. '
+        + 'A vizsgálat az országos közutakra terjed ki.' }));
+  }
+
+  const lista = el('div', { class: 'akadaly-lista' });
+  for (const t of eredmeny.talalatok) {
+    lista.appendChild(el('div', { class: 'akadaly ' + (t.sulyossag === 'utkozes' ? 'baj' : 'figyelem') }, [
+      el('div', { class: 'akadaly-fej' }, [
+        el('span', { class: 'akadaly-jel', text: t.sulyossag === 'utkozes' ? '⛔' : '⚠️' }),
+        el('span', { class: 'akadaly-hely', text: t.hely }),
+      ]),
+      el('div', { class: 'akadaly-nev', text: t.nev }),
+      el('div', { class: 'akadaly-szoveg', text: t.szoveg }),
+    ]));
+  }
+  body.appendChild(lista);
+
+  // forrásmegjelölés — a NAP adat licence ezt kéri
+  body.appendChild(el('p', { class: 'muted small',
+    text: 'Forrás: Nemzeti Adathozzáférési Pont (NAP), CC BY 4.0. '
+      + 'Tájékoztató adat — a helyszíni táblák és a közútkezelő döntése az irányadó.' }));
+
+  actions.appendChild(el('button', {
+    class: 'btn ghost small', type: 'button', onclick: zarAkadalyok,
+  }, ikonos('bezar', 'Bezárás')));
+}
+
+function zarAkadalyok() { $('#akadalyok').hidden = true; }
+
+/** „Elfér a szerelvény?” — hidak és korlátozások az útvonal mentén. */
+async function akadalyokEllenorzes() {
+  if (!state.session) { toast('Előbb nyisson meg egy bejárást.', 'error'); return; }
+  toast('Útvonal ellenőrzése…');
+  await roadNetwork();
+  const kesz = await szakaszAdat();
+  if (!kesz) {
+    toast('A hídak és korlátozások adata még nem érhető el.', 'error');
+    return;
+  }
+  const szakaszok = utvonalSzakaszok();
+  const eredmeny = utkozesek(szakaszok, (state.session && state.session.vehicle) || {});
+  akadalyokMegjelenit(eredmeny, szakaszok);
+  $('#akadalyok').hidden = false;
 }
 
 /* ------------------------------------------------ biztonságos kapcsolat */
@@ -2275,11 +2717,24 @@ async function openViewer(id) {
   // Útszám és km szelvény: saját doboz, mert ezen a közút felé beadott
   // anyagban minden múlik, és három különböző úton lehet megszerezni.
   const r = item.road || {};
+  // a NAP szakaszos adataiból: kezelő, belterület, burkolat, sávszám
+  const extra = (r.utszam && r.meters != null
+    ? szakaszInfo(r.utszam, r.palyakod || 0, r.meters) : null) || {};
   const roadReszletek = [
-    ['Út megnevezése', r.utNev],
+    ['Út megnevezése', r.utNev || extra.utNev],
+    ['Út kategóriája', extra.kategoria],
+    ['Kezelő', extra.kezelo
+      ? extra.kezelo + (extra.kezeloVegyes ? ' (szakaszonként eltérhet)' : '') : ''],
     ['Nemzetközi útszám', r.nemzetkozi],
     ['Pályakód', r.palyakod],
     ['Település', r.telepules],
+    ['Fekvés', extra.belterulet === true ? 'átkelési szakasz (belterület)'
+      : extra.belterulet === false ? 'külsőségi szakasz (külterület)' : ''],
+    ['Burkolat', extra.burkolatSzelesseg
+      ? `${String(extra.burkolatSzelesseg).replace('.', ',')} m széles`
+        + (extra.burkolatTipus ? ` · ${extra.burkolatTipus}` : '')
+      : extra.burkolatTipus],
+    ['Forgalmi sávok', extra.savszam ? String(extra.savszam) : ''],
     ['Mérnökség', r.mernokseg],
     ['Üzemeltető', r.uzemelteto],
     ['Az útra vetítve', r.utLat != null ? formatCoord(r.utLat, r.utLon) : ''],
@@ -3412,6 +3867,18 @@ function bind() {
   $('#home-edit').addEventListener('click', () => show('list'));
   $('#home-escort').addEventListener('click', escortFromHome);
   $('#home-all').addEventListener('click', () => show('list'));
+  $('#check-clearance').addEventListener('click', akadalyokEllenorzes);
+  $('#hz-utcakep').addEventListener('click', () => {
+    if (!helyzetUtolso) { toast('Nincs még helyadat.', 'error'); return; }
+    window.open(utcakepUrl(helyzetUtolso.lat, helyzetUtolso.lon), '_blank', 'noopener');
+  });
+  $('#hz-pont').addEventListener('click', async () => {
+    if (!helyzetUtolso) { toast('Nincs még helyadat.', 'error'); return; }
+    if (!state.session) { toast('Előbb nyisson meg egy bejárást.', 'error'); return; }
+    show('session');
+    await markPoint();
+  });
+  $('#akadalyok-close').addEventListener('click', zarAkadalyok);
   $('#live-utcakep').addEventListener('click', () => {
     const p = recorder && recorder.current;
     if (!p || p.lat == null) { toast('Nincs friss GPS-pozíció.', 'error'); return; }
@@ -3580,6 +4047,9 @@ async function init() {
       roadNet = res.net;
     }
   }).catch(() => { /* enélkül is működik minden más */ });
+
+  // hidak, korlátozások, burkolat, kezelő — háttérben, csendben
+  szakaszAdat().catch(() => { /* enélkül csak ez a vizsgálat hiányzik */ });
 
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persist().catch(() => {});

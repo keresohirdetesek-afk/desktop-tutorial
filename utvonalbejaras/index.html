@@ -231,6 +231,7 @@
       <button id="backup-status" class="backup-status"></button>
 
       <div class="btn-grid">
+        <button id="check-clearance" class="btn primary small">⚠️ Elfér a szerelvény?</button>
         <button id="export-html" class="btn primary small">📄 Riport (HTML)</button>
         <button id="kozut-open" class="btn primary small">📋 Közút dokumentumok kitöltése</button>
         <button id="export-json" class="btn ghost small">💾 Mentés</button>
@@ -239,6 +240,42 @@
         <button id="open-track-map" class="btn ghost small">🗺️ Pontos nyomvonal térképen</button>
         <button id="delete-session" class="btn danger small">Bejárás törlése</button>
       </div>
+    </div>
+  </section>
+
+  <!-- ================================================= élő helyzet -->
+  <section class="screen" id="scr-helyzet" hidden>
+    <div class="pad helyzet">
+      <div class="helyzet-fo">
+        <span id="hz-ut" class="hz-ut">—</span>
+        <div class="hz-kozep">
+          <span id="hz-szelv" class="hz-szelv">Helymeghatározás indul…</span>
+          <span id="hz-meta" class="hz-meta"></span>
+        </div>
+      </div>
+
+      <div id="hz-riaszt" class="hz-riaszt" hidden></div>
+
+      <div class="hz-racs" id="hz-racs"></div>
+
+      <h3 class="section-title" id="hz-elottunk-cim">Előttünk</h3>
+      <div id="hz-elottunk" class="hz-lista"></div>
+
+      <h3 class="section-title">Itt, ezen a szakaszon</h3>
+      <div id="hz-korlatok" class="hz-lista"></div>
+
+      <h3 class="section-title" id="hz-mogottunk-cim" hidden>Mögöttünk</h3>
+      <div id="hz-mogottunk" class="hz-lista"></div>
+
+      <div class="hz-lab">
+        <button id="hz-utcakep" class="btn ghost small">👁 Utcakép itt</button>
+        <button id="hz-pont" class="btn ghost small">📍 Pont felvétele ide</button>
+      </div>
+      <p id="hz-jarmu" class="muted small"></p>
+      <p class="muted small">
+        Forrás: Nemzeti Adathozzáférési Pont (NAP), CC BY 4.0. Tájékoztató adat —
+        a helyszíni táblák és a közútkezelő döntése az irányadó.
+      </p>
     </div>
   </section>
 
@@ -267,6 +304,7 @@
   <button class="tab active" data-screen="home"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5 12 3.5l8.5 7"/><path d="M5.5 9.8V20h13V9.8"/><path d="M10 20v-5.5h4V20"/></svg></span>Kezdés</button>
   <button class="tab" data-screen="list"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5h6l2 2.5h10V19a.5.5 0 0 1-.5.5h-15A.5.5 0 0 1 3 19z"/></svg></span>Bejárások</button>
   <button class="tab" data-screen="session" disabled><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg></span>Aktív</button>
+  <button class="tab" data-screen="helyzet"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5 4.5 20.5M17 3.5l2.5 17"/><path d="M12 4v3M12 10.5v3M12 17v3"/></svg></span>Hol vagyok</button>
   <button class="tab" data-screen="search"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span>Keresés</button>
 </nav>
 
@@ -601,6 +639,16 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- ====================================== akadályok az útvonalon -->
+<div id="akadalyok" class="overlay" hidden>
+  <header class="overlay-bar">
+    <button id="akadalyok-close" class="icon-btn" aria-label="Bezárás">✕</button>
+    <h2>Elfér a szerelvény?</h2>
+  </header>
+  <div id="akadalyok-body" class="viewer-body"></div>
+  <div class="viewer-actions" id="akadalyok-actions"></div>
 </div>
 
 <!-- ============================================== elem részletek -->

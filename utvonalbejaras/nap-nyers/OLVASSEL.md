@@ -1,4 +1,17 @@
-# Ide jön a NAP szelvényjelek csomagja
+# Ide jönnek a NAP adatcsomagok
+
+Két állomány készül belőlük:
+
+| Állomány | Miből | Mire kell |
+|---|---|---|
+| `adatok/szelvenyjelek.json` | Szelvényjelek | útszám és km szelvény minden ponthoz |
+| `adatok/szakaszadatok.json` | Hídhasználati feltételek · Tehergépjármű-korlátozások · Lakott területi szakaszok · Közút neve, kategóriája, kezelője · Burkolat típusa és szélessége · Forgalmi sávok száma | „Elfér a szerelvény?”, „Hol vagyok” képernyő, dokumentumok kitöltése |
+
+A szakaszos csomagokat is ide kell tenni ZIP-ként (akármilyen néven, a
+feldolgozó a mezőnevekből ismeri fel, melyik melyik). Amelyik hiányzik,
+annak az adata változatlan marad.
+
+## A szelvényjelek csomagja
 
 A [Nemzeti Adathozzáférési Pont](https://napportal.kozut.hu/) statikus
 adatcsomagjai csak bejelentkezés után tölthetők le, ezért a heti frissítés
