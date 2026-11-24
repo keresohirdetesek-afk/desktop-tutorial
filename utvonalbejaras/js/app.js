@@ -133,8 +133,10 @@ function show(screen) {
   if (screen === 'search') runSearch();
   if (screen === 'list') renderSessionList();
   if (screen === 'home') renderHome();
-  // a „Hol vagyok” képernyő csak akkor méri a helyzetet, amíg látszik
-  if (screen === 'helyzet') helyzetIndit(); else helyzetLeallit();
+  // a mérés addig fut, amíg a kezdőlap vagy a „Hol vagyok” látszik
+  if (screen === 'helyzet') helyzetIndit();
+  else if (screen === 'home') helyzetIndit(true);
+  else helyzetLeallit();
 }
 
 /* ------------------------------------------------- kezdőképernyő */
@@ -517,6 +519,7 @@ async function openSession(id) {
   state.points = await db.getPoints(id);
   state.items = await db.getItems(id);
   state.recElapsed = state.session.stats?.elapsed || 0;
+  state.helyMod = helyModTarolt();   // gépen: hova kerüljenek az új bejegyzések
   if (trackView) trackView.reset();   // új bejárás: a teljes nyomvonal látszódjon
   $('[data-screen="session"]').disabled = false;
   renderItems();
@@ -563,6 +566,22 @@ function renderMeta() {
       ])
     );
   }
+  // gépen a GPS nem a helyszínt adja: itt látszik és állítható, hogy az új
+  // fotó, jegyzet, jelzéskép hova kerüljön
+  if (isDesktop()) {
+    $('#session-meta').appendChild(el('div', { class: 'meta-row' }, [
+      el('span', { class: 'meta-key', text: 'Új bejegyzés helye' }),
+      el('span', { class: 'meta-val' }, [
+        el('span', {
+          text: (state.helyMod && HELY_MOD_SZOVEG[state.helyMod]) || 'rákérdezek',
+        }),
+        el('button', {
+          class: 'btn ghost tiny hely-mod-gomb', type: 'button',
+          onclick: helyModValtas,
+        }, ikonos('ceruza', 'Módosítás')),
+      ]),
+    ]));
+  }
 }
 
 /* ------------------------------------- „Hol vagyok” élő képernyő */
@@ -573,15 +592,43 @@ let helyzetIrany = 0;          // +1: nő a szelvény, −1: csökken, 0: nem tu
 let helyzetIranyElozo = null;  // az előző szelvényérték (ebből jön az irány)
 let helyzetUtKulcs = null;     // melyik úton/pályán mértünk utoljára
 
-function helyzetIndit() {
-  if (helyzetWatch != null || !navigator.geolocation) {
-    if (!navigator.geolocation) {
-      $('#hz-szelv').textContent = 'Ez a böngésző nem tud helymeghatározást.';
-    }
+/**
+ * A helymérés indítása.
+ * @param {boolean} csendes a kezdőlapon ne ugorjon fel engedélykérés:
+ *   ott csak akkor mérünk, ha a helymeghatározás már engedélyezett.
+ */
+async function helyzetIndit(csendes = false) {
+  if (helyzetWatch != null) {
+    // már mérünk (pl. a kezdőlapról jöttünk át): a legutóbbi mérést
+    // rögtön kiértékeljük erre a képernyőre is
+    helyzetUjraszamol();
     return;
   }
-  szakaszAdat().catch(() => {});
-  roadNetwork().catch(() => {});
+  if (!navigator.geolocation) {
+    $('#hz-szelv').textContent = 'Ez a böngésző nem tud helymeghatározást.';
+    return;
+  }
+
+  if (csendes) {
+    // Volt-e már sikeres helymérés ebben az alkalmazásban? Ha igen, a
+    // böngésző nem fog újra kérdezni, indulhat magától. (A Permissions API
+    // nem mindenhol válaszol — ezért a saját jelzésünk is számít.)
+    let engedve = false;
+    try { engedve = localStorage.getItem('helyEngedve') === '1'; } catch (_) {}
+    let allapot = null;
+    try {
+      allapot = (await navigator.permissions.query({ name: 'geolocation' })).state;
+    } catch (_) { allapot = null; }
+    if (allapot === 'denied' || (allapot !== 'granted' && !engedve)) {
+      // marad a szlogen, mellette egy koppintható jelzés
+      const ind = $('#home-hely-ind');
+      if (ind) ind.hidden = false;
+      return;
+    }
+  }
+
+  szakaszAdat().then(helyzetUjraszamol).catch(() => {});
+  roadNetwork().then(helyzetUjraszamol).catch(() => {});
   $('#hz-szelv').textContent = 'Helymeghatározás indul…';
   helyzetWatch = navigator.geolocation.watchPosition(
     (pos) => helyzetFrissit({
@@ -599,6 +646,11 @@ function helyzetIndit() {
   );
 }
 
+/** Ha menet közben jött meg az adat, a legutóbbi mérést újra kiértékeljük. */
+function helyzetUjraszamol() {
+  if (helyzetUtolso && helyzetUtolso.lat != null) helyzetFrissit(helyzetUtolso);
+}
+
 function helyzetLeallit() {
   if (helyzetWatch != null) {
     navigator.geolocation.clearWatch(helyzetWatch);
@@ -610,6 +662,34 @@ function helyzetLeallit() {
     a kiírt érték mellett amúgy is ott van. */
 const korlNevTiszta = (nev) => String(nev || '')
   .replace(/\s*\((tonna|dm|m|km\/ó|km\/h)\)\s*$/i, '').trim();
+
+/** A kezdőlapi sáv: ugyanaz a mérés, csak tömörebben. */
+function homeHelyFrissit(hit, p) {
+  const ut = $('#home-hely-ut');
+  const szelv = $('#home-hely-szelv');
+  const meta = $('#home-hely-meta');
+  if (!ut || !szelv || !meta) return;
+  $('#home-hely-ind').hidden = true;
+  if (!hit) {
+    ut.textContent = '—';
+    ut.classList.add('halvany');
+    szelv.textContent = p && p.lat != null
+      ? (roadNet ? 'Nincs országos közút a közelben' : 'Az országos adat töltődik…')
+      : 'Helymeghatározás indul…';
+    meta.textContent = p && p.acc != null ? `GPS ±${p.acc} m` : '';
+    return;
+  }
+  ut.textContent = hit.utszam;
+  ut.classList.remove('halvany');
+  szelv.textContent = hit.szelveny || '—';
+  const reszek = [];
+  const palya = palyaNev(hit.palyakod);
+  if (palya) reszek.push(palya);
+  if (hit.telepules) reszek.push(hit.telepules);
+  if (helyzetIrany) reszek.push(helyzetIrany > 0 ? '↑ növekvő szelvény' : '↓ csökkenő szelvény');
+  if (p && p.acc != null) reszek.push(`GPS ±${p.acc} m`);
+  meta.textContent = reszek.join(' · ');
+}
 
 /** Egy adatkártya a rácsba. */
 function hzKartya(cimke, ertek, baj = false) {
@@ -627,6 +707,8 @@ const szamErtek = (v) => {
 
 /** A képernyő feltöltése egy friss méréssel. */
 function helyzetFrissit(p) {
+  // ha egyszer sikerült mérni, legközelebb a kezdőlapon is indulhat magától
+  try { localStorage.setItem('helyEngedve', '1'); } catch (_) {}
   const hit = roadNet ? lookupRoad(roadNet, p.lat, p.lon, 150) : null;
   const ut = $('#hz-ut');
   const szelv = $('#hz-szelv');
@@ -635,6 +717,8 @@ function helyzetFrissit(p) {
   const korlLista = $('#hz-korlatok');
   helyzetUtolso = { ...p, meters: hit ? hit.meters : null, utszam: hit ? hit.utszam : null };
 
+  homeHelyFrissit(hit, p);
+  if (state.screen === 'home') return;     // a kezdőlapon csak a sáv kell
   if (!hit) {
     ut.textContent = '—';
     ut.classList.add('halvany');
@@ -1502,6 +1586,104 @@ async function stampIfWanted(blob, item) {
   }
 }
 
+/* ------------------------------- hol legyen az új bejegyzés (gépen) */
+
+const HELY_MOD_SZOVEG = {
+  terkep: 'a térképen jelölöm ki',
+  gps: 'a gép helymeghatározása',
+  nincs: 'hely nélkül, utólag adom meg',
+};
+
+/** A készüléken megjegyzett választás (gépen: hova kerüljenek a pontok). */
+function helyModTarolt() {
+  try {
+    const v = localStorage.getItem('helyMod');
+    return HELY_MOD_SZOVEG[v] ? v : null;
+  } catch (_) { return null; }
+}
+
+function helyModMent(mod) {
+  try { localStorage.setItem('helyMod', mod); } catch (_) {}
+}
+
+const uresPozicio = () => ({
+  lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none', road: null,
+});
+
+/** A kérdés önmagában — a beállítás módosításához is ez kell. */
+function helyModKerdes() {
+  return choose({
+    title: 'Hová kerüljön a bejegyzés?',
+    text: 'Gépen a helymeghatározás általában nem ott van, ahol a szállítmány megy, '
+      + 'hanem az internetkapcsolat helyén. Ezért itt megkérdezem — a válaszra '
+      + 'ebben a bejárásban emlékezem.',
+    options: [
+      {
+        value: 'terkep',
+        label: 'Kijelölöm a térképen',
+        hint: 'Megnyílik a térkép, és rákoppint a helyre. Gépen ez az ajánlott.',
+      },
+      {
+        value: 'gps',
+        label: 'A gép helymeghatározása',
+        hint: 'Csak akkor jó, ha a gépen pontos a helyadat (pl. külső GPS).',
+      },
+      {
+        value: 'nincs',
+        label: 'Egyelőre hely nélkül',
+        hint: 'A helyet később az elem adatlapján is meg lehet adni.',
+      },
+    ],
+  });
+}
+
+/**
+ * Hová kerüljön az új bejegyzés? Telefonon marad a GPS. Gépen viszont a
+ * helymeghatározás jellemzően az internetszolgáltató telephelyét adja, nem
+ * azt, ahol a szállítmány megy — ezért ott megkérdezzük, és a választ a
+ * megnyitott bejárásra megjegyezzük (a „Bejárás adatai” alatt átállítható).
+ *
+ * @param {string} cim mi kerül oda (a térképes kijelölés feliratához)
+ * @returns {Promise<object|null>} pozíció, vagy null ha megszakították
+ */
+async function ujPozicio(cim = 'Új bejegyzés') {
+  if (!isDesktop()) return positionNow();
+
+  if (!state.helyMod) {
+    const valasz = await helyModKerdes();
+    if (!valasz) return null;
+    state.helyMod = valasz;
+    helyModMent(valasz);
+    renderMeta();
+  }
+
+  if (state.helyMod === 'gps') return positionNow();
+  if (state.helyMod === 'nincs') return uresPozicio();
+
+  const picked = await pickOnMap({ lat: null, lon: null, title: cim });
+  if (!picked) return null;
+  return {
+    lat: picked.lat,
+    lon: picked.lon,
+    acc: null,
+    heading: null,
+    posAt: Date.now(),
+    posSource: 'manual',
+    road: await roadStamp(picked.lat, picked.lon),
+  };
+}
+
+/** A hely-mód átállítása a „Bejárás adatai” alól. */
+async function helyModValtas() {
+  const valasz = await helyModKerdes();
+  if (!valasz) return;
+  state.helyMod = valasz;
+  helyModMent(valasz);
+  renderMeta();
+  toast('Az új bejegyzések helye: ' + (HELY_MOD_SZOVEG[valasz] || '—') + '.');
+}
+
+
 async function positionNow() {
   const now = Date.now();
   // minden rögzített helyszínre ráírjuk az útszámot és a szelvényt is
@@ -1534,7 +1716,8 @@ async function onPhotoSelected(e) {
   // Egy most készült fotóhoz friss mérés kell. Több fájl egyszerre viszont
   // jellemzően galériából jön: azoknál a készítés helye a képben van (EXIF),
   // az eszköz pillanatnyi helye félrevezető lenne.
-  const live = files.length === 1 ? await positionNow() : null;
+  const live = files.length === 1 ? await ujPozicio('Fotó') : null;
+  if (files.length === 1 && !live) return;
   let firstId = null;
   let noPos = 0;
   let noHeading = 0;
@@ -1716,7 +1899,8 @@ async function recordAudio(attachToItemId = null, vissza = false) {
       return;
     }
 
-    const pos = await positionNow();
+    const pos = await ujPozicio('Hangjegyzet');
+    if (!pos) return;
     const item = {
       id: db.uid(),
       sessionId: state.session.id,
@@ -1764,7 +1948,8 @@ async function onVideoSelected(e) {
   }
 
   toast('Videó feldolgozása…');
-  const pos = await positionNow();
+  const pos = await ujPozicio('Videó');
+  if (!pos) return;
   const heading = compassHeading();
   let thumb = null;
   let duration = null;
@@ -1828,7 +2013,8 @@ async function addCondition() {
   });
   if (!res) return;
 
-  const pos = await positionNow();
+  const pos = await ujPozicio('Állapot / tábla');
+  if (!pos) return;
   const heading = compassHeading();
   const item = {
     id: db.uid(),
@@ -2078,7 +2264,8 @@ async function addSign() {
     return;
   }
 
-  const pos = await positionNow();
+  const pos = await ujPozicio('Jelzéskép');
+  if (!pos) return;
   const heading = compassHeading();
   const item = {
     id: db.uid(),
@@ -2280,7 +2467,8 @@ async function addNote() {
     okText: 'Mentés',
   });
   if (!res || (!res.note && !res.title)) return;
-  const pos = await positionNow();
+  const pos = await ujPozicio('Jegyzet');
+  if (!pos) return;
   const item = {
     id: db.uid(),
     sessionId: state.session.id,
@@ -2301,7 +2489,8 @@ async function addNote() {
 }
 
 async function markPoint() {
-  const pos = await positionNow();
+  const pos = await ujPozicio('Jelölt pont');
+  if (!pos) return;
   if (pos.lat == null) { toast('Nincs GPS-pozíció.', 'error'); return; }
   const res = await modal({
     title: 'Pont jelölése',
@@ -3842,6 +4031,12 @@ function bind() {
   $('#home-escort').addEventListener('click', escortFromHome);
   $('#home-all').addEventListener('click', () => show('list'));
   $('#check-clearance').addEventListener('click', akadalyokEllenorzes);
+  $('#home-hely').addEventListener('click', () => {
+    // még nem mérünk: a koppintás kéri az engedélyt; ha már mérünk, a
+    // részletes képernyőre visz
+    if (helyzetWatch == null) helyzetIndit();
+    else show('helyzet');
+  });
   $('#hz-utcakep').addEventListener('click', () => {
     if (!helyzetUtolso) { toast('Nincs még helyadat.', 'error'); return; }
     window.open(utcakepUrl(helyzetUtolso.lat, helyzetUtolso.lon), '_blank', 'noopener');
@@ -4011,10 +4206,12 @@ async function init() {
     } else if (res.net) {
       roadNet = res.net;
     }
+    helyzetUjraszamol();
   }).catch(() => { /* enélkül is működik minden más */ });
 
   // hidak, korlátozások, burkolat, kezelő — háttérben, csendben
-  szakaszAdat().catch(() => { /* enélkül csak ez a vizsgálat hiányzik */ });
+  szakaszAdat().then(helyzetUjraszamol)
+    .catch(() => { /* enélkül csak ez a vizsgálat hiányzik */ });
 
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persist().catch(() => {});

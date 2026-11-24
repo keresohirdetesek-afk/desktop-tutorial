@@ -38,8 +38,16 @@
     <div class="pad home">
       <div class="home-hero">
         <p class="wordmark"><b>UTVONAL</b><span>bejaras.hu</span></p>
-        <p class="szlogen">Tervezés. Biztonság. Engedélyezés.</p>
-        <p>Útvonalbejárás túlméretes és túlsúlyos szállítmányhoz — tervezés, bejárás, kíséret.</p>
+
+        <!-- a szlogen helyén az aktuális útszám és km szelvény -->
+        <button id="home-hely" class="home-hely" type="button">
+          <span id="home-hely-ut" class="home-hely-ut">—</span>
+          <span class="home-hely-kozep">
+            <span id="home-hely-szelv" class="home-hely-szelv">Tervezés. Biztonság. Engedélyezés.</span>
+            <span id="home-hely-meta" class="home-hely-meta">Útvonalbejárás túlméretes és túlsúlyos szállítmányhoz</span>
+          </span>
+          <span id="home-hely-ind" class="home-hely-ind" hidden>Helymeghatározás</span>
+        </button>
       </div>
 
       <div id="home-install" class="install-card" hidden>
