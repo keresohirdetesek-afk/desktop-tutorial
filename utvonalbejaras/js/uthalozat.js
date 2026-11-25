@@ -664,18 +664,84 @@ const SZAKASZ_MINTA =
 export function parseKijeloltUtvonal(szoveg) {
   const szakaszok = [];
   const kihagyott = [];
+  // A szakaszok közé szövegesen írt átvezetések, pl.
+  // „Tata - 8139. sz. út - Komárom” — ezekből az útszám kell, mert ezen az
+  // úton megy az összekötés a két szelvényezett szakasz között.
+  const ATVEZETO = /(\d{2,5}|[Mm]\d{1,2})\s*\.?\s*(?:sz\.?|j\.?)\s*(?:út|ut)/g;
+  let fuggo = [];
   for (const nyers of String(szoveg || '').split(/\r?\n/)) {
     const sor = nyers.trim();
     if (!sor) continue;
     const m = SZAKASZ_MINTA.exec(sor);
-    if (!m) { kihagyott.push(sor); continue; }
+    if (!m) {
+      kihagyott.push(sor);
+      for (const t of sor.matchAll(ATVEZETO)) fuggo.push(t[1]);
+      continue;
+    }
     szakaszok.push({
       ut: m[1],
       tol: Number(m[2].replace(',', '.')),
       ig: Number(m[3].replace(',', '.')),
+      atvezeto: fuggo,
     });
+    fuggo = [];
   }
   return { szakaszok, kihagyott };
+}
+
+/** Egy pontsor hossza méterben. */
+function trackLengthOf(pts) {
+  let h = 0;
+  for (let i = 1; i < pts.length; i++) {
+    h += metersBetween(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon);
+  }
+  return h;
+}
+
+/** Egy úton a ponthoz legközelebbi szelvénykő-szakasz. */
+function legkozelebbiSzelvenyen(net, ri, pont) {
+  let best = null;
+  for (let i = 0; i < net.segRoad.length; i++) {
+    if (net.segRoad[i] !== ri) continue;
+    const km = net.segKm[i];
+    if (!isFinite(km)) continue;
+    const p = projectToSegment(pont.lat, pont.lon, net.aLat[i], net.aLon[i], net.bLat[i], net.bLon[i]);
+    if (!best || p.distance < best.tav) {
+      best = { seg: i, tav: p.distance, km: km + p.t * (net.segLen ? net.segLen[i] : 0) };
+    }
+  }
+  return best;
+}
+
+/**
+ * Összekötés két szakasz között a megadott (szövegből kiolvasott) átvezető
+ * utakon. Ha egyik sem köti össze a két véget, null.
+ */
+function atvezetoVonal(net, honnan, hova, utszamok, maxTav = 4000) {
+  for (const u of utszamok || []) {
+    const ri = utIndexe(net, u);
+    if (ri < 0) continue;
+    const a = legkozelebbiSzelvenyen(net, ri, honnan);
+    const b = legkozelebbiSzelvenyen(net, ri, hova);
+    if (!a || !b || a.tav > maxTav || b.tav > maxTav) continue;
+    const lo = Math.min(a.km, b.km);
+    const hi = Math.max(a.km, b.km);
+    const arr = [];
+    for (let i = 0; i < net.segRoad.length; i++) {
+      if (net.segRoad[i] !== ri) continue;
+      const km = net.segKm[i];
+      if (!isFinite(km) || km < lo || km > hi) continue;
+      arr.push(i);
+    }
+    if (!arr.length) continue;
+    arr.sort((x, y) => net.segKm[x] - net.segKm[y]);
+    const pts = arr.map((i) => ({ lat: net.aLat[i], lon: net.aLon[i] }));
+    const utolso = arr[arr.length - 1];
+    pts.push({ lat: net.bLat[utolso], lon: net.bLon[utolso] });
+    if (a.km > b.km) pts.reverse();
+    return { ut: net.roads[ri], pts };
+  }
+  return null;
 }
 
 /**
@@ -803,10 +869,29 @@ export function utvonalSzelvenyekbol(net, szakaszok) {
     }
     // a szakaszok közötti ugrás: a csomópont a két szelvénykő között van,
     // ezért pár száz méter természetes; a nagyobb hézagot jelezzük
-    const ugras = pts.length
+    let ugras = pts.length
       ? Math.round(metersBetween(pts[pts.length - 1].lat, pts[pts.length - 1].lon, resz[0].lat, resz[0].lon))
       : 0;
-    reszek.push({ ...sz, pontok: resz.length, hossz, ugras });
+
+    // Ha a listában szövegesen ott az átvezető út („Tata - 8139. sz. út -
+    // Komárom”), azon vezetjük át — különben hosszú egyenes maradna.
+    let atvezetve = null;
+    if (ugras > 1500 && sz.atvezeto && sz.atvezeto.length) {
+      const hid = atvezetoVonal(net, pts[pts.length - 1], resz[0], sz.atvezeto);
+      if (hid && hid.pts.length > 1) {
+        pts.push(...hid.pts);
+        atvezetve = hid.ut;
+        ugras = Math.round(metersBetween(
+          hid.pts[hid.pts.length - 1].lat, hid.pts[hid.pts.length - 1].lon,
+          resz[0].lat, resz[0].lon
+        ));
+        reszek.push({
+          ut: hid.ut, tol: null, ig: null, atvezetes: true,
+          pontok: hid.pts.length, hossz: trackLengthOf(hid.pts), ugras: 0,
+        });
+      }
+    }
+    reszek.push({ ...sz, pontok: resz.length, hossz, ugras, atvezetve });
     pts.push(...resz);
   }
   return { pts, reszek, hiany };

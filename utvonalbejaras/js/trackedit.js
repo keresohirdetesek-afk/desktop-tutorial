@@ -772,18 +772,28 @@ export class TrackEditor {
     // a szakaszokon megtett út, a csomóponti összekötések nélkül
     const utonHossz = ki.reszek.reduce((sum, r) => sum + r.hossz, 0);
     const ugrasok = ki.reszek.filter((r) => r.ugras > 1500);
+    const atvezetesek = ki.reszek.filter((r) => r.atvezetes);
     const sorok = [
-      `${ki.reszek.length} szakasz · ${formatDistance(utonHossz)} az utakon · ${ki.pts.length} pont`,
+      `${ki.reszek.length - atvezetesek.length} szakasz · ${formatDistance(utonHossz)} az utakon`
+        + ` · ${ki.pts.length} pont`,
       `A megrajzolt vonal ${formatDistance(hossz)}, mert a szakaszok közötti `
         + 'csomópontokat egyenes köti össze.',
     ];
+    if (atvezetesek.length) {
+      sorok.push('', 'Átvezetés a listában megadott úton:');
+      for (const a of atvezetesek) sorok.push(`  ${a.ut} · ${formatDistance(a.hossz)}`);
+    }
     if (ki.hiany.length) {
       sorok.push('', 'Nem találtam adatot ezekhez:');
       for (const h of ki.hiany) sorok.push(`  ${h.ut} ${h.tol}–${h.ig} km — ${h.ok}`);
     }
     if (ugrasok.length) {
       sorok.push('', 'Nagyobb ugrás a szakaszok között (a csomópontot egyenes köti össze):');
-      for (const u of ugrasok) sorok.push(`  ${u.ut} ${u.tol}–${u.ig} km előtt ${u.ugras} m`);
+      for (const u of ugrasok) {
+        sorok.push(u.tol == null
+          ? `  ${u.ut} átvezetés előtt ${u.ugras} m`
+          : `  ${u.ut} ${u.tol}–${u.ig} km előtt ${u.ugras} m`);
+      }
     }
     if (ki.kihagyott.length) {
       sorok.push('', `Kihagyott sorok: ${ki.kihagyott.length} (pl. induló és célállomás)`);
