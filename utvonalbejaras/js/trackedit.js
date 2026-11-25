@@ -779,6 +779,9 @@ export class TrackEditor {
       `A megrajzolt vonal ${formatDistance(hossz)}, mert a szakaszok közötti `
         + 'csomópontokat egyenes köti össze.',
     ];
+    if (ki.onlineKitoltes) {
+      sorok.push('', `${ki.onlineKitoltes} hézagot az online útvonaltervezővel kötöttem össze.`);
+    }
     if (atvezetesek.length) {
       sorok.push('', 'Átvezetés a listában megadott úton:');
       for (const a of atvezetesek) sorok.push(`  ${a.ut} · ${formatDistance(a.hossz)}`);
@@ -794,6 +797,10 @@ export class TrackEditor {
           ? `  ${u.ut} átvezetés előtt ${u.ugras} m`
           : `  ${u.ut} ${u.tol}–${u.ig} km előtt ${u.ugras} m`);
       }
+    }
+    if (ugrasok.length && !ki.onlineKitoltes) {
+      sorok.push('Ezeket az „Online kiegészítés” bekapcsolásával valódi úton '
+        + 'vezetem át (Bejárások fül, alul).');
     }
     if (ki.kihagyott.length) {
       sorok.push('', `Kihagyott sorok: ${ki.kihagyott.length} (pl. induló és célállomás)`);

@@ -12266,6 +12266,9 @@ class TrackEditor {
       `A megrajzolt vonal ${formatDistance(hossz)}, mert a szakaszok közötti `
         + 'csomópontokat egyenes köti össze.',
     ];
+    if (ki.onlineKitoltes) {
+      sorok.push('', `${ki.onlineKitoltes} hézagot az online útvonaltervezővel kötöttem össze.`);
+    }
     if (atvezetesek.length) {
       sorok.push('', 'Átvezetés a listában megadott úton:');
       for (const a of atvezetesek) sorok.push(`  ${a.ut} · ${formatDistance(a.hossz)}`);
@@ -12281,6 +12284,10 @@ class TrackEditor {
           ? `  ${u.ut} átvezetés előtt ${u.ugras} m`
           : `  ${u.ut} ${u.tol}–${u.ig} km előtt ${u.ugras} m`);
       }
+    }
+    if (ugrasok.length && !ki.onlineKitoltes) {
+      sorok.push('Ezeket az „Online kiegészítés” bekapcsolásával valódi úton '
+        + 'vezetem át (Bejárások fül, alul).');
     }
     if (ki.kihagyott.length) {
       sorok.push('', `Kihagyott sorok: ${ki.kihagyott.length} (pl. induló és célállomás)`);
@@ -14278,7 +14285,28 @@ async function openTrackEditor() {
         if (!net) return null;
         const { szakaszok, kihagyott } = parseKijeloltUtvonal(szoveg);
         if (!szakaszok.length) return { pts: [], reszek: [], hiany: [], szakaszok, kihagyott };
-        return { ...utvonalSzelvenyekbol(net, szakaszok), szakaszok, kihagyott };
+        const alap = utvonalSzelvenyekbol(net, szakaszok);
+
+        // A szelvényadatban nincsenek csomópontok, ezért a szakaszok között
+        // maradhat pár kilométeres egyenes. Ha az online kiegészítés be van
+        // kapcsolva, ezeket a hézagokat valódi úton vezetjük át.
+        let onlineKitoltes = 0;
+        if (onlineRouting() && alap.pts.length > 1) {
+          const ki = [alap.pts[0]];
+          for (let i = 1; i < alap.pts.length; i++) {
+            const elozo = alap.pts[i - 1];
+            const most = alap.pts[i];
+            if (trackLength([elozo, most]) > 2000) {
+              try {
+                const mid = await routeOnline(elozo, most);
+                if (mid && mid.length) { ki.push(...mid); onlineKitoltes += 1; }
+              } catch (_) { /* marad az egyenes */ }
+            }
+            ki.push(most);
+          }
+          alap.pts = ki;
+        }
+        return { ...alap, onlineKitoltes, szakaszok, kihagyott };
       },
     },
     onApply: async ({ updated, deleted, drawn }) => {

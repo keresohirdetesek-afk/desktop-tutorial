@@ -1456,7 +1456,28 @@ async function openTrackEditor() {
         if (!net) return null;
         const { szakaszok, kihagyott } = parseKijeloltUtvonal(szoveg);
         if (!szakaszok.length) return { pts: [], reszek: [], hiany: [], szakaszok, kihagyott };
-        return { ...utvonalSzelvenyekbol(net, szakaszok), szakaszok, kihagyott };
+        const alap = utvonalSzelvenyekbol(net, szakaszok);
+
+        // A szelvényadatban nincsenek csomópontok, ezért a szakaszok között
+        // maradhat pár kilométeres egyenes. Ha az online kiegészítés be van
+        // kapcsolva, ezeket a hézagokat valódi úton vezetjük át.
+        let onlineKitoltes = 0;
+        if (onlineRouting() && alap.pts.length > 1) {
+          const ki = [alap.pts[0]];
+          for (let i = 1; i < alap.pts.length; i++) {
+            const elozo = alap.pts[i - 1];
+            const most = alap.pts[i];
+            if (trackLength([elozo, most]) > 2000) {
+              try {
+                const mid = await routeOnline(elozo, most);
+                if (mid && mid.length) { ki.push(...mid); onlineKitoltes += 1; }
+              } catch (_) { /* marad az egyenes */ }
+            }
+            ki.push(most);
+          }
+          alap.pts = ki;
+        }
+        return { ...alap, onlineKitoltes, szakaszok, kihagyott };
       },
     },
     onApply: async ({ updated, deleted, drawn }) => {
