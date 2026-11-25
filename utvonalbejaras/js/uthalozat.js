@@ -483,8 +483,7 @@ export function lookupRoad(net, lat, lon, maxDistance = 120) {
 /** Egy út adott szelvényének helye — „81” + 27387 m. */
 export function pointOnRoad(net, road, meters) {
   if (!net || !net.count) return null;
-  const name = String(road).trim().toLowerCase();
-  const ri = net.roads.findIndex((r) => String(r).trim().toLowerCase() === name);
+  const ri = utIndexe(net, road);
   if (ri < 0) return null;
 
   let best = -1;
@@ -688,6 +687,24 @@ export function parseKijeloltUtvonal(szoveg) {
  *
  * @returns {{pts: Array<{lat:number, lon:number}>, reszek: Array, hiany: Array}}
  */
+/**
+ * Útszámok összehasonlítása. A listában és az adatban eltérhet a kis- és
+ * nagybetű, a szóköz, és a „j.”/„sz.” toldalék — ezektől eltekintünk.
+ */
+export const normUtszam = (s) => String(s == null ? '' : s).trim().toLowerCase()
+  .replace(/\s*(j\.?|sz\.?)\s*(út|ut)?\s*$/, '')
+  .replace(/[\s.]/g, '');
+
+/** Hányadik útszám ez a hálózatban (robusztus egyezéssel)? */
+export function utIndexe(net, utszam) {
+  if (!net || !net.roads) return -1;
+  const pontos = net.roads.indexOf(utszam);
+  if (pontos >= 0) return pontos;
+  const keresett = normUtszam(utszam);
+  if (!keresett) return -1;
+  return net.roads.findIndex((r) => normUtszam(r) === keresett);
+}
+
 export function utvonalSzelvenyekbol(net, szakaszok) {
   const pts = [];
   const reszek = [];
@@ -695,7 +712,7 @@ export function utvonalSzelvenyekbol(net, szakaszok) {
   if (!net || !net.count) return { pts, reszek, hiany };
 
   for (const sz of szakaszok) {
-    const ri = net.roads.indexOf(sz.ut);
+    const ri = utIndexe(net, sz.ut);
     if (ri < 0) {
       hiany.push({ ...sz, ok: 'nincs ilyen útszám a betöltött adatban' });
       continue;

@@ -1424,6 +1424,28 @@ async function openTrackEditor() {
           veg: hb,
         };
       },
+      // mi van most betöltve — a hibaüzenet ebből tud okosat mondani
+      halozatInfo: async () => {
+        const net = await roadNetwork();
+        if (!net) return null;
+        return {
+          nev: net.name || 'úthálózat',
+          utak: net.roads ? net.roads.length : 0,
+          szakaszok: net.count || 0,
+          szelvenyes: !!net.hasSzelveny,
+          beepitett: !!net.beepitett,
+          pelda: (net.roads || []).slice(0, 8),
+        };
+      },
+      // vissza a beépített országos adatra (ha valaki saját fájlt töltött be)
+      orszagosVissza: async () => {
+        try { localStorage.removeItem('beepitettAdat'); } catch (_) {}
+        await db.clearNetwork();
+        roadNet = undefined;
+        const res = await beepitettAdat((m) => toast(m));
+        roadNet = res && res.net ? res.net : null;
+        return !!roadNet;
+      },
       kijelolt: async (szoveg) => {
         const net = await roadNetwork();
         if (!net) return null;

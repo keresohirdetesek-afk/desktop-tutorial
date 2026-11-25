@@ -7842,8 +7842,7 @@ function lookupRoad(net, lat, lon, maxDistance = 120) {
 /** Egy út adott szelvényének helye — „81” + 27387 m. */
 function pointOnRoad(net, road, meters) {
   if (!net || !net.count) return null;
-  const name = String(road).trim().toLowerCase();
-  const ri = net.roads.findIndex((r) => String(r).trim().toLowerCase() === name);
+  const ri = utIndexe(net, road);
   if (ri < 0) return null;
 
   let best = -1;
@@ -8047,6 +8046,24 @@ function parseKijeloltUtvonal(szoveg) {
  *
  * @returns {{pts: Array<{lat:number, lon:number}>, reszek: Array, hiany: Array}}
  */
+/**
+ * Útszámok összehasonlítása. A listában és az adatban eltérhet a kis- és
+ * nagybetű, a szóköz, és a „j.”/„sz.” toldalék — ezektől eltekintünk.
+ */
+const normUtszam = (s) => String(s == null ? '' : s).trim().toLowerCase()
+  .replace(/\s*(j\.?|sz\.?)\s*(út|ut)?\s*$/, '')
+  .replace(/[\s.]/g, '');
+
+/** Hányadik útszám ez a hálózatban (robusztus egyezéssel)? */
+function utIndexe(net, utszam) {
+  if (!net || !net.roads) return -1;
+  const pontos = net.roads.indexOf(utszam);
+  if (pontos >= 0) return pontos;
+  const keresett = normUtszam(utszam);
+  if (!keresett) return -1;
+  return net.roads.findIndex((r) => normUtszam(r) === keresett);
+}
+
 function utvonalSzelvenyekbol(net, szakaszok) {
   const pts = [];
   const reszek = [];
@@ -8054,7 +8071,7 @@ function utvonalSzelvenyekbol(net, szakaszok) {
   if (!net || !net.count) return { pts, reszek, hiany };
 
   for (const sz of szakaszok) {
-    const ri = net.roads.indexOf(sz.ut);
+    const ri = utIndexe(net, sz.ut);
     if (ri < 0) {
       hiany.push({ ...sz, ok: 'nincs ilyen útszám a betöltött adatban' });
       continue;
@@ -12019,6 +12036,49 @@ class TrackEditor {
    * van, hanem szakaszok listája („51 179 -> 159 km”); ebből a betöltött
    * úthálózat alapján kirajzolható a tényleges nyomvonal.
    */
+  /**
+   * Miért nem jött ki egyetlen szakasz sem? Megmondjuk, mi van betöltve, és
+   * felajánljuk a visszaállást a beépített országos adatra — tapasztalat
+   * szerint a baj szinte mindig egy korábban kézzel betöltött, szelvény
+   * nélküli (vagy más útszám-jelölésű) állomány.
+   */
+  async kijeloltHiba(ki) {
+    const info = this.road.halozatInfo ? await this.road.halozatInfo() : null;
+    const sorok = ['A felismert szakaszokhoz nem találtam adatot az úthálózatban.', ''];
+    if (info) {
+      sorok.push(`Betöltött úthálózat: ${info.nev}`);
+      sorok.push(`${info.utak} útszám · ${info.szakaszok} szakasz · `
+        + (info.szelvenyes ? 'szelvényezéssel' : 'SZELVÉNY NÉLKÜL'));
+      if (info.pelda && info.pelda.length) {
+        sorok.push('Útszámok benne: ' + info.pelda.join(', ') + '…');
+      }
+      sorok.push('');
+    }
+    if (ki.hiany && ki.hiany.length) {
+      sorok.push('Szakaszonként:');
+      for (const h of ki.hiany.slice(0, 10)) sorok.push(`  ${h.ut} ${h.tol}–${h.ig} km — ${h.ok}`);
+      if (ki.hiany.length > 10) sorok.push(`  …és még ${ki.hiany.length - 10} szakasz`);
+      sorok.push('');
+    }
+    const sajat = info && !info.beepitett;
+    sorok.push(sajat
+      ? 'Ez egy kézzel betöltött állomány. A beépített országos adattal ez a lista '
+        + 'működik — visszaállítsam?'
+      : 'Ellenőrizd, hogy az útszámok úgy szerepelnek-e a listában, ahogy a Közút '
+        + 'írja (pl. „M5”, „405”, „1”).');
+
+    const vissza = await modal({
+      title: 'Nem sikerült megrajzolni',
+      text: sorok.join('\n'),
+      okText: sajat ? 'Országos adat visszaállítása' : 'Értem',
+      cancelText: sajat ? 'Most nem' : 'Bezárás',
+    });
+    if (!vissza || !sajat || !this.road.orszagosVissza) return;
+    toast('Országos adat visszaállítása…');
+    const ok = await this.road.orszagosVissza();
+    toast(ok ? 'Kész. Próbáld újra a beolvasást.' : 'Nem sikerült visszaállítani.', ok ? 'info' : 'error');
+  }
+
   async kijeloltUtvonal() {
     if (!this.road || !this.road.kijelolt) {
       toast('Ehhez az országos úthálózati adat kell — töltse újra az oldalt, '
@@ -12046,7 +12106,7 @@ class TrackEditor {
       return;
     }
     if (!ki.pts.length) {
-      toast('A felismert szakaszokhoz nem találtam adatot az úthálózatban.', 'error');
+      await this.kijeloltHiba(ki);
       return;
     }
 
@@ -13126,7 +13186,7 @@ async function openSession(id) {
   state.points = await db.getPoints(id);
   state.items = await db.getItems(id);
   state.recElapsed = state.session.stats?.elapsed || 0;
-  state.helyMod = null;        // gépen: hova kerüljenek az új bejegyzések
+  state.helyMod = helyModTarolt();   // gépen: hova kerüljenek az új bejegyzések
   if (trackView) trackView.reset();   // új bejárás: a teljes nyomvonal látszódjon
   $('[data-screen="session"]').disabled = false;
   renderItems();
@@ -13179,7 +13239,9 @@ function renderMeta() {
     $('#session-meta').appendChild(el('div', { class: 'meta-row' }, [
       el('span', { class: 'meta-key', text: 'Új bejegyzés helye' }),
       el('span', { class: 'meta-val' }, [
-        el('span', { text: state.helyMod ? HELY_MOD_SZOVEG[state.helyMod] : 'rákérdezek' }),
+        el('span', {
+          text: (state.helyMod && HELY_MOD_SZOVEG[state.helyMod]) || 'rákérdezek',
+        }),
         el('button', {
           class: 'btn ghost tiny hely-mod-gomb', type: 'button',
           onclick: helyModValtas,
@@ -14029,6 +14091,28 @@ async function openTrackEditor() {
           veg: hb,
         };
       },
+      // mi van most betöltve — a hibaüzenet ebből tud okosat mondani
+      halozatInfo: async () => {
+        const net = await roadNetwork();
+        if (!net) return null;
+        return {
+          nev: net.name || 'úthálózat',
+          utak: net.roads ? net.roads.length : 0,
+          szakaszok: net.count || 0,
+          szelvenyes: !!net.hasSzelveny,
+          beepitett: !!net.beepitett,
+          pelda: (net.roads || []).slice(0, 8),
+        };
+      },
+      // vissza a beépített országos adatra (ha valaki saját fájlt töltött be)
+      orszagosVissza: async () => {
+        try { localStorage.removeItem('beepitettAdat'); } catch (_) {}
+        await db.clearNetwork();
+        roadNet = undefined;
+        const res = await beepitettAdat((m) => toast(m));
+        roadNet = res && res.net ? res.net : null;
+        return !!roadNet;
+      },
       kijelolt: async (szoveg) => {
         const net = await roadNetwork();
         if (!net) return null;
@@ -14199,6 +14283,18 @@ const HELY_MOD_SZOVEG = {
   nincs: 'hely nélkül, utólag adom meg',
 };
 
+/** A készüléken megjegyzett választás (gépen: hova kerüljenek a pontok). */
+function helyModTarolt() {
+  try {
+    const v = localStorage.getItem('helyMod');
+    return HELY_MOD_SZOVEG[v] ? v : null;
+  } catch (_) { return null; }
+}
+
+function helyModMent(mod) {
+  try { localStorage.setItem('helyMod', mod); } catch (_) {}
+}
+
 const uresPozicio = () => ({
   lat: null, lon: null, acc: null, heading: null, posAt: null, posSource: 'none', road: null,
 });
@@ -14246,6 +14342,7 @@ async function ujPozicio(cim = 'Új bejegyzés') {
     const valasz = await helyModKerdes();
     if (!valasz) return null;
     state.helyMod = valasz;
+    helyModMent(valasz);
     renderMeta();
   }
 
@@ -14270,6 +14367,7 @@ async function helyModValtas() {
   const valasz = await helyModKerdes();
   if (!valasz) return;
   state.helyMod = valasz;
+  helyModMent(valasz);
   renderMeta();
   toast('Az új bejegyzések helye: ' + (HELY_MOD_SZOVEG[valasz] || '—') + '.');
 }

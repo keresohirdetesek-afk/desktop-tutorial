@@ -695,6 +695,49 @@ export class TrackEditor {
    * van, hanem szakaszok listája („51 179 -> 159 km”); ebből a betöltött
    * úthálózat alapján kirajzolható a tényleges nyomvonal.
    */
+  /**
+   * Miért nem jött ki egyetlen szakasz sem? Megmondjuk, mi van betöltve, és
+   * felajánljuk a visszaállást a beépített országos adatra — tapasztalat
+   * szerint a baj szinte mindig egy korábban kézzel betöltött, szelvény
+   * nélküli (vagy más útszám-jelölésű) állomány.
+   */
+  async kijeloltHiba(ki) {
+    const info = this.road.halozatInfo ? await this.road.halozatInfo() : null;
+    const sorok = ['A felismert szakaszokhoz nem találtam adatot az úthálózatban.', ''];
+    if (info) {
+      sorok.push(`Betöltött úthálózat: ${info.nev}`);
+      sorok.push(`${info.utak} útszám · ${info.szakaszok} szakasz · `
+        + (info.szelvenyes ? 'szelvényezéssel' : 'SZELVÉNY NÉLKÜL'));
+      if (info.pelda && info.pelda.length) {
+        sorok.push('Útszámok benne: ' + info.pelda.join(', ') + '…');
+      }
+      sorok.push('');
+    }
+    if (ki.hiany && ki.hiany.length) {
+      sorok.push('Szakaszonként:');
+      for (const h of ki.hiany.slice(0, 10)) sorok.push(`  ${h.ut} ${h.tol}–${h.ig} km — ${h.ok}`);
+      if (ki.hiany.length > 10) sorok.push(`  …és még ${ki.hiany.length - 10} szakasz`);
+      sorok.push('');
+    }
+    const sajat = info && !info.beepitett;
+    sorok.push(sajat
+      ? 'Ez egy kézzel betöltött állomány. A beépített országos adattal ez a lista '
+        + 'működik — visszaállítsam?'
+      : 'Ellenőrizd, hogy az útszámok úgy szerepelnek-e a listában, ahogy a Közút '
+        + 'írja (pl. „M5”, „405”, „1”).');
+
+    const vissza = await modal({
+      title: 'Nem sikerült megrajzolni',
+      text: sorok.join('\n'),
+      okText: sajat ? 'Országos adat visszaállítása' : 'Értem',
+      cancelText: sajat ? 'Most nem' : 'Bezárás',
+    });
+    if (!vissza || !sajat || !this.road.orszagosVissza) return;
+    toast('Országos adat visszaállítása…');
+    const ok = await this.road.orszagosVissza();
+    toast(ok ? 'Kész. Próbáld újra a beolvasást.' : 'Nem sikerült visszaállítani.', ok ? 'info' : 'error');
+  }
+
   async kijeloltUtvonal() {
     if (!this.road || !this.road.kijelolt) {
       toast('Ehhez az országos úthálózati adat kell — töltse újra az oldalt, '
@@ -722,7 +765,7 @@ export class TrackEditor {
       return;
     }
     if (!ki.pts.length) {
-      toast('A felismert szakaszokhoz nem találtam adatot az úthálózatban.', 'error');
+      await this.kijeloltHiba(ki);
       return;
     }
 
