@@ -21,7 +21,7 @@ import { setTilesEnabled, onTileLoad, cachedTileCount, clearTileCache } from './
 import { MapView } from './terkepnezet.js';
 import {
   pointOnRoad, findPlace, lookupRoad, routeBetween, szelvenyMeters, formatSzelveny,
-  parseKijeloltUtvonal, utvonalSzelvenyekbol,
+  parseKijeloltUtvonal, utvonalSzelvenyekbol, utvonalEgyUton,
 } from './uthalozat.js';
 import { eovToWgs84, formatEov } from './eov.js';
 import { onlineRouting, setOnlineRouting, snapOnline, routeOnline } from './utvonalterv.js';
@@ -1386,17 +1386,22 @@ async function openTrackEditor() {
       },
       route: async (a, b) => {
         const net = await roadNetwork();
-        // A szelvényjelekből épített hálózat útszámhoz és szelvényhez jó, de
-        // útvonaltervezésre nem: a kövek útszámonként külön vonalat adnak,
-        // kereszteződés nincs bennük. Ilyenkor rögtön az online tervező jön.
         if (net && !net.szelvenykoves) {
           const sajat = await routeBetween(net, a, b);
           if (sajat && sajat.length) return sajat;
         }
+        // A szelvényjelekből épített hálózatban nincsenek csomópontok, de
+        // EGY úton belül pontosan tudjuk a vonalat: a két szelvény közötti
+        // szelvénykövek adják. Ez a tervezés leggyakoribb esete, és
+        // internet nélkül is megy.
+        if (net && net.szelvenykoves) {
+          const egyUton = utvonalEgyUton(net, a, b);
+          if (egyUton && egyUton.length > 1) return egyUton;
+        }
         return routeOnline(a, b);
       },
       // tud-e egyáltalán útvonalat tervezni a mostani forrás
-      routeReady: () => !!(roadNet && !roadNet.szelvenykoves) || onlineRouting(),
+      routeReady: () => !!roadNet || onlineRouting(),
       /**
        * A Közút által kijelölt útvonal (útszám + szelvénytartomány lista)
        * kirajzolása a betöltött úthálózatból.

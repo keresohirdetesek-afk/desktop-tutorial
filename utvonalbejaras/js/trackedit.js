@@ -639,13 +639,12 @@ export class TrackEditor {
         // csak bosszantó, mert nem derül ki belőle, mit lehet tenni
         const tervezheto = this.road.routeReady ? this.road.routeReady() : true;
         toast(!tervezheto
-          ? 'A beépített adat szelvényjelekből áll: útszámhoz és szelvényhez jó, '
-            + 'útvonaltervezésre nem. Kapcsolja be az online kiegészítést, vagy '
-            + 'töltse be a vonalas úthálózatot — addig egyenes vonallal kötöm össze.'
+          ? 'Nincs miből útvonalat tervezni — egyenes vonallal kötöm össze.'
           : this.road.source && this.road.source() === 'online'
             ? 'Az útvonaltervező nem válaszolt (vagy nincs net) — egyenes vonallal kötöm össze.'
-            : 'Az úthálózaton nem találtam ide utat (külföldön nincs adat) — '
-              + 'egyenes vonallal kötöm össze.');
+            : 'A két pont nem ugyanarra az útszámra esik (vagy csomóponton át vezet), '
+              + 'ezért egyenes vonallal kötöm össze. Tegyél közbe egy pontot a '
+              + 'csomópontnál, vagy kapcsold be az online kiegészítést.');
       }
     }
 

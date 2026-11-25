@@ -705,6 +705,56 @@ export function utIndexe(net, utszam) {
   return net.roads.findIndex((r) => normUtszam(r) === keresett);
 }
 
+/**
+ * Két pont közötti vonal a szelvényjelekből — ha mindkettő UGYANARRA az
+ * útra esik. Csomópontokat ez nem tud (a szelvénykövek útszámonként külön
+ * vonalat adnak), de a gyakori esetre — „kattints a szakasz elejére, majd a
+ * végére ugyanazon az úton” — pont ez kell, és hálózat nélkül is megy.
+ *
+ * @returns {Array<{lat:number, lon:number}>|null} a köztes pontok, vagy null
+ */
+export function utvonalEgyUton(net, a, b, maxTav = 90) {
+  if (!net || !net.count) return null;
+  const ha = lookupRoad(net, a.lat, a.lon, maxTav);
+  const hb = lookupRoad(net, b.lat, b.lon, maxTav);
+  if (!ha || !hb || ha.meters == null || hb.meters == null) return null;
+  if (normUtszam(ha.utszam) !== normUtszam(hb.utszam)) return null;
+
+  const ri = net.segRoad[ha.seg];
+  const lo = Math.min(ha.meters, hb.meters);
+  const hi = Math.max(ha.meters, hb.meters);
+  if (hi - lo < 30) return null;              // túl közel: nincs mit követni
+
+  // osztott pályánál a két végpont más vonalra eshet: azt a vonalat
+  // választjuk, amelyik a tartományt jobban lefedi
+  const jeloltek = new Set([
+    net.segLine ? net.segLine[ha.seg] : 0,
+    net.segLine ? net.segLine[hb.seg] : 0,
+  ]);
+  let best = null;
+  for (const ln of jeloltek) {
+    const arr = [];
+    for (let i = 0; i < net.segRoad.length; i++) {
+      if (net.segRoad[i] !== ri) continue;
+      if (net.segLine && net.segLine[i] !== ln) continue;
+      const km = net.segKm[i];
+      if (!isFinite(km) || km < lo || km > hi) continue;
+      arr.push(i);
+    }
+    if (!best || arr.length > best.length) best = arr;
+  }
+  if (!best || !best.length) return null;
+  best.sort((x, y) => net.segKm[x] - net.segKm[y]);
+
+  // növekvő szelvény szerint: az első pont a kisebb szelvényhez tartozik
+  const pts = [];
+  for (const i of best) pts.push({ lat: net.aLat[i], lon: net.aLon[i] });
+  const utolso = best[best.length - 1];
+  pts.push({ lat: net.bLat[utolso], lon: net.bLon[utolso] });
+  if (ha.meters > hb.meters) pts.reverse();
+  return pts;
+}
+
 export function utvonalSzelvenyekbol(net, szakaszok) {
   const pts = [];
   const reszek = [];
