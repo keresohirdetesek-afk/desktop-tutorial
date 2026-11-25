@@ -9266,7 +9266,13 @@ class KozutDocs {
     this.net = null;
     this.netFile = null;
     try { await db.clearNetwork(); } catch (_) {}
-    if (this.onNetwork) this.onNetwork();
+    this.render();
+    // az app ilyenkor visszateszi a beépített országos adatot — várjuk meg,
+    // és mutassuk is, hogy mi lett belőle
+    if (this.onNetwork) await this.onNetwork();
+    try {
+      this.net = await db.getNetwork();
+    } catch (_) { this.net = null; }
     this.render();
   }
 
@@ -9405,7 +9411,7 @@ class KozutDocs {
     const n = this.net;
     const fields = Object.entries(n.fields).map(([k, v]) => `${k}: ${v}`).join(' · ');
     box.appendChild(el('div', { class: 'net-card' }, [
-      el('b', { text: n.name }),
+      el('b', { text: n.name + (n.beepitett ? ' · beépített országos adat' : ' · saját állomány') }),
       el('span', {
         class: 'muted small',
         text: `${n.roads.length} útszám · ${n.count} szakasz · `
@@ -9439,8 +9445,13 @@ class KozutDocs {
           class: 'btn ghost tiny', type: 'button', text: 'Mezők módosítása',
           onclick: () => this.remapNetwork(),
         }),
+        // saját állománynál a visszaút a beépített országos adathoz
         el('button', {
-          class: 'btn ghost tiny', type: 'button', text: 'Eltávolítás',
+          class: 'btn ghost tiny', type: 'button',
+          text: n.beepitett ? 'Eltávolítás' : '⤴ Vissza az országos adatra',
+          title: n.beepitett
+            ? 'Törli a betöltött adatot (újraindításkor visszatelepül).'
+            : 'Törli ezt a saját állományt, és visszateszi a beépített országos adatot.',
           onclick: () => this.dropNetwork(),
         }),
       ]),
@@ -16352,7 +16363,20 @@ async function openKozut(opts = {}) {
       drawTrack();
     },
     // betöltött vagy törölt úthálózat után újra kell olvasni
-    onNetwork: () => { roadNet = undefined; },
+    onNetwork: async () => {
+      roadNet = undefined;
+      // ha nem maradt hálózat (eltávolították a sajátot), visszatesszük a
+      // beépített országos adatot — enélkül üresen maradna a szelvényezés
+      try {
+        if (!(await db.getNetwork())) {
+          try { localStorage.removeItem('beepitettAdat'); } catch (_) {}
+          toast('Országos adat visszaállítása…');
+          const res = await beepitettAdat((m) => toast(m));
+          roadNet = res && res.net ? res.net : null;
+          if (roadNet) toast('Kész: az országos szelvényadat újra megvan.');
+        }
+      } catch (_) { /* a következő indításkor úgyis feltelepül */ }
+    },
     // a kitöltött dokumentum a fizetős lépés: egy bejárás egyszer visz kreditet
     canIssue: () => dokumentumEngedely('Közút-dokumentumok kitöltése'),
   });
@@ -16933,8 +16957,9 @@ async function checkOfflineReady() {
       ch.port1.onmessage = (e) => { clearTimeout(timer); resolve(e.data); };
       sw.postMessage({ type: 'status' }, [ch.port2]);
     });
+    const valtozat = res && res.version ? ' · ' + String(res.version).replace('utvonalbejaras-', '') : '';
     if (res && res.cached >= res.expected) {
-      setOfflineStatus(`✓ Offline használatra kész (${res.cached} fájl).`);
+      setOfflineStatus(`✓ Offline használatra kész (${res.cached} fájl)${valtozat}.`);
     } else {
       setOfflineStatus(
         `⚠️ Offline készenlét hiányos (${res ? res.cached : 0}/${res ? res.expected : '?'} fájl) — `

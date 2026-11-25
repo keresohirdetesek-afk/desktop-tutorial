@@ -433,7 +433,13 @@ export class KozutDocs {
     this.net = null;
     this.netFile = null;
     try { await db.clearNetwork(); } catch (_) {}
-    if (this.onNetwork) this.onNetwork();
+    this.render();
+    // az app ilyenkor visszateszi a beépített országos adatot — várjuk meg,
+    // és mutassuk is, hogy mi lett belőle
+    if (this.onNetwork) await this.onNetwork();
+    try {
+      this.net = await db.getNetwork();
+    } catch (_) { this.net = null; }
     this.render();
   }
 
@@ -572,7 +578,7 @@ export class KozutDocs {
     const n = this.net;
     const fields = Object.entries(n.fields).map(([k, v]) => `${k}: ${v}`).join(' · ');
     box.appendChild(el('div', { class: 'net-card' }, [
-      el('b', { text: n.name }),
+      el('b', { text: n.name + (n.beepitett ? ' · beépített országos adat' : ' · saját állomány') }),
       el('span', {
         class: 'muted small',
         text: `${n.roads.length} útszám · ${n.count} szakasz · `
@@ -606,8 +612,13 @@ export class KozutDocs {
           class: 'btn ghost tiny', type: 'button', text: 'Mezők módosítása',
           onclick: () => this.remapNetwork(),
         }),
+        // saját állománynál a visszaút a beépített országos adathoz
         el('button', {
-          class: 'btn ghost tiny', type: 'button', text: 'Eltávolítás',
+          class: 'btn ghost tiny', type: 'button',
+          text: n.beepitett ? 'Eltávolítás' : '⤴ Vissza az országos adatra',
+          title: n.beepitett
+            ? 'Törli a betöltött adatot (újraindításkor visszatelepül).'
+            : 'Törli ezt a saját állományt, és visszateszi a beépített országos adatot.',
           onclick: () => this.dropNetwork(),
         }),
       ]),

@@ -3685,7 +3685,20 @@ async function openKozut(opts = {}) {
       drawTrack();
     },
     // betöltött vagy törölt úthálózat után újra kell olvasni
-    onNetwork: () => { roadNet = undefined; },
+    onNetwork: async () => {
+      roadNet = undefined;
+      // ha nem maradt hálózat (eltávolították a sajátot), visszatesszük a
+      // beépített országos adatot — enélkül üresen maradna a szelvényezés
+      try {
+        if (!(await db.getNetwork())) {
+          try { localStorage.removeItem('beepitettAdat'); } catch (_) {}
+          toast('Országos adat visszaállítása…');
+          const res = await beepitettAdat((m) => toast(m));
+          roadNet = res && res.net ? res.net : null;
+          if (roadNet) toast('Kész: az országos szelvényadat újra megvan.');
+        }
+      } catch (_) { /* a következő indításkor úgyis feltelepül */ }
+    },
     // a kitöltött dokumentum a fizetős lépés: egy bejárás egyszer visz kreditet
     canIssue: () => dokumentumEngedely('Közút-dokumentumok kitöltése'),
   });
@@ -4270,8 +4283,9 @@ async function checkOfflineReady() {
       ch.port1.onmessage = (e) => { clearTimeout(timer); resolve(e.data); };
       sw.postMessage({ type: 'status' }, [ch.port2]);
     });
+    const valtozat = res && res.version ? ' · ' + String(res.version).replace('utvonalbejaras-', '') : '';
     if (res && res.cached >= res.expected) {
-      setOfflineStatus(`✓ Offline használatra kész (${res.cached} fájl).`);
+      setOfflineStatus(`✓ Offline használatra kész (${res.cached} fájl)${valtozat}.`);
     } else {
       setOfflineStatus(
         `⚠️ Offline készenlét hiányos (${res ? res.cached : 0}/${res ? res.expected : '?'} fájl) — `
