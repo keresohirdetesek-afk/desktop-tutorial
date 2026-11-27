@@ -13413,7 +13413,7 @@ async function utvonalVarazslo(nyissonTerkepet = true) {
 
   const valasz = await choose({
     title: 'Van a Magyar Közúttól kapott útvonal?',
-    text: 'Ha megkaptad az engedélyben a szakaszlistát (útszám + km szelvény), '
+    text: 'Ha megkapta az engedélyben a szakaszlistát (útszám + km szelvény), '
       + 'másolja be — magától megrajzolom a térképen.',
     options: [
       {
@@ -13481,7 +13481,7 @@ async function akadalyVarazslo() {
         value: 'jelol',
         emoji: '🗺️',
         kiemelt: true,
-        label: 'Igen, és jelöld a térképen',
+        label: 'Igen, és jelölés a térképen',
         hint: 'A szűk helyek ⚠ jelet kapnak a térképen is.',
       },
       { value: 'csak', emoji: '⚠️', label: 'Csak a lista', hint: 'A térképet nem jelölöm meg.' },
@@ -14101,7 +14101,7 @@ async function akadalyAdatlap(a, opts = {}) {
 
   const extra = [];
   if (opts.terkep !== false && a.lat != null) {
-    extra.push({ text: '🗺️ Mutasd a térképen', value: 'terkep', danger: false });
+    extra.push({ text: '🗺️ Mutatás a térképen', value: 'terkep', danger: false });
   }
   if (pipa.ellenorizve) extra.push({ text: 'Pipa visszavonása', value: 'vissza' });
 
@@ -14303,7 +14303,7 @@ function akadalyokMegjelenit(eredmeny, szakaszok) {
         toast(db ? `${db} hely bejelölve a térképen.` : 'Nem volt mit bejelölni.');
         akadalyokMegjelenit(eredmeny, szakaszok);
       },
-    }, ikonos('terkep', vanJel ? 'Jelölések frissítése' : 'Jelöld a térképen')));
+    }, ikonos('terkep', vanJel ? 'Jelölések frissítése' : 'Jelölés a térképen')));
   }
   if (vanJel) {
     actions.appendChild(el('button', {
