@@ -1239,7 +1239,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-color: color-mix(in srgb, var(--ok) 55%, var(--border));
   background: color-mix(in srgb, var(--ok) 9%, var(--surface));
 }
-.akadaly-lista { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+/* a margin-inline: auto kell, különben széles kijelzőn balra csúszik a lista */
+.akadaly-lista { display: flex; flex-direction: column; gap: 8px; margin: 10px auto; }
 .akadaly {
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -1253,6 +1254,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .akadaly-hely { font-weight: 700; font-size: 14.5px; }
 .akadaly-nev { font-size: 13px; color: var(--muted); margin-top: 1px; }
 .akadaly-szoveg { font-size: 13.5px; margin-top: 4px; }
+/* kattintható sor: innen nyílik az akadály adatlapja (térkép, pipa, megjegyzés) */
+.akadaly.kattinthato {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  min-height: 44px;
+}
+.akadaly.kattinthato:hover { border-color: var(--accent); }
+.akadaly.kattinthato:active { transform: scale(0.995); }
+.akadaly.pipas { border-left-color: #16a34a; opacity: 0.9; }
+.akadaly-pipa { font-size: 13px; margin-top: 5px; color: #16a34a; font-weight: 600; }
+.akadaly-tipp { font-size: 12px; margin-top: 5px; color: var(--muted); }
 
 /* figyelmeztető sáv a lap tetején (nem biztonságos kapcsolat) */
 .https-bar {

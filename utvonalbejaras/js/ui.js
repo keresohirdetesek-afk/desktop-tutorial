@@ -110,12 +110,13 @@ export function modal({ title, fields = [], okText = 'Mentés', cancelText = 'M�
     const actions = el('div', { class: 'modal-actions' });
     // Külön művelet (pl. törlés): a mentés mellé, de attól elhúzva, hogy
     // ne lehessen véletlenül eltalálni. A modál ekkor sztringgel tér vissza.
-    if (extra) {
+    // több külön művelet is lehet: tömbként adható át
+    for (const ex of (Array.isArray(extra) ? extra : [extra]).filter(Boolean)) {
       const more = el('button', {
-        type: 'button', class: 'btn ' + (extra.danger === false ? 'ghost' : 'danger') + ' modal-extra',
-        text: extra.text || 'Törlés',
+        type: 'button', class: 'btn ' + (ex.danger === false ? 'ghost' : 'danger') + ' modal-extra',
+        text: ex.text || 'Törlés',
       });
-      more.addEventListener('click', () => close(extra.value || 'extra'));
+      more.addEventListener('click', () => close(ex.value || 'extra'));
       actions.appendChild(more);
     }
     const cancel = el('button', { type: 'button', class: 'btn ghost', text: cancelText });

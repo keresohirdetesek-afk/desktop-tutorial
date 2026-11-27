@@ -672,11 +672,15 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
 
   // Akadályok (hidak, korlátozások), amik nem férnek el a szerelvénnyel.
   // Külön réteg: nem rögzített elem, hanem az ellenőrzés eredménye.
-  for (const a of (opts.akadalyok || [])) {
-    if (a.lat == null || a.lon == null) continue;
+  // A jelek kattinthatók: az azonosítójuk „akadaly:” előtaggal megy a hitboxba.
+  const hitboxes = [];
+  const akadalyHitek = [];
+  (opts.akadalyok || []).forEach((a, i) => {
+    if (a.lat == null || a.lon == null) return;
     const p = project(a.lat, a.lon);
     const r = 11;
     const baj = a.sulyossag === 'utkozes';
+    const pipa = !!a.ellenorizve;
     ctx.save();
     // háromszög jel, fehér kerettel, hogy a térképen is kivehető legyen
     ctx.beginPath();
@@ -684,7 +688,8 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     ctx.lineTo(p.x + r * 0.92, p.y + r * 0.72);
     ctx.lineTo(p.x - r * 0.92, p.y + r * 0.72);
     ctx.closePath();
-    ctx.fillStyle = baj ? '#dc2626' : '#f59e0b';
+    // leellenőrzött hely: zöld, hogy egy pillantásból lássuk, mi van még hátra
+    ctx.fillStyle = pipa ? '#16a34a' : (baj ? '#dc2626' : '#f59e0b');
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
     ctx.fill();
@@ -693,9 +698,10 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     ctx.font = 'bold 13px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('!', p.x, p.y + r * 0.22);
+    ctx.fillText(pipa ? '✓' : '!', p.x, p.y + r * 0.22);
     ctx.restore();
-  }
+    akadalyHitek.push({ id: 'akadaly:' + (a.kulcs || i), x: p.x, y: p.y, r: 15, akadaly: true });
+  });
 
   if (draft) {
     drawPoly(draft.pts, { color: drawColor, width: lineW, dash: [2, lineW * 1.6], vertices: true });
@@ -728,7 +734,6 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
   }
 
   // elem-markerek
-  const hitboxes = [];
   markerPts.forEach((m) => {
     const p = project(m.lat, m.lon);
     // a kísérőautó jelzésképe magával a táblával látszik: egy pöttyről nem
@@ -746,6 +751,10 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
       dot(ctx, v, 5, MARKER_SZIN[m.type] || MARKER_SZIN.photo, '#ffffff');
     }
   });
+
+  // az akadályjelek a sor végére: ha egy rögzített elem fedi őket,
+  // a koppintás a rögzített elemet nyitja meg
+  for (const h of akadalyHitek) hitboxes.push(h);
 
   // alaptérkép fölött sötét, fehér hátterű jelölés kell a világos csempékhez
   const overMap = opts.tiles !== false && tilesEnabled();

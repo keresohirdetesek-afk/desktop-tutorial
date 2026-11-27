@@ -649,7 +649,10 @@ function renderMeta() {
     rows.push(['GPS-kimaradás', `${len.gaps} db · ${formatDistance(len.gap)} ismeretlen szakasz`]);
   }
   if ((s.akadalyok || []).length) {
-    rows.push(['Bejelölt akadály', `${s.akadalyok.length} hely a térképen`]);
+    const pipas = (s.akadalyok || [])
+      .filter((a) => (s.akadalyPipak || {})[a.kulcs] && s.akadalyPipak[a.kulcs].ellenorizve).length;
+    rows.push(['Bejelölt akadály', `${s.akadalyok.length} hely a térképen`
+      + (pipas ? ` · ${pipas} ellenőrizve ✓` : '')]);
   }
   rows.push(['Megjegyzés', s.note || '—']);
   renderBackupStatus();
@@ -1083,11 +1086,155 @@ function utvonalSzakaszok() {
   return [...egyben.values()];
 }
 
-/** A térképre kirakott akadályjelek (a bejárásban eltéve). */
+/** A térképre kirakott akadályjelek (a bejárásban eltéve), a pipákkal együtt. */
 function akadalyJelek() {
   const s = state.session;
   if (!s || s.akadalyokLatszik === false) return [];
-  return (s.akadalyok || []).filter((a) => a.lat != null && a.lon != null);
+  const pipak = s.akadalyPipak || {};
+  return (s.akadalyok || [])
+    .filter((a) => a.lat != null && a.lon != null)
+    .map((a, i) => {
+      const p = pipak[a.kulcs != null ? a.kulcs : i];
+      if (!p) return a;
+      return { ...a, ellenorizve: !!p.ellenorizve, megjegyzes: p.megjegyzes || '' };
+    });
+}
+
+/** Egy akadály leellenőrzött állapota: pipa és megjegyzés. */
+function akadalyPipa(kulcs) {
+  const s = state.session;
+  if (!s || kulcs == null) return null;
+  return (s.akadalyPipak || {})[kulcs] || null;
+}
+
+/**
+ * A pipa mentése. Külön tároljuk a jelektől: akkor is megmarad, ha a
+ * térképi jelöléseket letöröljük vagy újra lefuttatjuk az ellenőrzést.
+ */
+async function akadalyPipaMent(kulcs, adat) {
+  const s = state.session;
+  if (!s || kulcs == null) return;
+  if (!s.akadalyPipak) s.akadalyPipak = {};
+  if (adat) s.akadalyPipak[kulcs] = adat;
+  else delete s.akadalyPipak[kulcs];
+  await db.saveSession(s);
+  akadalyRajzFrissit();
+  renderMeta();
+}
+
+/** Az akadályjelek újrarajzolása mindkét térképen. */
+function akadalyRajzFrissit() {
+  if (state.screen === 'session') drawTrack();
+  if (trackEditor && !$('#trackedit').hidden) {
+    trackEditor.akadalyok = akadalyJelek();
+    trackEditor.draw();
+  }
+}
+
+/** Egy találat helye koordinátában (az útszám és a szelvény alapján). */
+async function akadalyHelye(t) {
+  if (t.lat != null) return t;
+  const net = await roadNetwork();
+  if (!net || t.meter == null || !t.utszam) return t;
+  const p = pointOnRoad(net, t.utszam, t.meter);
+  return p && p.lat != null ? { ...t, lat: p.lat, lon: p.lon } : t;
+}
+
+/** Egyetlen akadály kitűzése a térképre (ha még nem volt kirakva). */
+async function akadalyJelHozzaad(a) {
+  const s = state.session;
+  if (!s || a.lat == null) return;
+  if (!s.akadalyok) s.akadalyok = [];
+  if (!s.akadalyok.some((x) => x.kulcs === a.kulcs)) {
+    s.akadalyok.push({
+      kulcs: a.kulcs, lat: a.lat, lon: a.lon, sulyossag: a.sulyossag,
+      cim: a.cim || a.nev || a.mi, hely: a.hely, szoveg: a.szoveg,
+    });
+  }
+  s.akadalyokLatszik = true;
+  await db.saveSession(s);
+  akadalyRajzFrissit();
+  renderMeta();
+}
+
+/** Ugrás az akadály helyére: a nyomvonal-szerkesztő térképe áll rá. */
+async function terkepreUgras(lat, lon) {
+  if (lat == null) { toast('Ehhez a helyhez nincs koordináta.', 'error'); return; }
+  zarAkadalyok();
+  if (!(await szerkesztoNyit())) return;
+  trackEditor.akadalyok = akadalyJelek();
+  trackEditor.centerOn(lat, lon, 500);
+}
+
+/**
+ * Egy akadály adatlapja: mi a korlátozás, hol van. Innen pipálható
+ * leellenőrzöttre — a megjegyzés nem kötelező.
+ * Igazat ad vissza, ha változott valami (a lista újrarajzolható).
+ */
+async function akadalyAdatlap(a, opts = {}) {
+  const kulcs = a.kulcs != null ? a.kulcs : null;
+  const pipa = akadalyPipa(kulcs) || {};
+  const mikor = pipa.ido ? new Date(pipa.ido).toLocaleString('hu-HU') : '';
+  const text = [
+    a.hely ? 'Hely: ' + a.hely : null,
+    a.cim && a.szoveg ? a.szoveg : (a.szoveg || null),
+    pipa.ellenorizve ? `✓ Ellenőrizve${mikor ? ' — ' + mikor : ''}` : null,
+    'Tájékoztató adat (NAP) — a helyszíni tábla és a közútkezelő döntése az irányadó.',
+  ].filter(Boolean).join('\n');
+
+  const extra = [];
+  if (opts.terkep !== false && a.lat != null) {
+    extra.push({ text: '🗺️ Mutasd a térképen', value: 'terkep', danger: false });
+  }
+  if (pipa.ellenorizve) extra.push({ text: 'Pipa visszavonása', value: 'vissza' });
+
+  const res = await modal({
+    title: (a.sulyossag === 'utkozes' ? '⛔ ' : '⚠️ ') + (a.cim || a.nev || 'Akadály'),
+    text,
+    fields: [{
+      name: 'megjegyzes',
+      label: 'Megjegyzés (nem kötelező)',
+      type: 'textarea',
+      rows: 2,
+      value: pipa.megjegyzes || '',
+      placeholder: 'Pl. elfér, a tábla 4,5 m-t ír',
+    }],
+    okText: pipa.ellenorizve ? 'Mentés' : '✓ Ellenőriztem',
+    cancelText: 'Bezárás',
+    extra,
+  });
+
+  if (res === 'terkep') {
+    await akadalyJelHozzaad(a);
+    await terkepreUgras(a.lat, a.lon);
+    return true;
+  }
+  if (res === 'vissza') {
+    await akadalyPipaMent(kulcs, null);
+    toast('A pipa visszavonva.');
+    return true;
+  }
+  if (res && typeof res === 'object') {
+    if (kulcs == null) { toast('Ezt a jelet nem tudom megjegyezni.', 'error'); return false; }
+    await akadalyPipaMent(kulcs, {
+      ellenorizve: true,
+      megjegyzes: res.megjegyzes || '',
+      ido: new Date().toISOString(),
+    });
+    toast(res.megjegyzes ? 'Ellenőrizve, megjegyzéssel. ✓' : 'Ellenőrizve. ✓');
+    return true;
+  }
+  return false;
+}
+
+/** Koppintás egy akadályjelre a térképen. */
+async function akadalyKoppintas(id) {
+  const kulcs = String(id).slice('akadaly:'.length);
+  const jelek = akadalyJelek();
+  const jel = jelek.find((a) => String(a.kulcs) === kulcs)
+    || (/^\d+$/.test(kulcs) ? jelek[Number(kulcs)] : null);
+  if (!jel) return;
+  await akadalyAdatlap(jel, { terkep: false });
 }
 
 /**
@@ -1103,6 +1250,7 @@ async function akadalyokJelolese(eredmeny) {
     const p = pointOnRoad(net, t.utszam, t.meter);
     if (!p || p.lat == null) continue;
     jelek.push({
+      kulcs: t.kulcs,
       lat: p.lat,
       lon: p.lon,
       sulyossag: t.sulyossag,
@@ -1150,6 +1298,13 @@ function akadalyokMegjelenit(eredmeny, szakaszok) {
       text: `${szakaszok.length} útszakasz ellenőrizve`
         + (utkozes.length && hidak.length ? ` · ${hidak.length} híd egyedi elbírálással` : '')
         + (figyelem.length ? ` · ${figyelem.length} figyelmeztetés` : '')
+        + (() => {
+          const p = eredmeny.talalatok.filter((t) => {
+            const x = akadalyPipa(t.kulcs);
+            return x && x.ellenorizve;
+          }).length;
+          return p ? ` · ${p} helyszínen ellenőrizve ✓` : '';
+        })()
         + (szakaszAdatKeszult() ? ` · adat: ${szakaszAdatKeszult()}` : ''),
     }),
   ]));
@@ -1179,18 +1334,43 @@ function akadalyokMegjelenit(eredmeny, szakaszok) {
         + 'A vizsgálat az országos közutakra terjed ki.' }));
   }
 
+  // A sorok kattinthatók: megnyílik az akadály adatlapja, onnan a térképre
+  // is el lehet ugrani, és ott lehet leellenőrzöttre pipálni.
   const lista = el('div', { class: 'akadaly-lista' });
   for (const t of eredmeny.talalatok) {
-    lista.appendChild(el('div', { class: 'akadaly ' + (t.sulyossag === 'utkozes' ? 'baj' : 'figyelem') }, [
+    const pipa = akadalyPipa(t.kulcs);
+    const sor = el('button', {
+      class: 'akadaly kattinthato ' + (t.sulyossag === 'utkozes' ? 'baj' : 'figyelem')
+        + (pipa && pipa.ellenorizve ? ' pipas' : ''),
+      type: 'button',
+      onclick: async () => {
+        const hely = await akadalyHelye(t);
+        if (await akadalyAdatlap({ ...hely, cim: t.nev || t.mi })) {
+          // a lista csak akkor épül újra, ha nem ugrottunk el a térképre
+          if ($('#akadalyok').hidden) return;
+          akadalyokMegjelenit(eredmeny, szakaszok);
+        }
+      },
+    }, [
       el('div', { class: 'akadaly-fej' }, [
-        el('span', { class: 'akadaly-jel', text: t.sulyossag === 'utkozes' ? '⛔' : '⚠️' }),
+        el('span', { class: 'akadaly-jel', text: pipa && pipa.ellenorizve ? '✅' : (t.sulyossag === 'utkozes' ? '⛔' : '⚠️') }),
         el('span', { class: 'akadaly-hely', text: t.hely }),
       ]),
       el('div', { class: 'akadaly-nev', text: t.nev }),
       el('div', { class: 'akadaly-szoveg', text: t.szoveg }),
-    ]));
+      pipa && pipa.ellenorizve
+        ? el('div', { class: 'akadaly-pipa', text: 'Ellenőrizve' + (pipa.megjegyzes ? ' — ' + pipa.megjegyzes : '') })
+        : el('div', { class: 'akadaly-tipp', text: 'Koppintson: térkép, pipa, megjegyzés' }),
+    ]);
+    lista.appendChild(sor);
   }
   body.appendChild(lista);
+
+  if ((state.session && (state.session.akadalyok || []).length)) {
+    body.appendChild(el('p', { class: 'hint',
+      text: 'A térképen a ⚠ és ⛔ jelek is kattinthatók — ott is pipálható, '
+        + 'hogy a helyszínen ellenőrizte. A zöld ✓ jel a leellenőrzött helyeket mutatja.' }));
+  }
 
   // forrásmegjelölés — a NAP adat licence ezt kéri
   body.appendChild(el('p', { class: 'muted small',
@@ -1415,7 +1595,9 @@ function trackTap(p) {
   if (!trackHit || !trackHit.hitboxes) return false;
   const hit = trackHit.hitboxes.find((h) => Math.hypot(h.x - p.x, h.y - p.y) < h.r);
   if (!hit) return false;
-  openViewer(hit.id);
+  // az akadályjelek nem rögzített elemek: saját adatlapjuk van
+  if (String(hit.id).startsWith('akadaly:')) akadalyKoppintas(hit.id);
+  else openViewer(hit.id);
   return true;
 }
 
@@ -1534,7 +1716,10 @@ async function openTrackEditor() {
     // a térképen kijelölt szakaszra jelzéskép — gépen ez a természetes út
     onSignForRange: (a, b, vonal) => jelzesSzakaszra(a, b, vonal),
     // a szerkesztő nyitva marad az adatlap mögött
-    onOpenItem: (id) => openViewer(id),
+    onOpenItem: (id) => {
+      if (String(id).startsWith('akadaly:')) akadalyKoppintas(id);
+      else openViewer(id);
+    },
     resolvePlace: (text) => resolvePlace(text),
     // úthálózati adat (NAP): a rajzolt pontok az útra kerülnek, és a vonal
     // az utat követi két pont között
