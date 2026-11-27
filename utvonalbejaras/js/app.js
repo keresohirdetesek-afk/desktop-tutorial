@@ -470,17 +470,110 @@ async function newSession(mod) {
     },
   });
   await openSession(s.id);
-  if (mod === 'terv') {
-    toast('Tervezze meg az útvonalat a térképen: az „Útvonal tervezése” módban koppintva '
-      + 'adhat hozzá pontokat, vagy a „Közút útvonala” gombbal olvassa be a szakaszlistát.');
-    await openTrackEditor();
-    return;
-  }
   if (mod === 'gps') {
     await startRecording();
     return;
   }
-  toast('Bejárás létrehozva. Indíthatja a nyomvonal rögzítését.');
+  // Vezetett indulás: a legtöbb munka a Közúttól kapott útvonallal kezdődik
+  await utvonalVarazslo(mod === 'terv');
+}
+
+/* --------------------------------------------- vezetett indulás */
+
+/**
+ * „Van a Magyar Közúttól kapott útvonalad?” — ha igen, bemásolja és
+ * megrajzoljuk; utána felajánljuk az elférés-vizsgálatot. Nagy, ikonos
+ * kártyákkal, hogy ne kelljen keresgélni a menükben.
+ */
+async function utvonalVarazslo(nyissonTerkepet = true) {
+  // kikapcsolható (próbákhoz és annak, aki mindig maga indít mindent)
+  try {
+    if (localStorage.getItem('varazslo') === '0') {
+      if (nyissonTerkepet) await openTrackEditor();
+      return;
+    }
+  } catch (_) { /* privát ablakban nincs tárolás */ }
+
+  const valasz = await choose({
+    title: 'Van a Magyar Közúttól kapott útvonal?',
+    text: 'Ha megkaptad az engedélyben a szakaszlistát (útszám + km szelvény), '
+      + 'másolja be — magától megrajzolom a térképen.',
+    options: [
+      {
+        value: 'kozut',
+        emoji: '📋',
+        kiemelt: true,
+        label: 'Igen, bemásolom a listát',
+        hint: 'Soronként egy szakasz: „51 179 -> 159 km”. A többi sort kihagyom.',
+      },
+      {
+        value: 'rajz',
+        emoji: '✏️',
+        label: 'Nem, magam tervezem meg',
+        hint: 'A térképen koppintva, az utat követve.',
+      },
+      {
+        value: 'kesobb',
+        emoji: '⏱️',
+        label: 'Később döntöm el',
+        hint: 'Most csak létrehozom a bejárást.',
+      },
+    ],
+    cancelText: 'Most nem',
+  });
+
+  if (valasz === 'kozut') {
+    if (!(await szerkesztoNyit())) return;
+    await trackEditor.kijeloltUtvonal();
+    await akadalyVarazslo();
+    return;
+  }
+  if (valasz === 'rajz') {
+    toast('Koppintson a szakasz elejére, majd a végére — a vonal az utat követi.');
+    if (await szerkesztoNyit()) trackEditor.setMode('draw');
+    return;
+  }
+  if (nyissonTerkepet && valasz !== null) await openTrackEditor();
+}
+
+/**
+ * A szerkesztő megnyitása úgy, hogy utána tudjunk vele dolgozni: az
+ * `openTrackEditor` ígérete csak a BEZÁRÁSKOR teljesül, ezért nem várjuk meg,
+ * csak azt, hogy a felület megjelenjen.
+ */
+async function szerkesztoNyit() {
+  openTrackEditor().catch(() => {});
+  for (let i = 0; i < 60 && $('#trackedit').hidden; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return !!trackEditor && !$('#trackedit').hidden;
+}
+
+/** A megrajzolt útvonal ellenőrzése — felajánljuk, nem erőltetjük. */
+async function akadalyVarazslo() {
+  if (!state.session) return;
+  const szakaszok = utvonalSzakaszok();
+  if (!szakaszok.length) return;
+  const valasz = await choose({
+    title: 'Ellenőrizzem, hogy elfér-e?',
+    text: 'Végigmegyek az útvonalon, és összevetem a hidak és a korlátozások '
+      + 'adatait a szerelvény méreteivel. Tájékoztató adat — a helyszíni táblák '
+      + 'és a közútkezelő döntése az irányadó.',
+    options: [
+      {
+        value: 'jelol',
+        emoji: '🗺️',
+        kiemelt: true,
+        label: 'Igen, és jelöld a térképen',
+        hint: 'A szűk helyek ⚠ jelet kapnak a térképen is.',
+      },
+      { value: 'csak', emoji: '⚠️', label: 'Csak a lista', hint: 'A térképet nem jelölöm meg.' },
+      { value: 'nem', emoji: '⏭️', label: 'Most nem', hint: 'Később az „Elfér a szerelvény?” gombbal.' },
+    ],
+    cancelText: 'Most nem',
+  });
+  if (!valasz || valasz === 'nem') return;
+  await akadalyokEllenorzes({ jelol: valasz === 'jelol' });
 }
 
 function defaultSessionName() {
@@ -554,6 +647,9 @@ function renderMeta() {
   }
   if (len.gaps) {
     rows.push(['GPS-kimaradás', `${len.gaps} db · ${formatDistance(len.gap)} ismeretlen szakasz`]);
+  }
+  if ((s.akadalyok || []).length) {
+    rows.push(['Bejelölt akadály', `${s.akadalyok.length} hely a térképen`]);
   }
   rows.push(['Megjegyzés', s.note || '—']);
   renderBackupStatus();
@@ -987,6 +1083,46 @@ function utvonalSzakaszok() {
   return [...egyben.values()];
 }
 
+/** A térképre kirakott akadályjelek (a bejárásban eltéve). */
+function akadalyJelek() {
+  const s = state.session;
+  if (!s || s.akadalyokLatszik === false) return [];
+  return (s.akadalyok || []).filter((a) => a.lat != null && a.lon != null);
+}
+
+/**
+ * Az ellenőrzés találatait a térképre tesszük: a híd vagy a korlátozás
+ * szelvényéből az úthálózat adja a pontot.
+ */
+async function akadalyokJelolese(eredmeny) {
+  const net = await roadNetwork();
+  if (!net || !state.session) return 0;
+  const jelek = [];
+  for (const t of eredmeny.talalatok) {
+    if (t.meter == null || !t.utszam) continue;
+    const p = pointOnRoad(net, t.utszam, t.meter);
+    if (!p || p.lat == null) continue;
+    jelek.push({
+      lat: p.lat,
+      lon: p.lon,
+      sulyossag: t.sulyossag,
+      cim: t.nev || t.mi,
+      hely: t.hely,
+      szoveg: t.szoveg,
+    });
+  }
+  state.session.akadalyok = jelek;
+  state.session.akadalyokLatszik = true;
+  await db.saveSession(state.session);
+  drawTrack();
+  if (trackEditor && !$('#trackedit').hidden) {
+    trackEditor.akadalyok = akadalyJelek();
+    trackEditor.draw();
+  }
+  renderMeta();
+  return jelek.length;
+}
+
 /** Az „Elfér a szerelvény?” ablak feltöltése. */
 function akadalyokMegjelenit(eredmeny, szakaszok) {
   const body = $('#akadalyok-body');
@@ -1061,6 +1197,34 @@ function akadalyokMegjelenit(eredmeny, szakaszok) {
     text: 'Forrás: Nemzeti Adathozzáférési Pont (NAP), CC BY 4.0. '
       + 'Tájékoztató adat — a helyszíni táblák és a közútkezelő döntése az irányadó.' }));
 
+  const vanJel = !!(state.session && (state.session.akadalyok || []).length);
+  if (eredmeny.talalatok.length) {
+    actions.appendChild(el('button', {
+      class: 'btn primary small', type: 'button',
+      onclick: async () => {
+        const db = await akadalyokJelolese(eredmeny);
+        toast(db ? `${db} hely bejelölve a térképen.` : 'Nem volt mit bejelölni.');
+        akadalyokMegjelenit(eredmeny, szakaszok);
+      },
+    }, ikonos('terkep', vanJel ? 'Jelölések frissítése' : 'Jelöld a térképen')));
+  }
+  if (vanJel) {
+    actions.appendChild(el('button', {
+      class: 'btn ghost small', type: 'button',
+      onclick: async () => {
+        state.session.akadalyok = [];
+        await db.saveSession(state.session);
+        drawTrack();
+        if (trackEditor && !$('#trackedit').hidden) {
+          trackEditor.akadalyok = [];
+          trackEditor.draw();
+        }
+        renderMeta();
+        toast('Jelölések törölve.');
+        akadalyokMegjelenit(eredmeny, szakaszok);
+      },
+    }, ikonos('kuka', 'Jelölések törlése')));
+  }
   actions.appendChild(el('button', {
     class: 'btn ghost small', type: 'button', onclick: zarAkadalyok,
   }, ikonos('bezar', 'Bezárás')));
@@ -1069,7 +1233,7 @@ function akadalyokMegjelenit(eredmeny, szakaszok) {
 function zarAkadalyok() { $('#akadalyok').hidden = true; }
 
 /** „Elfér a szerelvény?” — hidak és korlátozások az útvonal mentén. */
-async function akadalyokEllenorzes() {
+async function akadalyokEllenorzes(opts = {}) {
   if (!state.session) { toast('Előbb nyisson meg egy bejárást.', 'error'); return; }
   toast('Útvonal ellenőrzése…');
   await roadNetwork();
@@ -1080,6 +1244,10 @@ async function akadalyokEllenorzes() {
   }
   const szakaszok = utvonalSzakaszok();
   const eredmeny = utkozesek(szakaszok, (state.session && state.session.vehicle) || {});
+  if (opts.jelol) {
+    const db = await akadalyokJelolese(eredmeny);
+    if (db) toast(`${db} hely bejelölve a térképen.`);
+  }
   akadalyokMegjelenit(eredmeny, szakaszok);
   $('#akadalyok').hidden = false;
 }
@@ -1226,6 +1394,7 @@ function drawTrack() {
   const prevFit = trackLastFit;
   const opts = {
     drawn: (state.session && state.session.drawn) || [],
+    akadalyok: akadalyJelek(),
     view: trackView ? trackView.view : null,
   };
   trackHit = renderTrack(canvas, state.points, state.items, opts);
@@ -1360,6 +1529,7 @@ async function openTrackEditor() {
     points: state.points,
     items: state.items,
     drawn: state.session.drawn || [],
+    akadalyok: akadalyJelek(),
     onAddPoint: (at) => addPointAt(at),
     // a térképen kijelölt szakaszra jelzéskép — gépen ez a természetes út
     onSignForRange: (a, b, vonal) => jelzesSzakaszra(a, b, vonal),
@@ -2811,6 +2981,7 @@ async function pickOnMap(item) {
     points: state.points,
     items: state.items.filter((i) => i.lat != null && i !== item),
     drawn: (state.session && state.session.drawn) || [],
+    akadalyok: akadalyJelek(),
     pick: { lat: item.lat, lon: item.lon, cim: item.title || typeLabel(item.type) },
   });
 }

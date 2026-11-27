@@ -1523,7 +1523,29 @@ button, input, select, textarea { font: inherit; color: inherit; }
   text-align: left;
   padding: 12px 14px;
 }
-.valaszto-cim { font-weight: 650; }
+.valaszto-gomb.ikonos { display: flex; align-items: center; gap: 13px; text-align: left; }
+.valaszto-gomb.kiemelt {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.valaszto-ikon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  font-size: 27px;
+  line-height: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.valaszto-gomb.kiemelt .valaszto-ikon {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.valaszto-szoveg { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.valaszto-cim { font-weight: 650; font-size: 15.5px; }
 .valaszto-alcim { font-size: 12.5px; color: var(--muted); font-weight: 400; }
 
 /* Térkép az elem adatlapján — a lap alsó fele eddig üresen állt */

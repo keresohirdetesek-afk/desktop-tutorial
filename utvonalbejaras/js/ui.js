@@ -178,12 +178,20 @@ export function choose({ title, text, options = [], cancelText = 'Mégse' }) {
     const onKey = (e) => { if (e.key === 'Escape') close(null); };
 
     for (const o of options) {
+      // nagy, ikonos kártya: egy pillantásra látszik, mi mit csinál
+      const ikon = o.ikon
+        ? el('span', { class: 'valaszto-ikon', html: o.ikon })
+        : (o.emoji ? el('span', { class: 'valaszto-ikon', text: o.emoji }) : null);
       lista.appendChild(el('button', {
-        class: 'btn ghost valaszto-gomb', type: 'button',
+        class: 'btn ghost valaszto-gomb' + (ikon ? ' ikonos' : '') + (o.kiemelt ? ' kiemelt' : ''),
+        type: 'button',
         onclick: () => close(o.value),
       }, [
-        el('span', { class: 'valaszto-cim', text: o.label }),
-        o.hint ? el('span', { class: 'valaszto-alcim', text: o.hint }) : null,
+        ikon,
+        el('span', { class: 'valaszto-szoveg' }, [
+          el('span', { class: 'valaszto-cim', text: o.label }),
+          o.hint ? el('span', { class: 'valaszto-alcim', text: o.hint }) : null,
+        ].filter(Boolean)),
       ].filter(Boolean)));
     }
     sheet.appendChild(lista);

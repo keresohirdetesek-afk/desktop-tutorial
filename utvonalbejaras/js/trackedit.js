@@ -50,8 +50,8 @@ export class TrackEditor {
    *   — ilyenkor a szerkesztő egyetlen pont megadására szolgál (GPS nélküli,
    *   otthoni szerkesztéshez), és a kiválasztott koordinátával tér vissza.
    */
-  open({ points, items = [], drawn = [], onApply, pick = null, onAddPoint = null,
-    onSignForRange = null,
+  open({ points, items = [], drawn = [], akadalyok = [], onApply, pick = null,
+    onAddPoint = null, onSignForRange = null,
     onOpenItem = null, resolvePlace = null, road = null }) {
     this.onAddPoint = onAddPoint;               // új pont felvétele a térképről
     this.onSignForRange = onSignForRange;       // jelzéskép a kijelölt szakaszra
@@ -62,6 +62,7 @@ export class TrackEditor {
     this.points = points;
     this.items = items;
     this.drawn = drawn;
+    this.akadalyok = akadalyok;     // az ellenőrzés jelei a térképen
     this.onApply = onApply;
     this.pick = pick;
     this.adding = false;
@@ -643,8 +644,8 @@ export class TrackEditor {
           : this.road.source && this.road.source() === 'online'
             ? 'Az útvonaltervező nem válaszolt (vagy nincs net) — egyenes vonallal kötöm össze.'
             : 'A két pont nem ugyanarra az útszámra esik (vagy csomóponton át vezet), '
-              + 'ezért egyenes vonallal kötöm össze. Tegyél közbe egy pontot a '
-              + 'csomópontnál, vagy kapcsold be az online kiegészítést.');
+              + 'ezért egyenes vonallal kötöm össze. Tegyen közbe egy pontot a '
+              + 'csomópontnál, vagy kapcsolja be az online kiegészítést.');
       }
     }
 
@@ -722,7 +723,7 @@ export class TrackEditor {
     sorok.push(sajat
       ? 'Ez egy kézzel betöltött állomány. A beépített országos adattal ez a lista '
         + 'működik — visszaállítsam?'
-      : 'Ellenőrizd, hogy az útszámok úgy szerepelnek-e a listában, ahogy a Közút '
+      : 'Ellenőrizze, hogy az útszámok úgy szerepelnek-e a listában, ahogy a Közút '
         + 'írja (pl. „M5”, „405”, „1”).');
 
     const vissza = await modal({
@@ -734,7 +735,7 @@ export class TrackEditor {
     if (!vissza || !sajat || !this.road.orszagosVissza) return;
     toast('Országos adat visszaállítása…');
     const ok = await this.road.orszagosVissza();
-    toast(ok ? 'Kész. Próbáld újra a beolvasást.' : 'Nem sikerült visszaállítani.', ok ? 'info' : 'error');
+    toast(ok ? 'Kész. Próbálja újra a beolvasást.' : 'Nem sikerült visszaállítani.', ok ? 'info' : 'error');
   }
 
   async kijeloltUtvonal() {
@@ -745,9 +746,12 @@ export class TrackEditor {
     }
     const res = await modal({
       title: 'A Közút által kijelölt útvonal',
-      text: 'Másolja ide az engedélyben szereplő szakaszlistát, soronként egyet:\n'
-        + '51    179 -> 159 km\nM44    44 -> 57 km\n\n'
-        + 'A felesleges sorokat (induló állomás, célállomás) kihagyom.',
+      text: 'Másolja ide az engedélyben szereplő szakaszlistát.\n'
+        + 'Soronként egy szakasz: útszám, majd a kezdő és a vég km szelvény.\n\n'
+        + '   51     179 -> 159 km\n'
+        + '   M44     44 ->  57 km\n\n'
+        + 'Az induló és a célállomás sorát kihagyom. Ha két szakasz között '
+        + 'átvezető út szerepel (pl. „Tata - 8139. sz. út - Komárom”), azon vezetem át.',
       fields: [{ name: 'szoveg', label: 'Szakaszok', type: 'textarea', rows: 8, value: '' }],
       okText: 'Beolvasás',
     });
@@ -1116,6 +1120,7 @@ export class TrackEditor {
       view: this.view,
       selection: this.sel,
       drawn: this.drawn,
+      akadalyok: this.akadalyok,
       draft: this.draft,
       // egérrel: halvány vonal az utolsó ponttól a kurzorig
       ghost: this.mode === 'draw' && last && this.hoverPt

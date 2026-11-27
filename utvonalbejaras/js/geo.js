@@ -670,6 +670,33 @@ export function renderTrack(canvas, points, markers = [], opts = {}) {
     drawPoly(vonal, { color: '#b45309', width: Math.max(1.5, lineW * 0.8), alpha: 0.9 });
   }
 
+  // Akadályok (hidak, korlátozások), amik nem férnek el a szerelvénnyel.
+  // Külön réteg: nem rögzített elem, hanem az ellenőrzés eredménye.
+  for (const a of (opts.akadalyok || [])) {
+    if (a.lat == null || a.lon == null) continue;
+    const p = project(a.lat, a.lon);
+    const r = 11;
+    const baj = a.sulyossag === 'utkozes';
+    ctx.save();
+    // háromszög jel, fehér kerettel, hogy a térképen is kivehető legyen
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y - r);
+    ctx.lineTo(p.x + r * 0.92, p.y + r * 0.72);
+    ctx.lineTo(p.x - r * 0.92, p.y + r * 0.72);
+    ctx.closePath();
+    ctx.fillStyle = baj ? '#dc2626' : '#f59e0b';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', p.x, p.y + r * 0.22);
+    ctx.restore();
+  }
+
   if (draft) {
     drawPoly(draft.pts, { color: drawColor, width: lineW, dash: [2, lineW * 1.6], vertices: true });
   }

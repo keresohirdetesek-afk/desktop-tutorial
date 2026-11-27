@@ -1536,7 +1536,29 @@ button, input, select, textarea { font: inherit; color: inherit; }
   text-align: left;
   padding: 12px 14px;
 }
-.valaszto-cim { font-weight: 650; }
+.valaszto-gomb.ikonos { display: flex; align-items: center; gap: 13px; text-align: left; }
+.valaszto-gomb.kiemelt {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.valaszto-ikon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  font-size: 27px;
+  line-height: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.valaszto-gomb.kiemelt .valaszto-ikon {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.valaszto-szoveg { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.valaszto-cim { font-weight: 650; font-size: 15.5px; }
 .valaszto-alcim { font-size: 12.5px; color: var(--muted); font-weight: 400; }
 
 /* Térkép az elem adatlapján — a lap alsó fele eddig üresen állt */
@@ -2411,12 +2433,20 @@ function choose({ title, text, options = [], cancelText = 'Mégse' }) {
     const onKey = (e) => { if (e.key === 'Escape') close(null); };
 
     for (const o of options) {
+      // nagy, ikonos kártya: egy pillantásra látszik, mi mit csinál
+      const ikon = o.ikon
+        ? el('span', { class: 'valaszto-ikon', html: o.ikon })
+        : (o.emoji ? el('span', { class: 'valaszto-ikon', text: o.emoji }) : null);
       lista.appendChild(el('button', {
-        class: 'btn ghost valaszto-gomb', type: 'button',
+        class: 'btn ghost valaszto-gomb' + (ikon ? ' ikonos' : '') + (o.kiemelt ? ' kiemelt' : ''),
+        type: 'button',
         onclick: () => close(o.value),
       }, [
-        el('span', { class: 'valaszto-cim', text: o.label }),
-        o.hint ? el('span', { class: 'valaszto-alcim', text: o.hint }) : null,
+        ikon,
+        el('span', { class: 'valaszto-szoveg' }, [
+          el('span', { class: 'valaszto-cim', text: o.label }),
+          o.hint ? el('span', { class: 'valaszto-alcim', text: o.hint }) : null,
+        ].filter(Boolean)),
       ].filter(Boolean)));
     }
     sheet.appendChild(lista);
@@ -4088,6 +4118,33 @@ function renderTrack(canvas, points, markers = [], opts = {}) {
     if (!vonal) continue;
     drawPoly(vonal, { color: '#f59e0b', width: lineW * 3, alpha: 0.45 });
     drawPoly(vonal, { color: '#b45309', width: Math.max(1.5, lineW * 0.8), alpha: 0.9 });
+  }
+
+  // Akadályok (hidak, korlátozások), amik nem férnek el a szerelvénnyel.
+  // Külön réteg: nem rögzített elem, hanem az ellenőrzés eredménye.
+  for (const a of (opts.akadalyok || [])) {
+    if (a.lat == null || a.lon == null) continue;
+    const p = project(a.lat, a.lon);
+    const r = 11;
+    const baj = a.sulyossag === 'utkozes';
+    ctx.save();
+    // háromszög jel, fehér kerettel, hogy a térképen is kivehető legyen
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y - r);
+    ctx.lineTo(p.x + r * 0.92, p.y + r * 0.72);
+    ctx.lineTo(p.x - r * 0.92, p.y + r * 0.72);
+    ctx.closePath();
+    ctx.fillStyle = baj ? '#dc2626' : '#f59e0b';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', p.x, p.y + r * 0.22);
+    ctx.restore();
   }
 
   if (draft) {
@@ -11537,8 +11594,8 @@ class TrackEditor {
    *   — ilyenkor a szerkesztő egyetlen pont megadására szolgál (GPS nélküli,
    *   otthoni szerkesztéshez), és a kiválasztott koordinátával tér vissza.
    */
-  open({ points, items = [], drawn = [], onApply, pick = null, onAddPoint = null,
-    onSignForRange = null,
+  open({ points, items = [], drawn = [], akadalyok = [], onApply, pick = null,
+    onAddPoint = null, onSignForRange = null,
     onOpenItem = null, resolvePlace = null, road = null }) {
     this.onAddPoint = onAddPoint;               // új pont felvétele a térképről
     this.onSignForRange = onSignForRange;       // jelzéskép a kijelölt szakaszra
@@ -11549,6 +11606,7 @@ class TrackEditor {
     this.points = points;
     this.items = items;
     this.drawn = drawn;
+    this.akadalyok = akadalyok;     // az ellenőrzés jelei a térképen
     this.onApply = onApply;
     this.pick = pick;
     this.adding = false;
@@ -12130,8 +12188,8 @@ class TrackEditor {
           : this.road.source && this.road.source() === 'online'
             ? 'Az útvonaltervező nem válaszolt (vagy nincs net) — egyenes vonallal kötöm össze.'
             : 'A két pont nem ugyanarra az útszámra esik (vagy csomóponton át vezet), '
-              + 'ezért egyenes vonallal kötöm össze. Tegyél közbe egy pontot a '
-              + 'csomópontnál, vagy kapcsold be az online kiegészítést.');
+              + 'ezért egyenes vonallal kötöm össze. Tegyen közbe egy pontot a '
+              + 'csomópontnál, vagy kapcsolja be az online kiegészítést.');
       }
     }
 
@@ -12209,7 +12267,7 @@ class TrackEditor {
     sorok.push(sajat
       ? 'Ez egy kézzel betöltött állomány. A beépített országos adattal ez a lista '
         + 'működik — visszaállítsam?'
-      : 'Ellenőrizd, hogy az útszámok úgy szerepelnek-e a listában, ahogy a Közút '
+      : 'Ellenőrizze, hogy az útszámok úgy szerepelnek-e a listában, ahogy a Közút '
         + 'írja (pl. „M5”, „405”, „1”).');
 
     const vissza = await modal({
@@ -12221,7 +12279,7 @@ class TrackEditor {
     if (!vissza || !sajat || !this.road.orszagosVissza) return;
     toast('Országos adat visszaállítása…');
     const ok = await this.road.orszagosVissza();
-    toast(ok ? 'Kész. Próbáld újra a beolvasást.' : 'Nem sikerült visszaállítani.', ok ? 'info' : 'error');
+    toast(ok ? 'Kész. Próbálja újra a beolvasást.' : 'Nem sikerült visszaállítani.', ok ? 'info' : 'error');
   }
 
   async kijeloltUtvonal() {
@@ -12232,9 +12290,12 @@ class TrackEditor {
     }
     const res = await modal({
       title: 'A Közút által kijelölt útvonal',
-      text: 'Másolja ide az engedélyben szereplő szakaszlistát, soronként egyet:\n'
-        + '51    179 -> 159 km\nM44    44 -> 57 km\n\n'
-        + 'A felesleges sorokat (induló állomás, célállomás) kihagyom.',
+      text: 'Másolja ide az engedélyben szereplő szakaszlistát.\n'
+        + 'Soronként egy szakasz: útszám, majd a kezdő és a vég km szelvény.\n\n'
+        + '   51     179 -> 159 km\n'
+        + '   M44     44 ->  57 km\n\n'
+        + 'Az induló és a célállomás sorát kihagyom. Ha két szakasz között '
+        + 'átvezető út szerepel (pl. „Tata - 8139. sz. út - Komárom”), azon vezetem át.',
       fields: [{ name: 'szoveg', label: 'Szakaszok', type: 'textarea', rows: 8, value: '' }],
       okText: 'Beolvasás',
     });
@@ -12603,6 +12664,7 @@ class TrackEditor {
       view: this.view,
       selection: this.sel,
       drawn: this.drawn,
+      akadalyok: this.akadalyok,
       draft: this.draft,
       // egérrel: halvány vonal az utolsó ponttól a kurzorig
       ghost: this.mode === 'draw' && last && this.hoverPt
@@ -13299,17 +13361,110 @@ async function newSession(mod) {
     },
   });
   await openSession(s.id);
-  if (mod === 'terv') {
-    toast('Tervezze meg az útvonalat a térképen: az „Útvonal tervezése” módban koppintva '
-      + 'adhat hozzá pontokat, vagy a „Közút útvonala” gombbal olvassa be a szakaszlistát.');
-    await openTrackEditor();
-    return;
-  }
   if (mod === 'gps') {
     await startRecording();
     return;
   }
-  toast('Bejárás létrehozva. Indíthatja a nyomvonal rögzítését.');
+  // Vezetett indulás: a legtöbb munka a Közúttól kapott útvonallal kezdődik
+  await utvonalVarazslo(mod === 'terv');
+}
+
+/* --------------------------------------------- vezetett indulás */
+
+/**
+ * „Van a Magyar Közúttól kapott útvonalad?” — ha igen, bemásolja és
+ * megrajzoljuk; utána felajánljuk az elférés-vizsgálatot. Nagy, ikonos
+ * kártyákkal, hogy ne kelljen keresgélni a menükben.
+ */
+async function utvonalVarazslo(nyissonTerkepet = true) {
+  // kikapcsolható (próbákhoz és annak, aki mindig maga indít mindent)
+  try {
+    if (localStorage.getItem('varazslo') === '0') {
+      if (nyissonTerkepet) await openTrackEditor();
+      return;
+    }
+  } catch (_) { /* privát ablakban nincs tárolás */ }
+
+  const valasz = await choose({
+    title: 'Van a Magyar Közúttól kapott útvonal?',
+    text: 'Ha megkaptad az engedélyben a szakaszlistát (útszám + km szelvény), '
+      + 'másolja be — magától megrajzolom a térképen.',
+    options: [
+      {
+        value: 'kozut',
+        emoji: '📋',
+        kiemelt: true,
+        label: 'Igen, bemásolom a listát',
+        hint: 'Soronként egy szakasz: „51 179 -> 159 km”. A többi sort kihagyom.',
+      },
+      {
+        value: 'rajz',
+        emoji: '✏️',
+        label: 'Nem, magam tervezem meg',
+        hint: 'A térképen koppintva, az utat követve.',
+      },
+      {
+        value: 'kesobb',
+        emoji: '⏱️',
+        label: 'Később döntöm el',
+        hint: 'Most csak létrehozom a bejárást.',
+      },
+    ],
+    cancelText: 'Most nem',
+  });
+
+  if (valasz === 'kozut') {
+    if (!(await szerkesztoNyit())) return;
+    await trackEditor.kijeloltUtvonal();
+    await akadalyVarazslo();
+    return;
+  }
+  if (valasz === 'rajz') {
+    toast('Koppintson a szakasz elejére, majd a végére — a vonal az utat követi.');
+    if (await szerkesztoNyit()) trackEditor.setMode('draw');
+    return;
+  }
+  if (nyissonTerkepet && valasz !== null) await openTrackEditor();
+}
+
+/**
+ * A szerkesztő megnyitása úgy, hogy utána tudjunk vele dolgozni: az
+ * `openTrackEditor` ígérete csak a BEZÁRÁSKOR teljesül, ezért nem várjuk meg,
+ * csak azt, hogy a felület megjelenjen.
+ */
+async function szerkesztoNyit() {
+  openTrackEditor().catch(() => {});
+  for (let i = 0; i < 60 && $('#trackedit').hidden; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return !!trackEditor && !$('#trackedit').hidden;
+}
+
+/** A megrajzolt útvonal ellenőrzése — felajánljuk, nem erőltetjük. */
+async function akadalyVarazslo() {
+  if (!state.session) return;
+  const szakaszok = utvonalSzakaszok();
+  if (!szakaszok.length) return;
+  const valasz = await choose({
+    title: 'Ellenőrizzem, hogy elfér-e?',
+    text: 'Végigmegyek az útvonalon, és összevetem a hidak és a korlátozások '
+      + 'adatait a szerelvény méreteivel. Tájékoztató adat — a helyszíni táblák '
+      + 'és a közútkezelő döntése az irányadó.',
+    options: [
+      {
+        value: 'jelol',
+        emoji: '🗺️',
+        kiemelt: true,
+        label: 'Igen, és jelöld a térképen',
+        hint: 'A szűk helyek ⚠ jelet kapnak a térképen is.',
+      },
+      { value: 'csak', emoji: '⚠️', label: 'Csak a lista', hint: 'A térképet nem jelölöm meg.' },
+      { value: 'nem', emoji: '⏭️', label: 'Most nem', hint: 'Később az „Elfér a szerelvény?” gombbal.' },
+    ],
+    cancelText: 'Most nem',
+  });
+  if (!valasz || valasz === 'nem') return;
+  await akadalyokEllenorzes({ jelol: valasz === 'jelol' });
 }
 
 function defaultSessionName() {
@@ -13383,6 +13538,9 @@ function renderMeta() {
   }
   if (len.gaps) {
     rows.push(['GPS-kimaradás', `${len.gaps} db · ${formatDistance(len.gap)} ismeretlen szakasz`]);
+  }
+  if ((s.akadalyok || []).length) {
+    rows.push(['Bejelölt akadály', `${s.akadalyok.length} hely a térképen`]);
   }
   rows.push(['Megjegyzés', s.note || '—']);
   renderBackupStatus();
@@ -13816,6 +13974,46 @@ function utvonalSzakaszok() {
   return [...egyben.values()];
 }
 
+/** A térképre kirakott akadályjelek (a bejárásban eltéve). */
+function akadalyJelek() {
+  const s = state.session;
+  if (!s || s.akadalyokLatszik === false) return [];
+  return (s.akadalyok || []).filter((a) => a.lat != null && a.lon != null);
+}
+
+/**
+ * Az ellenőrzés találatait a térképre tesszük: a híd vagy a korlátozás
+ * szelvényéből az úthálózat adja a pontot.
+ */
+async function akadalyokJelolese(eredmeny) {
+  const net = await roadNetwork();
+  if (!net || !state.session) return 0;
+  const jelek = [];
+  for (const t of eredmeny.talalatok) {
+    if (t.meter == null || !t.utszam) continue;
+    const p = pointOnRoad(net, t.utszam, t.meter);
+    if (!p || p.lat == null) continue;
+    jelek.push({
+      lat: p.lat,
+      lon: p.lon,
+      sulyossag: t.sulyossag,
+      cim: t.nev || t.mi,
+      hely: t.hely,
+      szoveg: t.szoveg,
+    });
+  }
+  state.session.akadalyok = jelek;
+  state.session.akadalyokLatszik = true;
+  await db.saveSession(state.session);
+  drawTrack();
+  if (trackEditor && !$('#trackedit').hidden) {
+    trackEditor.akadalyok = akadalyJelek();
+    trackEditor.draw();
+  }
+  renderMeta();
+  return jelek.length;
+}
+
 /** Az „Elfér a szerelvény?” ablak feltöltése. */
 function akadalyokMegjelenit(eredmeny, szakaszok) {
   const body = $('#akadalyok-body');
@@ -13890,6 +14088,34 @@ function akadalyokMegjelenit(eredmeny, szakaszok) {
     text: 'Forrás: Nemzeti Adathozzáférési Pont (NAP), CC BY 4.0. '
       + 'Tájékoztató adat — a helyszíni táblák és a közútkezelő döntése az irányadó.' }));
 
+  const vanJel = !!(state.session && (state.session.akadalyok || []).length);
+  if (eredmeny.talalatok.length) {
+    actions.appendChild(el('button', {
+      class: 'btn primary small', type: 'button',
+      onclick: async () => {
+        const db = await akadalyokJelolese(eredmeny);
+        toast(db ? `${db} hely bejelölve a térképen.` : 'Nem volt mit bejelölni.');
+        akadalyokMegjelenit(eredmeny, szakaszok);
+      },
+    }, ikonos('terkep', vanJel ? 'Jelölések frissítése' : 'Jelöld a térképen')));
+  }
+  if (vanJel) {
+    actions.appendChild(el('button', {
+      class: 'btn ghost small', type: 'button',
+      onclick: async () => {
+        state.session.akadalyok = [];
+        await db.saveSession(state.session);
+        drawTrack();
+        if (trackEditor && !$('#trackedit').hidden) {
+          trackEditor.akadalyok = [];
+          trackEditor.draw();
+        }
+        renderMeta();
+        toast('Jelölések törölve.');
+        akadalyokMegjelenit(eredmeny, szakaszok);
+      },
+    }, ikonos('kuka', 'Jelölések törlése')));
+  }
   actions.appendChild(el('button', {
     class: 'btn ghost small', type: 'button', onclick: zarAkadalyok,
   }, ikonos('bezar', 'Bezárás')));
@@ -13898,7 +14124,7 @@ function akadalyokMegjelenit(eredmeny, szakaszok) {
 function zarAkadalyok() { $('#akadalyok').hidden = true; }
 
 /** „Elfér a szerelvény?” — hidak és korlátozások az útvonal mentén. */
-async function akadalyokEllenorzes() {
+async function akadalyokEllenorzes(opts = {}) {
   if (!state.session) { toast('Előbb nyisson meg egy bejárást.', 'error'); return; }
   toast('Útvonal ellenőrzése…');
   await roadNetwork();
@@ -13909,6 +14135,10 @@ async function akadalyokEllenorzes() {
   }
   const szakaszok = utvonalSzakaszok();
   const eredmeny = utkozesek(szakaszok, (state.session && state.session.vehicle) || {});
+  if (opts.jelol) {
+    const db = await akadalyokJelolese(eredmeny);
+    if (db) toast(`${db} hely bejelölve a térképen.`);
+  }
   akadalyokMegjelenit(eredmeny, szakaszok);
   $('#akadalyok').hidden = false;
 }
@@ -14055,6 +14285,7 @@ function drawTrack() {
   const prevFit = trackLastFit;
   const opts = {
     drawn: (state.session && state.session.drawn) || [],
+    akadalyok: akadalyJelek(),
     view: trackView ? trackView.view : null,
   };
   trackHit = renderTrack(canvas, state.points, state.items, opts);
@@ -14189,6 +14420,7 @@ async function openTrackEditor() {
     points: state.points,
     items: state.items,
     drawn: state.session.drawn || [],
+    akadalyok: akadalyJelek(),
     onAddPoint: (at) => addPointAt(at),
     // a térképen kijelölt szakaszra jelzéskép — gépen ez a természetes út
     onSignForRange: (a, b, vonal) => jelzesSzakaszra(a, b, vonal),
@@ -15640,6 +15872,7 @@ async function pickOnMap(item) {
     points: state.points,
     items: state.items.filter((i) => i.lat != null && i !== item),
     drawn: (state.session && state.session.drawn) || [],
+    akadalyok: akadalyJelek(),
     pick: { lat: item.lat, lon: item.lon, cim: item.title || typeLabel(item.type) },
   });
 }
