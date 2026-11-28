@@ -654,39 +654,114 @@ minden szakaszhoz kikeressük az adott útszám megadott szelvénytartományba
 eső darabjait, és sorrendbe fűzzük őket.                                  */
 
 /** Egy sor: „51 179 -> 159 km”. A nyíl sokféle lehet, a „km” elhagyható. */
-const SZAKASZ_MINTA =
-  /^\s*([A-Za-zÁÉÍÓÖŐÚÜŰ0-9][A-Za-z0-9./-]*)\s+(\d+(?:[.,]\d+)?)\s*(?:->|→|–|—|-|\.\.\.|\.\.)\s*(\d+(?:[.,]\d+)?)\s*(?:km)?\s*$/i;
+// A szelvény kétféleképpen jöhet: tizedesként (27,387) vagy a közúton
+// szokásos km+m alakban (27+387). Mindkettőt elfogadjuk, a „km” szó a
+// szám után is állhat: „813 7+371 km -> 8+89 km”.
+const SZELV = '\\d+(?:\\s*\\+\\s*\\d+|[.,]\\d+)?';
+const SZAKASZ_MINTA = new RegExp(
+  '^\\s*([A-Za-zÁÉÍÓÖŐÚÜŰ0-9][A-Za-z0-9./-]*)\\s+'
+  + `(${SZELV})\\s*(?:km)?\\s*(?:->|→|–|—|-|\\.\\.\\.|\\.\\.)\\s*(${SZELV})\\s*(?:km)?\\s*$`, 'i');
+
+// Utcanév vége: „Ipar u.”, „Deák Ferenc utca”, „Rákóczi út”, „Fő tér”.
+const UTCA_VEG = /\s(utca|u|út|ut|körút|krt|tér|ter|köz|sor|sugárút|sgt|fasor|sétány|rakpart|dűlő|part|liget)\.?$/i;
+// a rövidítések teljes alakja — így az OSM nevével összevethető
+const UTCA_ROVID = [
+  [/\bu\.?$/i, 'utca'], [/\bkrt\.?$/i, 'körút'], [/\bsgt\.?$/i, 'sugárút'],
+  [/\but$/i, 'út'], [/\bter$/i, 'tér'],
+];
+
+/** Egy darabból utcanév, ha az — útszámos átvezetésből nem csinálunk utcát. */
+function utcaNeve(darab) {
+  const s = String(darab || '').trim().replace(/[.,;]+$/, (v) => (v === '.' ? '.' : ''));
+  if (!s || !UTCA_VEG.test(s)) return null;
+  if (/^\s*(?:\d{1,5}|[Mm]\d{1,2})\b/.test(s)) return null;        // „8139. sz. út”
+  if (/\b(?:sz|j)\.?\s*(?:út|ut)\s*$/i.test(s)) return null;       // „... sz. út”
+  let nev = s.replace(/\s+/g, ' ');
+  for (const [re, teljes] of UTCA_ROVID) {
+    if (re.test(nev)) { nev = nev.replace(re, teljes); break; }
+  }
+  return nev;
+}
+
+// Címsorok: az induló és a célállomás is tartalmazhat utcanevet
+// („Célállomás: Berettyóújfalu, Kádár vitéz utca”), de az nem átvezetés,
+// hanem a szállítás vége — ezeket kihagyjuk.
+const ALLOMAS_SOR =
+  /^\s*(?:induló|indulási|kiindulási|kezdő|cél|vég|fel\s*-?\s*rakó|le\s*-?\s*rakó|rakodó|feladó|címzett|telephely)\w*\s*(?:állomás|hely|pont|cím)?\s*:/i;
+
+/**
+ * Utcás átvezetés sora: „Mór, Ipar u. - Hammerstein u. - Mester u.”
+ * @returns {{telepules: string|null, nevek: string[]}|null}
+ */
+export function parseUtcasSor(sor) {
+  const s = String(sor || '').trim();
+  if (!s || ALLOMAS_SOR.test(s)) return null;
+  let telepules = null;
+  let maradek = s;
+  const v = s.indexOf(',');
+  if (v > 0) {
+    const elol = s.slice(0, v).trim();
+    // a vessző előtti rész akkor település, ha maga nem utcanév
+    if (elol && !UTCA_VEG.test(elol) && elol.split(/\s+/).length <= 3 && !/\d/.test(elol)) {
+      telepules = elol;
+      maradek = s.slice(v + 1);
+    }
+  }
+  const nevek = [];
+  for (const d of maradek.split(/\s+[-–—]\s+|\s*,\s*/)) {
+    const n = utcaNeve(d);
+    if (n && !nevek.includes(n)) nevek.push(n);
+  }
+  return nevek.length ? { telepules, nevek } : null;
+}
 
 /**
  * A kijelölt útvonal szövegének feldolgozása.
- * @returns {{szakaszok: Array<{ut:string, tol:number, ig:number}>, kihagyott: string[]}}
+ * @returns {{szakaszok: Array, kihagyott: string[], utcasok: Array}}
  */
 export function parseKijeloltUtvonal(szoveg) {
   const szakaszok = [];
   const kihagyott = [];
+  const utcasok = [];
   // A szakaszok közé szövegesen írt átvezetések, pl.
   // „Tata - 8139. sz. út - Komárom” — ezekből az útszám kell, mert ezen az
   // úton megy az összekötés a két szelvényezett szakasz között.
   const ATVEZETO = /(\d{2,5}|[Mm]\d{1,2})\s*\.?\s*(?:sz\.?|j\.?)\s*(?:út|ut)/g;
   let fuggo = [];
+  let fuggoUtcak = null;
   for (const nyers of String(szoveg || '').split(/\r?\n/)) {
     const sor = nyers.trim();
     if (!sor) continue;
     const m = SZAKASZ_MINTA.exec(sor);
     if (!m) {
-      kihagyott.push(sor);
       for (const t of sor.matchAll(ATVEZETO)) fuggo.push(t[1]);
+      // belterületi átvezetés utcanevekkel: ezt nem hagyjuk ki, külön kezeljük
+      const utcas = fuggo.length ? null : parseUtcasSor(sor);
+      if (utcas) {
+        utcas.sor = sor;
+        utcasok.push(utcas);
+        fuggoUtcak = fuggoUtcak
+          ? { telepules: fuggoUtcak.telepules || utcas.telepules,
+            nevek: [...fuggoUtcak.nevek, ...utcas.nevek] }
+          : utcas;
+      } else {
+        kihagyott.push(sor);
+      }
       continue;
     }
     szakaszok.push({
       ut: m[1],
-      tol: Number(m[2].replace(',', '.')),
-      ig: Number(m[3].replace(',', '.')),
+      tol: szelvenyMeters(m[2]) / 1000,
+      ig: szelvenyMeters(m[3]) / 1000,
       atvezeto: fuggo,
+      utcak: fuggoUtcak,
     });
     fuggo = [];
+    fuggoUtcak = null;
   }
-  return { szakaszok, kihagyott };
+  // utcasor a lista legvégén: nincs mihez kötni, ezért kihagyottként jelezzük
+  if (fuggoUtcak && utcasok.length) kihagyott.push(utcasok[utcasok.length - 1].sor);
+  return { szakaszok, kihagyott, utcasok };
 }
 
 /** Egy pontsor hossza méterben. */
@@ -891,7 +966,9 @@ export function utvonalSzelvenyekbol(net, szakaszok) {
         });
       }
     }
-    reszek.push({ ...sz, pontok: resz.length, hossz, ugras, atvezetve });
+    // kezdet: hányadik pontnál kezdődik ez a szakasz a teljes vonalban —
+    // ide fűzhető be utólag a belterületi (utcás) átvezetés
+    reszek.push({ ...sz, pontok: resz.length, hossz, ugras, atvezetve, kezdet: pts.length });
     pts.push(...resz);
   }
   return { pts, reszek, hiany };

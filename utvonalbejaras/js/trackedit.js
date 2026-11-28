@@ -14,6 +14,16 @@ import { onTileLoad, setTilesEnabled, tilesEnabled, cachedTileCount } from './ti
 import { MapView, clampZoom } from './terkepnezet.js';
 import { $, el, toast, modal } from './ui.js';
 
+/**
+ * Szelvény a közúton szokásos alakban: 7,371 km → „7+371”, 27 km → „27”.
+ * A listában is így szerepel, így könnyebb visszakeresni az engedélyben.
+ */
+function kmSzoveg(km) {
+  if (km == null || !isFinite(km)) return '?';
+  const m = Math.round(km * 1000);
+  return m % 1000 === 0 ? String(m / 1000) : `${Math.floor(m / 1000)}+${String(m % 1000).padStart(3, '0')}`;
+}
+
 const SNAP_PX = 26; // ennél közelebb a meglévő nyomvonalhoz odaillesztjük a csúcsot
 
 export class TrackEditor {
@@ -715,7 +725,7 @@ export class TrackEditor {
     }
     if (ki.hiany && ki.hiany.length) {
       sorok.push('Szakaszonként:');
-      for (const h of ki.hiany.slice(0, 10)) sorok.push(`  ${h.ut} ${h.tol}–${h.ig} km — ${h.ok}`);
+      for (const h of ki.hiany.slice(0, 10)) sorok.push(`  ${h.ut} ${kmSzoveg(h.tol)}–${kmSzoveg(h.ig)} km — ${h.ok}`);
       if (ki.hiany.length > 10) sorok.push(`  …és még ${ki.hiany.length - 10} szakasz`);
       sorok.push('');
     }
@@ -750,8 +760,11 @@ export class TrackEditor {
         + 'Soronként egy szakasz: útszám, majd a kezdő és a vég km szelvény.\n\n'
         + '   51     179 -> 159 km\n'
         + '   M44     44 ->  57 km\n\n'
+        + 'A szelvény km+m alakban is jöhet: „813 7+371 -> 8+89 km”.\n\n'
         + 'Az induló és a célállomás sorát kihagyom. Ha két szakasz között '
-        + 'átvezető út szerepel (pl. „Tata - 8139. sz. út - Komárom”), azon vezetem át.',
+        + 'átvezető út szerepel (pl. „Tata - 8139. sz. út - Komárom”), azon vezetem át. '
+        + 'A belterületi utcasorokat („Mór, Ipar u. - Mester u.”) is felismerem — '
+        + 'ezeket bekapcsolt online kiegészítéssel rajzolom meg.',
       fields: [{ name: 'szoveg', label: 'Szakaszok', type: 'textarea', rows: 8, value: '' }],
       okText: 'Beolvasás',
     });
@@ -790,21 +803,47 @@ export class TrackEditor {
       sorok.push('', 'Átvezetés a listában megadott úton:');
       for (const a of atvezetesek) sorok.push(`  ${a.ut} · ${formatDistance(a.hossz)}`);
     }
+    // belterületi átvezetés utcanevekkel („Mór, Ipar u. - Hammerstein u. …”)
+    const utcasok = ki.utcasok || [];
+    if (utcasok.length) {
+      sorok.push('', 'Belterületi átvezetés utcákon:');
+      for (const u of utcasok) {
+        const hely = u.telepules ? u.telepules + ': ' : '';
+        sorok.push(u.megrajzolva
+          ? `  ${hely}${u.nevek.join(' → ')} — megrajzolva, ${formatDistance(u.hossz)}`
+          : `  ${hely}${u.nevek.join(' → ')} — ezt a részt kézzel kell megrajzolni`);
+      }
+      if (utcasok.some((u) => u.megrajzolva)) {
+        sorok.push('Az utcák vonala nyílt térképadatból (OpenStreetMap) van — '
+          + 'a helyszínen ellenőrizze.');
+      }
+      if (utcasok.some((u) => !u.megrajzolva)) {
+        sorok.push(ki.online
+          ? 'A belterületi utcák nincsenek benne az országos szelvényadatban, és '
+            + 'most a nyílt térképadatból sem jöttek össze — ezt a részt rajzolja meg kézzel.'
+          : 'A belterületi utcák nincsenek benne az országos szelvényadatban. '
+            + 'Az „Online kiegészítés” bekapcsolásával (Bejárások fül, alul) meg tudom '
+            + 'rajzolni őket, különben a helyükön egyenes marad.');
+      }
+    }
     if (ki.hiany.length) {
       sorok.push('', 'Nem találtam adatot ezekhez:');
-      for (const h of ki.hiany) sorok.push(`  ${h.ut} ${h.tol}–${h.ig} km — ${h.ok}`);
+      for (const h of ki.hiany) sorok.push(`  ${h.ut} ${kmSzoveg(h.tol)}–${kmSzoveg(h.ig)} km — ${h.ok}`);
     }
     if (ugrasok.length) {
       sorok.push('', 'Nagyobb ugrás a szakaszok között (a csomópontot egyenes köti össze):');
       for (const u of ugrasok) {
         sorok.push(u.tol == null
           ? `  ${u.ut} átvezetés előtt ${u.ugras} m`
-          : `  ${u.ut} ${u.tol}–${u.ig} km előtt ${u.ugras} m`);
+          : `  ${u.ut} ${kmSzoveg(u.tol)}–${kmSzoveg(u.ig)} km előtt ${u.ugras} m`);
       }
     }
     if (ugrasok.length && !ki.onlineKitoltes) {
-      sorok.push('Ezeket az „Online kiegészítés” bekapcsolásával valódi úton '
-        + 'vezetem át (Bejárások fül, alul).');
+      sorok.push(ki.online
+        ? 'Ezeket most nem sikerült valódi úton átvezetni (nincs kapcsolat, '
+          + 'vagy a tervező nem talált utat) — a helyükön egyenes maradt.'
+        : 'Ezeket az „Online kiegészítés” bekapcsolásával valódi úton '
+          + 'vezetem át (Bejárások fül, alul).');
     }
     if (ki.kihagyott.length) {
       sorok.push('', `Kihagyott sorok: ${ki.kihagyott.length} (pl. induló és célállomás)`);
@@ -821,7 +860,7 @@ export class TrackEditor {
     this.drawn.push({
       id: 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       name: 'Közút által kijelölt útvonal',
-      note: ki.reszek.map((r) => `${r.ut} ${r.tol}–${r.ig} km`).join(', '),
+      note: ki.reszek.map((r) => `${r.ut} ${kmSzoveg(r.tol)}–${kmSzoveg(r.ig)} km`).join(', '),
       pts: ki.pts,
       kijelolt: true,
     });

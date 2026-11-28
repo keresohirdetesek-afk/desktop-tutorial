@@ -26,6 +26,7 @@ import {
 import { eovToWgs84, formatEov } from './eov.js';
 import { onlineRouting, setOnlineRouting, snapOnline, routeOnline } from './utvonalterv.js';
 import { lookupOsm } from './utadat.js';
+import { utcaVonal } from './utcak.js';
 import { buildReport } from './report.js';
 import { buildMapPage } from './terkepfajl.js';
 import { KozutDocs, parseKeresoSzoveg, toClipboard, UTSZAM_KERESO, keresoUrl } from './kozut.js';
@@ -1809,9 +1810,44 @@ async function openTrackEditor() {
       kijelolt: async (szoveg) => {
         const net = await roadNetwork();
         if (!net) return null;
-        const { szakaszok, kihagyott } = parseKijeloltUtvonal(szoveg);
-        if (!szakaszok.length) return { pts: [], reszek: [], hiany: [], szakaszok, kihagyott };
+        const { szakaszok, kihagyott, utcasok } = parseKijeloltUtvonal(szoveg);
+        if (!szakaszok.length) {
+          return { pts: [], reszek: [], hiany: [], szakaszok, kihagyott, utcasok: [] };
+        }
         const alap = utvonalSzelvenyekbol(net, szakaszok);
+
+        // Belterületi átvezetés utcanevekkel („Mór, Ipar u. - Hammerstein u. …”).
+        // Ezek nincsenek benne az országos szelvényadatban, ezért nyílt
+        // térképadatból (OSM) kérjük le — ha az online kiegészítés megengedi.
+        const utcasAtvezetes = [];
+        for (let i = alap.reszek.length - 1; i >= 0; i--) {
+          const r = alap.reszek[i];
+          if (!r.utcak || !r.kezdet) continue;
+          const honnan = alap.pts[r.kezdet - 1];
+          const hova = alap.pts[r.kezdet];
+          const jelentes = {
+            telepules: r.utcak.telepules,
+            nevek: r.utcak.nevek,
+            ut: r.ut,
+            hol: honnan,
+            megrajzolva: false,
+            hossz: 0,
+            talalt: [],
+          };
+          if (onlineRouting() && honnan && hova) {
+            try {
+              const vonal = await utcaVonal(r.utcak, honnan, hova);
+              if (vonal && vonal.pts.length > 1) {
+                alap.pts.splice(r.kezdet, 0, ...vonal.pts);
+                jelentes.megrajzolva = true;
+                jelentes.hossz = vonal.hossz;
+                jelentes.talalt = vonal.utcak;
+              }
+            } catch (_) { /* marad a figyelmeztetés */ }
+          }
+          utcasAtvezetes.push(jelentes);
+        }
+        utcasAtvezetes.reverse();
 
         // A szelvényadatban nincsenek csomópontok, ezért a szakaszok között
         // maradhat pár kilométeres egyenes. Ha az online kiegészítés be van
@@ -1832,7 +1868,10 @@ async function openTrackEditor() {
           }
           alap.pts = ki;
         }
-        return { ...alap, onlineKitoltes, szakaszok, kihagyott };
+        return {
+          ...alap, onlineKitoltes, szakaszok, kihagyott,
+          utcasok: utcasAtvezetes, online: onlineRouting(),
+        };
       },
     },
     onApply: async ({ updated, deleted, drawn }) => {
